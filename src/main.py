@@ -125,7 +125,7 @@ async def handle_query_result_personaggio(update: Update, context: ContextTypes.
 
                 for index in indexes:
                     data = await service.get_ability_score(index)
-                    msg_string += f'Abilità: *{data['full_name']}*\n'
+                    msg_string += f"Abilità: *{data['full_name']}*\n"
 
                     desc = ' '.join(data['desc']) + '\n'
                     async with TranslationService() as translation:
@@ -133,7 +133,7 @@ async def handle_query_result_personaggio(update: Update, context: ContextTypes.
 
                     msg_string += desc
                     names = [skill['name'] for skill in data['skills']]
-                    msg_string += f'\nSkills: *{', '.join(names)}*\n\n'
+                    msg_string += f"\nSkills: *{', '.join(names)}*\n\n"
 
                 await split_text_into_chunks(msg_string, update)
 
