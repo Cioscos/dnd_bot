@@ -1,5 +1,6 @@
-from typing import Dict
+from typing import Dict, List
 import aiohttp
+from model.APIResource import APIResource
 
 
 class DndService:
@@ -40,6 +41,49 @@ class DndService:
         async with self.__session.get(url, headers=self.__headers) as response:
             response.raise_for_status()
             return await response.json()
+
+    async def get_all_resources(self) -> Dict:
+        """
+        Fetch all resource URLs.
+
+        Returns:
+            dict: The JSON response from the API.
+        """
+        url = f"{self.__api}/api"
+        return await self.__do_get(url)
+
+    async def get_available_resources(self, endpoint: str) -> List[APIResource]:
+        """
+        Get list of all available resources for an endpoint.
+
+        Args:
+            endpoint (str): An endpoint name.
+
+        Returns:
+            dict: The JSON response from the API.
+        """
+        url = f"{self.__api}/api/{endpoint}"
+        data = await self.__do_get(url)
+
+        available_resources = []
+        for resource in data['results']:
+            dnd_resource = APIResource(**resource)
+            available_resources.append(dnd_resource)
+
+        return available_resources
+
+    async def get_resource_detail(self, path: str) -> Dict:
+        """
+        Get resource detail.
+
+        Args:
+            path (str): Path to the resource detail.
+
+        Returns:
+            dict: The JSON response from the API.
+        """
+        url = f"{self.__api}/api/{path}"
+        return await self.__do_get(url)
 
     async def get_ability_score(self, ability: str) -> Dict:
         """

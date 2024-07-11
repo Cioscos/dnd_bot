@@ -1,7 +1,11 @@
-from typing import List
+import html
+import json
+import traceback
+from typing import List, Dict, Any
 from warnings import filterwarnings
 import logging
 
+from easygoogletranslate import EasyGoogleTranslate
 from telegram import Update, ReplyKeyboardMarkup, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton, \
     ReplyKeyboardRemove
 from telegram.constants import ParseMode
@@ -17,9 +21,11 @@ from telegram.helpers import escape_markdown
 from telegram.warnings import PTBUserWarning
 
 from src.DndService import DndService
-from src.TranslationService import TranslationService
 from src.environment_variables_mg import keyring_initialize, keyring_get
-from src.util import is_string_in_nested_lists, split_text_into_chunks
+from src.model.AbilityScore import AbilityScore
+from src.model.APIResource import APIResource
+from src.parse_object import parse_ability_score
+from src.util import is_string_in_nested_lists, split_text_into_chunks, format_camel_case_to_title
 
 # Setup logging
 logging.basicConfig(
@@ -37,22 +43,20 @@ logging.getLogger("httpx").setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
 
 # State definitions for top-level conv handler
-MAIN_MENU, PERSONAGGIO, CLASSE, RISORSE_DI_CLASSE, LIVELLI_DI_CLASSE = map(chr, range(5))
-# State def for personaggio
+MAIN_MENU, ITEM_DETAILS_MENU = map(chr, range(2))
 
-# State def for punteggi abilità
-PUNTEGGI_ABILITA = map(chr, range(1))
+CURRENT_INLINE_PAGE = 0
 
 STOPPING = 99
-
-MAIN_MENU_KEYBOARD: List[List[str]] = [['🧙‍♂ Personaggio 🧙‍♂', '🧮 Classe 🧮'],
-                                       ['📖 Risorse di classe 📖', '📊 Livelli di classe 📊']]
 
 # bot data keys
 BOT_DATA_CHAT_IDS = 'bot_data_chat_ids'
 
+# callback keys
+ABILITY_SCORE_CALLBACK = 'ability_score'
 
-async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
+async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE):
     """
     The error callback function.
     This function is used to handle possible Telegram API errors that aren't handled.
@@ -61,7 +65,36 @@ async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     :param context: The Telegram context.
     """
     # Log the error before we do anything else, so we can see it even if something breaks.
-    logger.error(f"Exception while handling an update: {context.error}")
+    logger.error("Exception while handling an update:", exc_info=context.error)
+
+    # traceback.format_exception returns the usual python message about an exception, but as a
+    # list of strings rather than a single string, so we have to join them together.
+    tb_list = traceback.format_exception(None, context.error, context.error.__traceback__)
+    tb_string = "".join(tb_list)
+
+    # Split the traceback into smaller parts
+    tb_parts = [tb_string[i: i + 4096] for i in range(0, len(tb_string), 4096)]
+
+    # Build the message with some markup and additional information about what happened.
+    update_str = update.to_dict() if isinstance(update, Update) else str(update)
+    base_message = (
+        f"An exception was raised while handling an update\n"
+        f"<pre>update = {html.escape(json.dumps(update_str, indent=2, ensure_ascii=False))}"
+        "</pre>\n\n"
+        f"<pre>context.chat_data = {html.escape(str(context.chat_data))}</pre>\n\n"
+        f"<pre>context.user_data = {html.escape(str(context.user_data))}</pre>\n\n"
+    )
+
+    # Send base message
+    await context.bot.send_message(
+        chat_id=keyring_get('DevId'), text=base_message, parse_mode=ParseMode.HTML
+    )
+
+    # Send each part of the traceback as a separate message
+    for part in tb_parts:
+        await context.bot.send_message(
+            chat_id=keyring_get('DevId'), text=f"<pre>{html.escape(part)}</pre>", parse_mode=ParseMode.HTML
+        )
 
 
 async def post_stop_callback(application: Application) -> None:
@@ -73,92 +106,111 @@ async def post_stop_callback(application: Application) -> None:
             logger.error(f"CHAT_ID: {chat_id} Telegram error stopping the bot: {e}")
 
 
+def parse_resource(category: str, data: Dict[str, Any]) -> APIResource:
+    if category == 'ability-scores':
+        return parse_ability_score(data)
+    elif category == 'classes':
+        pass
+    # Add other categories and their respective parsing functions
+    else:
+        return APIResource(data['index'], data['name'], data['url'])
+
+
 async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     # Add the chat_id to a list of IDs in order to allow the bot to contact them for communications reasons
     if BOT_DATA_CHAT_IDS in context.bot_data:
-        context.bot_data.append(update.effective_chat.id)
+        context.bot_data[BOT_DATA_CHAT_IDS].add(update.effective_chat.id)
     else:
-        context.bot_data[BOT_DATA_CHAT_IDS] = []
+        context.bot_data[BOT_DATA_CHAT_IDS] = set()
 
     welcome_message: str = (f"Benvenuto player {update.effective_user.name}!\n"
                             f"Come posso aiutarti oggi?! Dispongo di tante funzioni... provale tutte!")
 
+    # [['🧙‍♂ Personaggio 🧙‍♂', '🧮 Classe 🧮'],
+    #                                    ['📖 Risorse di classe 📖', '📊 Livelli di classe 📊']]
+
+    main_resources: Dict[str, str] = {}
+
+    try:
+        async with DndService() as dnd_service:
+            main_resources = await dnd_service.get_all_resources()
+    except Exception as e:
+        logger.error(f"Exception while getting main resources: {e}")
+        await update.effective_message.reply_text('Errore nel recuperare le risorse dalle API. Provare più tardi o un\'altra volta')
+        return ConversationHandler.END
+
+    # Create the keyboard
+    keyboard = []
+    row = []
+
+    for resource_name, resource in main_resources.items():
+        button = InlineKeyboardButton(format_camel_case_to_title(resource_name), callback_data=resource_name)
+        row.append(button)
+
+        if len(row) == 2:
+            keyboard.append(row)
+            row = []
+
+    if row:
+        keyboard.append(row)
+
     # send the keyboard
-    reply_markup = ReplyKeyboardMarkup(
-        MAIN_MENU_KEYBOARD,
-        resize_keyboard=True,
-        one_time_keyboard=False,
-        input_field_placeholder='Scegli cosa fare...'
-    )
+    reply_markup = InlineKeyboardMarkup(keyboard)
 
     await update.effective_message.reply_text(welcome_message, reply_markup=reply_markup)
 
     return MAIN_MENU
 
 
-async def prepare_menu_for_personaggio(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    keyboard = [
-        [InlineKeyboardButton('Punteggi abilità', callback_data='punteggi_abilità')],
-        [InlineKeyboardButton('Allineamenti', callback_data='allineamenti')],
-        [InlineKeyboardButton('Background', callback_data='background')],
-        [InlineKeyboardButton('Linguaggi', callback_data='linguaggi')],
-        [InlineKeyboardButton('Competenze', callback_data='competenze')],
-        [InlineKeyboardButton('Abilità', callback_data='abilità')]
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-
-    await update.effective_message.reply_text("Scegli una delle seguenti opzioni:", reply_markup=reply_markup)
-
-
-async def handle_query_result_personaggio(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+async def main_menu_buttons_query_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """
+    Manage inline buttons from main menu
+    """
     query = update.callback_query
-    data = query.data
+    category = query.data
 
-    if data == 'punteggi_abilità':
-        try:
-            async with DndService() as service:
-                data_ability_score = await service.get_ability_scores()
-                results = data_ability_score['results']
-                indexes = [result['index'] for result in results]
+    resources: List[APIResource] = []
+    async with DndService() as dnd_service:
+        resources = await dnd_service.get_available_resources(category)
 
-                msg_string = ''
+    # Create the keyboard
+    keyboard = []
+    row = []
 
-                for index in indexes:
-                    data = await service.get_ability_score(index)
-                    msg_string += f"Abilità: *{data['full_name']}*\n"
+    for resource in resources:
+        button = InlineKeyboardButton(resource.name, callback_data=f"{category}/{resource.index}")
+        row.append(button)
 
-                    desc = ' '.join(data['desc']) + '\n'
-                    async with TranslationService() as translation:
-                        desc = await translation.translate(desc)
+        if len(row) == 2:
+            keyboard.append(row)
+            row = []
 
-                    msg_string += desc
-                    names = [skill['name'] for skill in data['skills']]
-                    msg_string += f"\nSkills: *{', '.join(names)}*\n\n"
+    if row:
+        keyboard.append(row)
 
-                await split_text_into_chunks(msg_string, update)
+    # send the keyboard
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    await query.answer()
+    await query.edit_message_text(f"Seleziona un elemento in {category}:", reply_markup=reply_markup)
 
-        except Exception as e:
-            logger.error(e)
-            await update.effective_message.reply_text("Errore nel chiamare le API")
+    return ITEM_DETAILS_MENU
+
+
+async def details_menu_buttons_query_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    query = update.callback_query
+    path = query.data
+
+    category, _ = path.split('/', 1)
+
+    async with DndService() as dnd_service:
+        resource_details = await dnd_service.get_resource_detail(path)\
+
+    resource = parse_resource(category, resource_details)
+    details = str(resource)
 
     await query.answer()
+    await query.edit_message_text(details, parse_mode='Markdown')
     return ConversationHandler.END
-
-
-async def main_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    text: str = update.message.text
-
-    if is_string_in_nested_lists(text, MAIN_MENU_KEYBOARD):
-        if text == '🧙‍♂ Personaggio 🧙‍♂':
-            await prepare_menu_for_personaggio(update, context)
-            return PERSONAGGIO
-
-        elif text == '🧮 Classe 🧮':
-            return CLASSE
-        elif text == '📖 Risorse di classe 📖':
-            return RISORSE_DI_CLASSE
-        elif text == '📊 Livelli di classe 📊':
-            return LIVELLI_DI_CLASSE
 
 
 async def stop(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -184,8 +236,8 @@ def main() -> None:
     main_handler = ConversationHandler(
         entry_points=[CommandHandler('start', start_handler)],
         states={
-            MAIN_MENU: [MessageHandler(filters.TEXT & ~filters.COMMAND, main_menu_handler)],
-            PERSONAGGIO: [CallbackQueryHandler(handle_query_result_personaggio)],
+            MAIN_MENU: [CallbackQueryHandler(main_menu_buttons_query_handler, pattern='^[^/]+$')],
+            ITEM_DETAILS_MENU: [CallbackQueryHandler(details_menu_buttons_query_handler, pattern='^.*/.*$')]
         },
         fallbacks=[CommandHandler("stop", stop)]
     )
