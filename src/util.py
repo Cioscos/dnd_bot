@@ -39,7 +39,7 @@ async def split_text_into_chunks(text: str, update: Update, max_length: int = 40
         List[str]: A list of text chunks.
     """
     if len(text) <= max_length:
-        await update.effective_message.reply_text(text, parse_mode=ParseMode.MARKDOWN)
+        await update.effective_message.reply_text(text, parse_mode=ParseMode.HTML)
         return
 
     chunks = []
@@ -53,43 +53,7 @@ async def split_text_into_chunks(text: str, update: Update, max_length: int = 40
     chunks.append(text)  # Add the last remaining part
 
     for chunk in chunks:
-        await update.effective_message.reply_text(chunk, parse_mode=ParseMode.MARKDOWN)
-
-
-def generate_account_list_keyboard(entries: List[str],
-                                   draw_navigation_buttons: bool = True) -> InlineKeyboardMarkup:
-    """
-    Generates an inline keyboard markup for the provided list of accounts.
-
-    Args:
-        accounts (List[Account]): List of Account objects.
-        draw_navigation_buttons (bool): Choose to draw or not the navigation buttons
-
-    Returns:
-        InlineKeyboardMarkup: The generated inline keyboard markup.
-    """
-    keyboard = []
-
-    row = []
-    for entry in entries:
-        button = InlineKeyboardButton(entry, callback_data=f"{ABILITY_SCORE_CALLBACK}:{account.id}")
-        row.append(button)
-
-        if len(row) == 2:
-            keyboard.append(row)
-            row = []
-
-    # Append any remaining buttons if the total is an odd number
-    if row:
-        keyboard.append(row)
-
-    if draw_navigation_buttons:
-        # Add navigation buttons
-        navigation_buttons = [InlineKeyboardButton("Previous", callback_data="prev_page"),
-                              InlineKeyboardButton("Next", callback_data="next_page")]
-        keyboard.append(navigation_buttons)
-
-    return InlineKeyboardMarkup(keyboard)
+        await update.effective_message.reply_text(chunk, parse_mode=ParseMode.HTML)
 
 
 def format_camel_case_to_title(input_string: str) -> str:

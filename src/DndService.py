@@ -1,6 +1,9 @@
+import logging
 from typing import Dict, List
 import aiohttp
 from model.APIResource import APIResource
+
+logger = logging.getLogger(__name__)
 
 
 class DndService:
@@ -40,7 +43,9 @@ class DndService:
         """
         async with self.__session.get(url, headers=self.__headers) as response:
             response.raise_for_status()
-            return await response.json()
+            response = await response.json()
+            logger.info(response)
+            return response
 
     async def get_all_resources(self) -> Dict:
         """

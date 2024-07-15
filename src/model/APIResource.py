@@ -1,8 +1,10 @@
-class APIResource:
-    def __init__(self, index: str, name: str, url: str):
-        self.index = index
-        self.name = name
-        self.url = url
+from pydantic import BaseModel
+
+
+class APIResource(BaseModel):
+    index: str
+    name: str
+    url: str
 
     def __repr__(self):
         return f"{self.name} ({self.index})"

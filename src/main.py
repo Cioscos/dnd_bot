@@ -24,6 +24,7 @@ from src.DndService import DndService
 from src.environment_variables_mg import keyring_initialize, keyring_get
 from src.model.AbilityScore import AbilityScore
 from src.model.APIResource import APIResource
+from src.model.ClassResource import ClassResource
 from src.parse_object import parse_ability_score
 from src.util import is_string_in_nested_lists, split_text_into_chunks, format_camel_case_to_title
 
@@ -54,6 +55,9 @@ BOT_DATA_CHAT_IDS = 'bot_data_chat_ids'
 
 # callback keys
 ABILITY_SCORE_CALLBACK = 'ability_score'
+
+CLASSES = 'classes'
+ABILITY_SCORES = 'ability-scores'
 
 
 async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE):
@@ -107,13 +111,13 @@ async def post_stop_callback(application: Application) -> None:
 
 
 def parse_resource(category: str, data: Dict[str, Any]) -> APIResource:
-    if category == 'ability-scores':
+    if category == ABILITY_SCORES:
         return parse_ability_score(data)
-    elif category == 'classes':
-        pass
+    elif category == CLASSES:
+        return ClassResource(**data)
     # Add other categories and their respective parsing functions
     else:
-        return APIResource(data['index'], data['name'], data['url'])
+        return APIResource(**data)
 
 
 async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -126,9 +130,6 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
     welcome_message: str = (f"Benvenuto player {update.effective_user.name}!\n"
                             f"Come posso aiutarti oggi?! Dispongo di tante funzioni... provale tutte!")
 
-    # [['🧙‍♂ Personaggio 🧙‍♂', '🧮 Classe 🧮'],
-    #                                    ['📖 Risorse di classe 📖', '📊 Livelli di classe 📊']]
-
     main_resources: Dict[str, str] = {}
 
     try:
@@ -136,7 +137,8 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
             main_resources = await dnd_service.get_all_resources()
     except Exception as e:
         logger.error(f"Exception while getting main resources: {e}")
-        await update.effective_message.reply_text('Errore nel recuperare le risorse dalle API. Provare più tardi o un\'altra volta')
+        await update.effective_message.reply_text(
+            'Errore nel recuperare le risorse dalle API. Provare più tardi o un\'altra volta')
         return ConversationHandler.END
 
     # Create the keyboard
@@ -191,7 +193,8 @@ async def main_menu_buttons_query_handler(update: Update, context: ContextTypes.
     # send the keyboard
     reply_markup = InlineKeyboardMarkup(keyboard)
     await query.answer()
-    await query.edit_message_text(f"Seleziona un elemento in {category}:", reply_markup=reply_markup)
+    await query.edit_message_text(f"Seleziona un elemento in {category} o usa /stop per annullare il comando:",
+                                  reply_markup=reply_markup)
 
     return ITEM_DETAILS_MENU
 
@@ -200,20 +203,32 @@ async def details_menu_buttons_query_handler(update: Update, context: ContextTyp
     query = update.callback_query
     path = query.data
 
+    await query.answer()
+
     category, _ = path.split('/', 1)
 
     async with DndService() as dnd_service:
-        resource_details = await dnd_service.get_resource_detail(path)\
+        resource_details = await dnd_service.get_resource_detail(path)
 
     resource = parse_resource(category, resource_details)
     details = str(resource)
 
-    await query.answer()
-    await query.edit_message_text(details, parse_mode='Markdown')
-    return ConversationHandler.END
+    if len(details) <= 4096:
+        await query.edit_message_text(details, parse_mode=ParseMode.HTML)
+    else:
+        await split_text_into_chunks(details, update)
+
+    # choose the type of return based on the category selected. Returns END if there is no need to go deeper in the
+    # conversation
+
+    if category == CLASSES:
+        pass
+    else:
+        return ConversationHandler.END
 
 
 async def stop(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    await update.effective_message.reply_text('Ok! Use /start to start a new conversation!')
     return ConversationHandler.END
 
 
