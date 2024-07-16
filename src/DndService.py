@@ -114,3 +114,11 @@ class DndService:
         """
         url = f"{self.__api}/api/ability-scores"
         return await self.__do_get(url)
+
+    async def get_resource_by_class_resource(self, endpoint: str) -> Dict:
+        """
+        Fetch resource by an endpoint provided from another resource
+        :param endpoint: Resource string
+        """
+        url = f"{self.__api}{endpoint}"
+        return await self.__do_get(url)

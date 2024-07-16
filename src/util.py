@@ -26,7 +26,7 @@ def is_string_in_nested_lists(target: str, nested_lists: List[Union[str, List]])
     return False
 
 
-async def split_text_into_chunks(text: str, update: Update, max_length: int = 4096) -> None:
+async def split_text_into_chunks(text: str, update: Update, reply_markup: InlineKeyboardMarkup = None, max_length: int = 4096) -> None:
     """
     Split a given text into chunks that do not exceed the maximum Telegram message length.
 
@@ -39,7 +39,7 @@ async def split_text_into_chunks(text: str, update: Update, max_length: int = 40
         List[str]: A list of text chunks.
     """
     if len(text) <= max_length:
-        await update.effective_message.reply_text(text, parse_mode=ParseMode.HTML)
+        await update.effective_message.reply_text(text, parse_mode=ParseMode.HTML, reply_markup=reply_markup)
         return
 
     chunks = []
@@ -53,7 +53,7 @@ async def split_text_into_chunks(text: str, update: Update, max_length: int = 40
     chunks.append(text)  # Add the last remaining part
 
     for chunk in chunks:
-        await update.effective_message.reply_text(chunk, parse_mode=ParseMode.HTML)
+        await update.effective_message.reply_text(chunk, parse_mode=ParseMode.HTML, reply_markup=reply_markup)
 
 
 def format_camel_case_to_title(input_string: str) -> str:

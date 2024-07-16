@@ -44,7 +44,7 @@ logging.getLogger("httpx").setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
 
 # State definitions for top-level conv handler
-MAIN_MENU, ITEM_DETAILS_MENU = map(chr, range(2))
+MAIN_MENU, ITEM_DETAILS_MENU,  = map(chr, range(5))
 
 CURRENT_INLINE_PAGE = 0
 
@@ -118,6 +118,17 @@ def parse_resource(category: str, data: Dict[str, Any]) -> APIResource:
     # Add other categories and their respective parsing functions
     else:
         return APIResource(**data)
+
+
+def process_keyboard_by_category(category: str, class_: APIResource) -> List:
+    if category == CLASSES:
+        return [
+            [InlineKeyboardButton('Spell', callback_data=f"spells|{class_.spells}|{class_.name}")],
+            [InlineKeyboardButton('Risorse di classe per livello', callback_data=f"resources|{class_.class_levels}|{class_.name}")]
+        ]
+
+    else:
+        return []
 
 
 async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -213,10 +224,17 @@ async def details_menu_buttons_query_handler(update: Update, context: ContextTyp
     resource = parse_resource(category, resource_details)
     details = str(resource)
 
+    # process the keyboard based on the category
+    keyboard = process_keyboard_by_category(category, resource)
+
+    reply_markup = None
+    if keyboard:
+        reply_markup = InlineKeyboardMarkup(keyboard)
+
     if len(details) <= 4096:
-        await query.edit_message_text(details, parse_mode=ParseMode.HTML)
+        await query.edit_message_text(details, parse_mode=ParseMode.HTML, reply_markup=reply_markup)
     else:
-        await split_text_into_chunks(details, update)
+        await split_text_into_chunks(details, update, reply_markup=reply_markup)
 
     # choose the type of return based on the category selected. Returns END if there is no need to go deeper in the
     # conversation
@@ -225,6 +243,40 @@ async def details_menu_buttons_query_handler(update: Update, context: ContextTyp
         pass
     else:
         return ConversationHandler.END
+
+
+async def class_submenus_query_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    query = update.callback_query
+    data = query.data
+
+    submenu, endpoint, class_name = data.split('|')
+
+    await query.answer()
+
+    if submenu == 'spells':
+        keyboard = [[InlineKeyboardButton('consulta', callback_data='read-spells'),
+                     InlineKeyboardButton('cerca', callback_data='search-spell')]]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        await update.effective_message.reply_text(f"Vuoi consultare tutte le spell del {class_name} o cercarne una?\n"
+                                                  "Manda /stop per terminare la conversazione", reply_markup=reply_markup)
+    elif submenu == 'resources':
+        # save the endpoint in chat data
+        context.chat_data['class-levele-endpoint'] = endpoint
+        await update.effective_message.reply_text(f"A che livello vuoi consultare la classe {class_name}? Rispondi con un messaggio da 1 a 20")
+
+    return SPELL_BUTTONS_MENU
+
+
+async def spells_menu_buttons_query_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    query = update.callback_query
+    data = query.data
+    await query.answer()
+
+    if data == 'search-spell':
+        await update.effective_message.reply_text("Mandami il nome della spell da cercare")
+        return
+
+
 
 
 async def stop(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -248,11 +300,14 @@ def main() -> None:
 
     application.add_error_handler(error_handler)
 
+
+
     main_handler = ConversationHandler(
         entry_points=[CommandHandler('start', start_handler)],
         states={
             MAIN_MENU: [CallbackQueryHandler(main_menu_buttons_query_handler, pattern='^[^/]+$')],
-            ITEM_DETAILS_MENU: [CallbackQueryHandler(details_menu_buttons_query_handler, pattern='^.*/.*$')]
+            ITEM_DETAILS_MENU: [CallbackQueryHandler(details_menu_buttons_query_handler, pattern='^.*/.*$')],
+            SPELL_BUTTONS_MENU: [CallbackQueryHandler(spells_menu_buttons_query_handler, pattern='^read-spells$|^search-spell$')]
         },
         fallbacks=[CommandHandler("stop", stop)]
     )
