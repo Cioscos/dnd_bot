@@ -63,9 +63,13 @@ ABILITY_SCORE_CALLBACK = 'ability_score'
 CLASS_SPELLS_PAGES = 'class_spells'
 CLASS_SPELLS_PAGE = 'class_spells_page'
 
+# Categories
 CLASSES = 'classes'
 ABILITY_SCORES = 'ability-scores'
 ALIGNMENTS = 'alignments'
+
+# Excluded categories: These categories won't be shown in the first wiki menu
+EXCLUDED_CATEGORIES = ['backgrounds']
 
 
 async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE):
@@ -168,12 +172,13 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
     row = []
 
     for resource_name, resource in main_resources.items():
-        button = InlineKeyboardButton(format_camel_case_to_title(resource_name), callback_data=resource_name)
-        row.append(button)
+        if resource_name not in EXCLUDED_CATEGORIES:
+            button = InlineKeyboardButton(format_camel_case_to_title(resource_name), callback_data=resource_name)
+            row.append(button)
 
-        if len(row) == 2:
-            keyboard.append(row)
-            row = []
+            if len(row) == 2:
+                keyboard.append(row)
+                row = []
 
     if row:
         keyboard.append(row)
