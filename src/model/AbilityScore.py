@@ -13,6 +13,6 @@ class AbilityScore(APIResource):
         self.__str__()
 
     def __str__(self):
-        return (f"<br>Nome</br>: {self.full_name}\n"
-                f"<br>Descrizione</br>: {" ".join(self.desc)}\n"
-                f"<br>Skills</br>: {', '.join([skill.name for skill in self.skills])}")
+        return (f"<b>Nome</b>: {self.full_name}\n"
+                f"<b>Descrizione</b>: {" ".join(self.desc)}\n"
+                f"<b>Skills</b>: {', '.join([skill.name for skill in self.skills])}")
