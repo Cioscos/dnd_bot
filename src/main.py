@@ -26,6 +26,7 @@ from src.model.APIResource import APIResource
 from src.model.AbilityScore import AbilityScore
 from src.model.Alignment import Alignment
 from src.model.ClassResource import ClassResource
+from src.model.Condition import Condition
 from src.util import split_text_into_chunks, format_camel_case_to_title
 
 # Setup logging
@@ -67,6 +68,7 @@ CLASS_SPELLS_PAGE = 'class_spells_page'
 CLASSES = 'classes'
 ABILITY_SCORES = 'ability-scores'
 ALIGNMENTS = 'alignments'
+CONDITIONS = 'conditions'
 
 # Excluded categories: These categories won't be shown in the first wiki menu
 EXCLUDED_CATEGORIES = ['backgrounds']
@@ -130,6 +132,8 @@ def parse_resource(category: str, data: Dict[str, Any]) -> APIResource:
         return ClassResource(**data)
     elif category == ALIGNMENTS:
         return Alignment(**data)
+    elif category == CONDITIONS:
+        return Condition(**data)
     else:
         return APIResource(**data)
 
