@@ -19,14 +19,20 @@ from telegram.ext import (
 )
 from telegram.helpers import escape_markdown
 from telegram.warnings import PTBUserWarning
+from thefuzz import fuzz
 
 from src.DndService import DndService
 from src.environment_variables_mg import keyring_initialize, keyring_get
 from src.model.AbilityScore import AbilityScore
 from src.model.APIResource import APIResource
 from src.model.ClassResource import ClassResource
+from src.model.SpellResource import SpellResource
+from src.model.class_submenus import class_submenus_query_handler, class_spells_menu_buttons_query_handler, \
+    class_search_spells_text_handler, class_reading_spells_menu_buttons_query_handler, \
+    class_spell_visualization_buttons_query_handler, class_resources_submenu_text_handler
 from src.parse_object import parse_ability_score
-from src.util import is_string_in_nested_lists, split_text_into_chunks, format_camel_case_to_title
+from src.util import is_string_in_nested_lists, split_text_into_chunks, format_camel_case_to_title, \
+    generate_account_list_keyboard, chunk_list
 
 # Setup logging
 logging.basicConfig(
@@ -44,17 +50,24 @@ logging.getLogger("httpx").setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
 
 # State definitions for top-level conv handler
-MAIN_MENU, ITEM_DETAILS_MENU,  = map(chr, range(5))
+MAIN_MENU, ITEM_DETAILS_MENU = map(chr, range(2))
 
-CURRENT_INLINE_PAGE = 0
+# State definitions for class sub conversation
+CLASS_SUBMENU, CLASS_SPELLS_SUBMENU, CLASS_RESOURCES_SUBMENU, CLASS_MANUAL_SPELLS_SEARCHING, CLASS_READING_SPELLS_SEARCHING, CLASS_SPELL_VISUALIZATION = map(
+    chr, range(2, 8))
 
 STOPPING = 99
 
 # bot data keys
 BOT_DATA_CHAT_IDS = 'bot_data_chat_ids'
 
+# chat data keys
+CURRENT_CLASS_SPELLS_INLINE_PAGE = 'current_class_spells_inline_page'
+
 # callback keys
 ABILITY_SCORE_CALLBACK = 'ability_score'
+CLASS_SPELLS_PAGES = 'class_spells'
+CLASS_SPELLS_PAGE = 'class_spells_page'
 
 CLASSES = 'classes'
 ABILITY_SCORES = 'ability-scores'
@@ -102,7 +115,7 @@ async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def post_stop_callback(application: Application) -> None:
-    for chat_id in application.bot_data[BOT_DATA_CHAT_IDS]:
+    for chat_id in application.bot_data.get(BOT_DATA_CHAT_IDS, []):
         try:
             await application.bot.send_message(chat_id,
                                                "🔴 The bot was switched off... someone switched off the power 🔴")
@@ -124,7 +137,8 @@ def process_keyboard_by_category(category: str, class_: APIResource) -> List:
     if category == CLASSES:
         return [
             [InlineKeyboardButton('Spell', callback_data=f"spells|{class_.spells}|{class_.name}")],
-            [InlineKeyboardButton('Risorse di classe per livello', callback_data=f"resources|{class_.class_levels}|{class_.name}")]
+            [InlineKeyboardButton('Risorse di classe per livello',
+                                  callback_data=f"resources|{class_.class_levels}|{class_.name}")]
         ]
 
     else:
@@ -240,43 +254,9 @@ async def details_menu_buttons_query_handler(update: Update, context: ContextTyp
     # conversation
 
     if category == CLASSES:
-        pass
+        return CLASS_SUBMENU
     else:
         return ConversationHandler.END
-
-
-async def class_submenus_query_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    query = update.callback_query
-    data = query.data
-
-    submenu, endpoint, class_name = data.split('|')
-
-    await query.answer()
-
-    if submenu == 'spells':
-        keyboard = [[InlineKeyboardButton('consulta', callback_data='read-spells'),
-                     InlineKeyboardButton('cerca', callback_data='search-spell')]]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        await update.effective_message.reply_text(f"Vuoi consultare tutte le spell del {class_name} o cercarne una?\n"
-                                                  "Manda /stop per terminare la conversazione", reply_markup=reply_markup)
-    elif submenu == 'resources':
-        # save the endpoint in chat data
-        context.chat_data['class-levele-endpoint'] = endpoint
-        await update.effective_message.reply_text(f"A che livello vuoi consultare la classe {class_name}? Rispondi con un messaggio da 1 a 20")
-
-    return SPELL_BUTTONS_MENU
-
-
-async def spells_menu_buttons_query_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    query = update.callback_query
-    data = query.data
-    await query.answer()
-
-    if data == 'search-spell':
-        await update.effective_message.reply_text("Mandami il nome della spell da cercare")
-        return
-
-
 
 
 async def stop(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -300,14 +280,29 @@ def main() -> None:
 
     application.add_error_handler(error_handler)
 
-
+    class_options_handler = ConversationHandler(
+        entry_points=[CallbackQueryHandler(class_submenus_query_handler, pattern=r"^(spells\|)|(resources\|)")],
+        states={
+            CLASS_SPELLS_SUBMENU: [CallbackQueryHandler(class_spells_menu_buttons_query_handler, pattern='^read-spells$|^search-spell$')],
+            CLASS_MANUAL_SPELLS_SEARCHING: [MessageHandler(filters.TEXT & ~filters.COMMAND, class_search_spells_text_handler)],
+            CLASS_READING_SPELLS_SEARCHING: [CallbackQueryHandler(class_reading_spells_menu_buttons_query_handler)],
+            CLASS_SPELL_VISUALIZATION: [CallbackQueryHandler(class_spell_visualization_buttons_query_handler)],
+            CLASS_RESOURCES_SUBMENU: [MessageHandler(filters.TEXT & ~filters.COMMAND, class_resources_submenu_text_handler)]
+        },
+        fallbacks=[CommandHandler("stop", stop_nested)],
+        map_to_parent={
+            STOPPING: MAIN_MENU,
+            ConversationHandler.END: MAIN_MENU
+        }
+    )
 
     main_handler = ConversationHandler(
         entry_points=[CommandHandler('start', start_handler)],
         states={
-            MAIN_MENU: [CallbackQueryHandler(main_menu_buttons_query_handler, pattern='^[^/]+$')],
+            MAIN_MENU: [CallbackQueryHandler(main_menu_buttons_query_handler, pattern='^[^/]+$'),
+                        CommandHandler('start', start_handler)],
             ITEM_DETAILS_MENU: [CallbackQueryHandler(details_menu_buttons_query_handler, pattern='^.*/.*$')],
-            SPELL_BUTTONS_MENU: [CallbackQueryHandler(spells_menu_buttons_query_handler, pattern='^read-spells$|^search-spell$')]
+            CLASS_SUBMENU: [class_options_handler]
         },
         fallbacks=[CommandHandler("stop", stop)]
     )

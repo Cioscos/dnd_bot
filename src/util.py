@@ -3,6 +3,8 @@ from typing import List, Union
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.constants import ParseMode
 
+from src.model.APIResource import APIResource
+
 ABILITY_SCORE_CALLBACK = 'ability_score'
 
 
@@ -54,6 +56,56 @@ async def split_text_into_chunks(text: str, update: Update, reply_markup: Inline
 
     for chunk in chunks:
         await update.effective_message.reply_text(chunk, parse_mode=ParseMode.HTML, reply_markup=reply_markup)
+
+
+def generate_account_list_keyboard(spells: List[APIResource],
+                                   draw_navigation_buttons: bool = True) -> InlineKeyboardMarkup:
+    """
+    Generates an inline keyboard markup for the provided list of accounts.
+
+    Args:
+        spells (List[Account]): List of Account objects.
+        draw_navigation_buttons (bool): Choose to draw or not the navigation buttons
+
+    Returns:
+        InlineKeyboardMarkup: The generated inline keyboard markup.
+    """
+    keyboard = []
+    row = []
+    for spell in spells:
+        button = InlineKeyboardButton(spell.name, callback_data=f"{spell.url}")
+        row.append(button)
+
+        if len(row) == 2:
+            keyboard.append(row)
+            row = []
+
+    # Append any remaining buttons if the total is an odd number
+    if row:
+        keyboard.append(row)
+
+    if draw_navigation_buttons:
+        # Add navigation buttons
+        navigation_buttons = [InlineKeyboardButton("⬅️ Precedente", callback_data="prev_page"),
+                              InlineKeyboardButton("Successiva ➡️", callback_data="next_page")]
+        keyboard.append(navigation_buttons)
+
+    return InlineKeyboardMarkup(keyboard)
+
+
+def chunk_list(input_list, chunk_size):
+    """
+    Divide una lista in sottoliste di dimensione massima `chunk_size`.
+
+    Args:
+        input_list (list): La lista da dividere.
+        chunk_size (int): La dimensione massima di ogni sottolista.
+
+    Returns:
+        list of lists: Una lista contenente sottoliste di massimo `chunk_size` elementi.
+    """
+    # Utilizza una list comprehension per creare i chunk
+    return [input_list[i:i + chunk_size] for i in range(0, len(input_list), chunk_size)]
 
 
 def format_camel_case_to_title(input_string: str) -> str:

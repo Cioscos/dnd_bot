@@ -44,7 +44,6 @@ class DndService:
         async with self.__session.get(url, headers=self.__headers) as response:
             response.raise_for_status()
             response = await response.json()
-            logger.info(response)
             return response
 
     async def get_all_resources(self) -> Dict:

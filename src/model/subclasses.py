@@ -79,3 +79,8 @@ class Spellcasting(BaseModel):
     level: int
     spellcasting_ability: APIResource
     info: List[SpellcastingInfo]
+
+
+class DamageType(APIResource):
+    level: Optional[int] = None
+    desc: Optional[List[str]] = None
