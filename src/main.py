@@ -24,6 +24,7 @@ from src.class_submenus import class_submenus_query_handler, class_spells_menu_b
 from src.environment_variables_mg import keyring_initialize, keyring_get
 from src.model.APIResource import APIResource
 from src.model.AbilityScore import AbilityScore
+from src.model.Alignment import Alignment
 from src.model.ClassResource import ClassResource
 from src.util import split_text_into_chunks, format_camel_case_to_title
 
@@ -64,6 +65,7 @@ CLASS_SPELLS_PAGE = 'class_spells_page'
 
 CLASSES = 'classes'
 ABILITY_SCORES = 'ability-scores'
+ALIGNMENTS = 'alignments'
 
 
 async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE):
@@ -117,11 +119,13 @@ async def post_stop_callback(application: Application) -> None:
 
 
 def parse_resource(category: str, data: Dict[str, Any]) -> APIResource:
+    # Add other categories and their respective parsing functions
     if category == ABILITY_SCORES:
         return AbilityScore(**data)
     elif category == CLASSES:
         return ClassResource(**data)
-    # Add other categories and their respective parsing functions
+    elif category == ALIGNMENTS:
+        return Alignment(**data)
     else:
         return APIResource(**data)
 
