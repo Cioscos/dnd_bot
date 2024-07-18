@@ -23,8 +23,8 @@ from src.class_submenus import class_submenus_query_handler, class_spells_menu_b
     class_spell_visualization_buttons_query_handler, class_resources_submenu_text_handler
 from src.environment_variables_mg import keyring_initialize, keyring_get
 from src.model.APIResource import APIResource
+from src.model.AbilityScore import AbilityScore
 from src.model.ClassResource import ClassResource
-from src.parse_object import parse_ability_score
 from src.util import split_text_into_chunks, format_camel_case_to_title
 
 # Setup logging
@@ -118,7 +118,7 @@ async def post_stop_callback(application: Application) -> None:
 
 def parse_resource(category: str, data: Dict[str, Any]) -> APIResource:
     if category == ABILITY_SCORES:
-        return parse_ability_score(data)
+        return AbilityScore(**data)
     elif category == CLASSES:
         return ClassResource(**data)
     # Add other categories and their respective parsing functions

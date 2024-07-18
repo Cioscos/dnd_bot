@@ -1,17 +1,18 @@
-from typing import List
+from typing import List, Optional
 
 from src.model.APIResource import APIResource
 
 
 class AbilityScore(APIResource):
-    def __init__(self, index: str, name: str, url: str, full_name: str, desc: List[str], skills: List[APIResource]):
-        super().__init__(index, name, url)
-        self.full_name = full_name
-        self.desc = desc
-        self.skills = skills
+    full_name: str
+    desc: List[str]
+    skills: Optional[List[APIResource]]
+    url: str
 
     def __repr__(self):
-        repr_string = (f"*{self.full_name} ({self.name})*:\n"
-                       f"{" ".join(self.desc)}\n\n"
-                       f"*Skill*:\n{', '.join([skill.name for skill in self.skills]) if self.skills else 'No skills for this ability'}")
-        return repr_string
+        self.__str__()
+
+    def __str__(self):
+        return (f"<br>Nome</br>: {self.full_name}\n"
+                f"<br>Descrizione</br>: {" ".join(self.desc)}\n"
+                f"<br>Skills</br>: {', '.join([skill.name for skill in self.skills])}")
