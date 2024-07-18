@@ -156,8 +156,6 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
     welcome_message: str = (f"Benvenuto player {update.effective_user.name}!\n"
                             f"Come posso aiutarti oggi?! Dispongo di tante funzioni... provale tutte!")
 
-    main_resources: Dict[str, str] = {}
-
     try:
         async with DndService() as dnd_service:
             main_resources = await dnd_service.get_all_resources()
