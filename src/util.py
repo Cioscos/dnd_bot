@@ -58,13 +58,13 @@ async def split_text_into_chunks(text: str, update: Update, reply_markup: Inline
         await update.effective_message.reply_text(chunk, parse_mode=ParseMode.HTML, reply_markup=reply_markup)
 
 
-def generate_account_list_keyboard(spells: List[APIResource],
-                                   draw_navigation_buttons: bool = True) -> InlineKeyboardMarkup:
+def generate_resource_list_keyboard(resources: List[APIResource],
+                                    draw_navigation_buttons: bool = True) -> InlineKeyboardMarkup:
     """
     Generates an inline keyboard markup for the provided list of accounts.
 
     Args:
-        spells (List[Account]): List of Account objects.
+        resources (List[Account]): List of Account objects.
         draw_navigation_buttons (bool): Choose to draw or not the navigation buttons
 
     Returns:
@@ -72,8 +72,8 @@ def generate_account_list_keyboard(spells: List[APIResource],
     """
     keyboard = []
     row = []
-    for spell in spells:
-        button = InlineKeyboardButton(spell.name, callback_data=f"{spell.url}")
+    for resource in resources:
+        button = InlineKeyboardButton(resource.name, callback_data=f"{resource.url}")
         row.append(button)
 
         if len(row) == 2:

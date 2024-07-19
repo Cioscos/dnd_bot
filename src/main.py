@@ -22,19 +22,22 @@ from src.class_submenus import class_submenus_query_handler, class_spells_menu_b
     class_search_spells_text_handler, class_reading_spells_menu_buttons_query_handler, \
     class_spell_visualization_buttons_query_handler, class_resources_submenu_text_handler
 from src.environment_variables_mg import keyring_initialize, keyring_get
+from src.equipment_categories_submenus import equipment_categories_first_menu_query_handler, \
+    equipment_visualization_query_handler
 from src.model.APIResource import APIResource
 from src.model.AbilityScore import AbilityScore
 from src.model.Alignment import Alignment
 from src.model.ClassResource import ClassResource
 from src.model.Condition import Condition
-from src.util import split_text_into_chunks, format_camel_case_to_title
+from src.model.DamageType import DamageType
+from src.util import split_text_into_chunks, format_camel_case_to_title, generate_resource_list_keyboard, chunk_list
 
 # Setup logging
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     datefmt='%y-%m-%d %H:%M:%S',
-    filename='password_bot.log'
+    filename='dnd_beyond.log'
 )
 
 filterwarnings(action="ignore", message=r".*CallbackQueryHandler", category=PTBUserWarning)
@@ -51,13 +54,19 @@ MAIN_MENU, ITEM_DETAILS_MENU = map(chr, range(2))
 CLASS_SUBMENU, CLASS_SPELLS_SUBMENU, CLASS_RESOURCES_SUBMENU, CLASS_MANUAL_SPELLS_SEARCHING, CLASS_READING_SPELLS_SEARCHING, CLASS_SPELL_VISUALIZATION = map(
     chr, range(2, 8))
 
+# state definitions for equipment-categories conversation
+EQUIPMENT_CATEGORIES_SUBMENU, EQUIPMENT_VISUALIZATION = map(chr, range(8, 10))
+
 STOPPING = 99
 
 # bot data keys
 BOT_DATA_CHAT_IDS = 'bot_data_chat_ids'
 
 # chat data keys
-CURRENT_CLASS_SPELLS_INLINE_PAGE = 'current_class_spells_inline_page'
+WIKI = 'wiki'
+CHARACTERS_CREATOR = 'characters_creator'
+CURRENT_INLINE_PAGE_FOR_SUBMENUS = 'current_inline_page_for_submenu'
+INLINE_PAGES = 'inline_pages'
 
 # callback keys
 ABILITY_SCORE_CALLBACK = 'ability_score'
@@ -69,9 +78,15 @@ CLASSES = 'classes'
 ABILITY_SCORES = 'ability-scores'
 ALIGNMENTS = 'alignments'
 CONDITIONS = 'conditions'
+DAMAGE_TYPES = 'damage-types'
+EQUIPMENT_CATEGORIES = 'equipment-categories'
+EQUIPMENT = 'equipment'
 
 # Excluded categories: These categories won't be shown in the first wiki menu
-EXCLUDED_CATEGORIES = ['backgrounds']
+EXCLUDED_CATEGORIES = ['backgrounds', 'equipment']
+
+# Not standard menù categories
+NOT_STANDARD_MENU_CATEGORIES = ['equipment-categories']
 
 
 async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE):
@@ -115,6 +130,11 @@ async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE):
         )
 
 
+async def post_init_callback(application: Application) -> None:
+    if CHARACTERS_CREATOR not in application.bot_data:
+        application.bot_data[CHARACTERS_CREATOR] = {}
+
+
 async def post_stop_callback(application: Application) -> None:
     for chat_id in application.bot_data.get(BOT_DATA_CHAT_IDS, []):
         try:
@@ -134,6 +154,8 @@ def parse_resource(category: str, data: Dict[str, Any]) -> APIResource:
         return Alignment(**data)
     elif category == CONDITIONS:
         return Condition(**data)
+    elif category == DAMAGE_TYPES:
+        return DamageType(**data)
     else:
         return APIResource(**data)
 
@@ -156,6 +178,8 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
         context.bot_data[BOT_DATA_CHAT_IDS].add(update.effective_chat.id)
     else:
         context.bot_data[BOT_DATA_CHAT_IDS] = set()
+
+    context.chat_data[WIKI] = {}
 
     welcome_message: str = (f"Benvenuto player {update.effective_user.name}!\n"
                             f"Come posso aiutarti oggi?! Dispongo di tante funzioni... provale tutte!")
@@ -239,37 +263,62 @@ async def details_menu_buttons_query_handler(update: Update, context: ContextTyp
     async with DndService() as dnd_service:
         resource_details = await dnd_service.get_resource_detail(path)
 
-    resource = parse_resource(category, resource_details)
-    details = str(resource)
+    if category not in NOT_STANDARD_MENU_CATEGORIES:
+        resource = parse_resource(category, resource_details)
+        details = str(resource)
 
-    # process the keyboard based on the category
-    keyboard = process_keyboard_by_category(category, resource)
+        # process the keyboard based on the category
+        keyboard = process_keyboard_by_category(category, resource)
 
-    reply_markup = None
-    if keyboard:
-        reply_markup = InlineKeyboardMarkup(keyboard)
+        reply_markup = None
+        if keyboard:
+            reply_markup = InlineKeyboardMarkup(keyboard)
 
-    if len(details) <= 4096:
-        await query.edit_message_text(details, parse_mode=ParseMode.HTML, reply_markup=reply_markup)
+        if len(details) <= 4096:
+            await query.edit_message_text(details, parse_mode=ParseMode.HTML, reply_markup=reply_markup)
+        else:
+            await split_text_into_chunks(details, update, reply_markup=reply_markup)
+
     else:
-        await split_text_into_chunks(details, update, reply_markup=reply_markup)
+        # if we are here means that we have another list of APIResource objects
+        # continue sending another list of items with pagination
+        # this mean that the category is here this function must return a state for the submenus management
+
+        # try to understand the key name which has a list has value
+        key_name = ''
+        for k, v in resource_details.items():
+            if isinstance(v, list):
+                key_name = k
+
+        resource_list = [APIResource(**result) for result in resource_details[key_name]]
+        resource_pages = chunk_list(resource_list, 8)
+
+        # save the inline pages in the context data
+        context.chat_data[WIKI][INLINE_PAGES] = resource_pages
+
+        reply_markup = generate_resource_list_keyboard(resource_pages[0])
+        await update.effective_message.reply_text("Seleziona un elemento dalla lista o premi "
+                                                  "/stop per terminare la conversazione", reply_markup=reply_markup)
 
     # choose the type of return based on the category selected. Returns END if there is no need to go deeper in the
     # conversation
-
     if category == CLASSES:
         return CLASS_SUBMENU
+    elif category == EQUIPMENT_CATEGORIES:
+        return EQUIPMENT_CATEGORIES_SUBMENU
     else:
         return ConversationHandler.END
 
 
 async def stop(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     await update.effective_message.reply_text('Ok! Use /start to start a new conversation!')
+    context.chat_data[WIKI] = {}
     return ConversationHandler.END
 
 
 async def stop_nested(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     await update.message.reply_text("Comando stoppato")
+    context.chat_data[WIKI] = {}
     return STOPPING
 
 
@@ -280,6 +329,7 @@ def main() -> None:
 
     application = (Application.builder()
                    .token(keyring_get('Telegram'))
+                   .post_init(post_init_callback)
                    .post_stop(post_stop_callback)).build()
 
     application.add_error_handler(error_handler)
@@ -300,13 +350,27 @@ def main() -> None:
         }
     )
 
+    equipment_categories_handler = ConversationHandler(
+        entry_points=[CallbackQueryHandler(equipment_categories_first_menu_query_handler)],
+        states={
+            EQUIPMENT_CATEGORIES_SUBMENU: [CallbackQueryHandler(equipment_categories_first_menu_query_handler)],
+            EQUIPMENT_VISUALIZATION: [CallbackQueryHandler(equipment_visualization_query_handler)]
+        },
+        fallbacks=[CommandHandler("stop", stop_nested)],
+        map_to_parent={
+            STOPPING: MAIN_MENU,
+            ConversationHandler.END: MAIN_MENU
+        }
+    )
+
     main_handler = ConversationHandler(
         entry_points=[CommandHandler('start', start_handler)],
         states={
             MAIN_MENU: [CallbackQueryHandler(main_menu_buttons_query_handler, pattern='^[^/]+$'),
                         CommandHandler('start', start_handler)],
             ITEM_DETAILS_MENU: [CallbackQueryHandler(details_menu_buttons_query_handler, pattern='^.*/.*$')],
-            CLASS_SUBMENU: [class_options_handler]
+            CLASS_SUBMENU: [class_options_handler],
+            EQUIPMENT_CATEGORIES_SUBMENU: [equipment_categories_handler]
         },
         fallbacks=[CommandHandler("stop", stop)]
     )

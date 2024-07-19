@@ -9,7 +9,7 @@ from src.DndService import DndService
 from src.model.APIResource import APIResource
 from src.model.ClassLevelResource import ClassLevelResource
 from src.model.SpellResource import SpellResource
-from src.util import chunk_list, generate_account_list_keyboard
+from src.util import chunk_list, generate_resource_list_keyboard
 
 # State definitions for class sub conversation
 CLASS_SUBMENU, CLASS_SPELLS_SUBMENU, CLASS_RESOURCES_SUBMENU, CLASS_MANUAL_SPELLS_SEARCHING, CLASS_READING_SPELLS_SEARCHING, CLASS_SPELL_VISUALIZATION = map(
@@ -18,9 +18,8 @@ CLASS_SUBMENU, CLASS_SPELLS_SUBMENU, CLASS_RESOURCES_SUBMENU, CLASS_MANUAL_SPELL
 STOPPING = 99
 
 # chat data keys
+WIKI = 'wiki'
 CURRENT_CLASS_SPELLS_INLINE_PAGE = 'current_class_spells_inline_page'
-
-# callback keys
 ABILITY_SCORE_CALLBACK = 'ability_score'
 CLASS_SPELLS_PAGES = 'class_spells'
 CLASS_SPELLS_PAGE = 'class_spells_page'
@@ -33,7 +32,7 @@ async def class_submenus_query_handler(update: Update, context: ContextTypes.DEF
 
     submenu, endpoint, class_name = data.split('|')
     # save the endpoint in chat data
-    context.chat_data['class-level-endpoint'] = endpoint
+    context.chat_data[WIKI]['class-level-endpoint'] = endpoint
 
     if submenu == 'spells':
         keyboard = [[InlineKeyboardButton('consulta', callback_data='read-spells'),
@@ -62,20 +61,21 @@ async def class_spells_menu_buttons_query_handler(update: Update, context: Conte
         return CLASS_MANUAL_SPELLS_SEARCHING
 
     elif data == 'read-spells':
-        endpoint = context.chat_data['class-level-endpoint']
+        endpoint = context.chat_data[WIKI]['class-level-endpoint']
         async with DndService() as dnd_service:
             resource_details = await dnd_service.get_resource_by_class_resource(endpoint)
 
         # set the current inline page in chat_data
-        context.chat_data[CURRENT_CLASS_SPELLS_INLINE_PAGE] = 0
+        context.chat_data[WIKI][CURRENT_CLASS_SPELLS_INLINE_PAGE] = 0
 
         spell_list = [APIResource(**result) for result in resource_details['results']]
         spell_pages = chunk_list(spell_list, 8)
 
         # save the spells in the chat data
-        context.chat_data[CLASS_SPELLS_PAGES] = spell_pages
+        context.chat_data[WIKI][CLASS_SPELLS_PAGES] = spell_pages
 
-        reply_markup = generate_account_list_keyboard(spell_pages[context.chat_data[CURRENT_CLASS_SPELLS_INLINE_PAGE]])
+        reply_markup = generate_resource_list_keyboard(
+            spell_pages[context.chat_data[WIKI][CURRENT_CLASS_SPELLS_INLINE_PAGE]])
 
         await update.effective_message.reply_text(f"(Premi /stop per tornare al menu principle)\n"
                                                   f"Ecco la lista delle spell :", reply_markup=reply_markup)
@@ -90,14 +90,14 @@ async def class_reading_spells_menu_buttons_query_handler(update: Update, contex
     data = query.data
 
     if data == "prev_page":
-        if context.chat_data[CURRENT_CLASS_SPELLS_INLINE_PAGE] == 0:
+        if context.chat_data[WIKI][CURRENT_CLASS_SPELLS_INLINE_PAGE] == 0:
             await query.answer('Sei alla prima pagina!')
             return CLASS_READING_SPELLS_SEARCHING
 
-        context.chat_data[CURRENT_CLASS_SPELLS_INLINE_PAGE] -= 1
+        context.chat_data[WIKI][CURRENT_CLASS_SPELLS_INLINE_PAGE] -= 1
 
     elif data == "next_page":
-        context.chat_data[CURRENT_CLASS_SPELLS_INLINE_PAGE] += 1
+        context.chat_data[WIKI][CURRENT_CLASS_SPELLS_INLINE_PAGE] += 1
 
     else:
         await query.answer()
@@ -114,14 +114,14 @@ async def class_reading_spells_menu_buttons_query_handler(update: Update, contex
         return CLASS_SPELL_VISUALIZATION
 
     # retrieve other spells
-    spells_page: List[APIResource] = context.chat_data[CLASS_SPELLS_PAGES][
-        context.chat_data[CURRENT_CLASS_SPELLS_INLINE_PAGE]]
+    spells_page: List[APIResource] = context.chat_data[WIKI][CLASS_SPELLS_PAGES][
+        context.chat_data[WIKI][CURRENT_CLASS_SPELLS_INLINE_PAGE]]
 
     if not spells_page:
         await query.answer("Non ci sono altre pagine!")
         return CLASS_READING_SPELLS_SEARCHING
 
-    reply_markup = generate_account_list_keyboard(spells_page)
+    reply_markup = generate_resource_list_keyboard(spells_page)
     await query.answer()
     await query.edit_message_text(f"(Premi /stop per tornare al menu principle)\n"
                                   f"Ecco la lista delle spell :", reply_markup=reply_markup)
@@ -132,10 +132,10 @@ async def class_spell_visualization_buttons_query_handler(update: Update, contex
     data = query.data
 
     if data == 'back':
-        spells_page: List[APIResource] = context.chat_data[CLASS_SPELLS_PAGES][
-            context.chat_data[CURRENT_CLASS_SPELLS_INLINE_PAGE]]
+        spells_page: List[APIResource] = context.chat_data[WIKI][CLASS_SPELLS_PAGES][
+            context.chat_data[WIKI][CURRENT_CLASS_SPELLS_INLINE_PAGE]]
 
-        reply_markup = generate_account_list_keyboard(spells_page)
+        reply_markup = generate_resource_list_keyboard(spells_page)
         await query.answer()
         await query.edit_message_text(f"(Premi /stop per tornare al menu principle)\n"
                                       f"Ecco la lista delle spell :", reply_markup=reply_markup)
@@ -145,7 +145,7 @@ async def class_spell_visualization_buttons_query_handler(update: Update, contex
 
 async def class_search_spells_text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     text = update.effective_message.text
-    endpoint = context.chat_data['class-level-endpoint']
+    endpoint = context.chat_data[WIKI]['class-level-endpoint']
 
     # check if the input is a number
     if text.isdigit():
@@ -187,7 +187,7 @@ async def class_resources_submenu_text_handler(update: Update, context: ContextT
         await update.effective_message.reply_text('Inserisci un numero tra 1 a 20. Dovresti saperlo...')
         return CLASS_RESOURCES_SUBMENU
 
-    endpoint = context.chat_data['class-level-endpoint'] + f'/{text}'
+    endpoint = context.chat_data[WIKI]['class-level-endpoint'] + f'/{text}'
 
     async with DndService() as dnd_service:
         resource_details = await dnd_service.get_resource_by_class_resource(endpoint)
