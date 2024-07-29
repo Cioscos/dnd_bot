@@ -3407,14 +3407,16 @@ class Proficiency(GraphQLBaseModel):
 
     def __str__(self):
         classes = ', '.join([str(cls) for cls in self.classes]) if self.classes else "None"
-        index = self.index if self.index else "None"
         name = self.name if self.name else "None"
         races = ', '.join([str(race) for race in self.races]) if self.races else "None"
         reference = str(self.reference) if self.reference else "None"
         type_str = self.type if self.type else "None"
 
-        return (f"Classes: {classes}, Index: {index}, Name: {name}, Races: {races}, "
-                f"Reference: {reference}, Type: {type_str}")
+        return (f"<b>Classes</b>: {classes}\n"
+                f"<b>Name</b>: {name}\n"
+                f"<b>Races</b>: {races}\n"
+                f"<b>Reference</b>: {reference}\n"
+                f"<b>Type</b>: {type_str}")
 
 
 class ProficiencyChoice(GraphQLBaseModel):

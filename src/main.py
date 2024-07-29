@@ -92,16 +92,18 @@ EQUIPMENT_CATEGORIES = 'equipment-categories'
 EQUIPMENT = 'equipment'
 LANGUAGES = 'languages'
 MONSTERS = 'monsters'
+PROFICIENCIES = 'proficiencies'
+RACES = 'races'
 
 # Excluded categories: These categories won't be shown in the first wiki menu
-EXCLUDED_CATEGORIES = ['backgrounds', 'equipment', 'feats', 'features', 'magic-items', 'magic-schools']
+EXCLUDED_CATEGORIES = ['backgrounds', 'equipment', 'feats', 'features', 'magic-items', 'magic-schools', PROFICIENCIES]
 
 # Not standard menù categories
-NOT_STANDARD_MENU_CATEGORIES = ['equipment-categories']
+NOT_STANDARD_MENU_CATEGORIES = [EQUIPMENT_CATEGORIES]
 
 # graphql categories
 GRAPHQL_ENDPOINT = 'https://www.dnd5eapi.co/graphql'
-GRAPHQL_CATEOGRIES = [MONSTERS]
+GRAPHQL_CATEOGRIES = [MONSTERS, PROFICIENCIES, RACES]
 
 
 async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE):
@@ -159,7 +161,8 @@ async def post_stop_callback(application: Application) -> None:
             logger.error(f"CHAT_ID: {chat_id} Telegram error stopping the bot: {e}")
 
 
-def parse_resource(category: str, data: Dict[str, Any]) -> APIResource:
+def parse_resource(category: str, data: Dict[str, Any], graphql_key: str = None) -> Union[
+    APIResource, GraphQLBaseModel]:
     # Add other categories and their respective parsing functions
     if category == ABILITY_SCORES:
         return AbilityScore(**data)
@@ -173,6 +176,12 @@ def parse_resource(category: str, data: Dict[str, Any]) -> APIResource:
         return DamageType(**data)
     elif category == LANGUAGES:
         return Language(**data)
+    elif category == MONSTERS:
+        return models.Monster(**data[graphql_key])
+    elif category == PROFICIENCIES:
+        return models.Proficiency(**data[graphql_key])
+    elif category == RACES:
+        return models.Race(**data[graphql_key])
     else:
         return APIResource(**data)
 
@@ -241,7 +250,6 @@ async def main_menu_buttons_query_handler(update: Update, context: ContextTypes.
     query = update.callback_query
     category = query.data
 
-    resources: List[APIResource] = []
     async with DndService() as dnd_service:
         resources = await dnd_service.get_available_resources(category)
 
@@ -375,7 +383,7 @@ async def details_menu_buttons_query_handler(update: Update, context: ContextTyp
                                                          variables=variables)
             await query.answer()
             key = list(resource_details.keys())[0]
-            resource = models.Monster(**resource_details[key])
+            resource = parse_resource(category, resource_details, key)
         details = str(resource)
 
         keyboard = process_keyboard_by_category(category, resource)
