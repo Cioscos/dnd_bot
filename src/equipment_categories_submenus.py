@@ -60,7 +60,7 @@ async def equipment_categories_first_menu_query_handler(update: Update, context:
 
     reply_markup = generate_resource_list_keyboard(equipment_page)
     await query.answer()
-    await query.edit_message_text(f"(Premi /stop per tornare al menu principle)\n"
+    await query.edit_message_text(f"(Premi /stop per tornare al menu principale)\n"
                                   f"Ecco la lista di equipaggiamenti:", reply_markup=reply_markup)
 
 

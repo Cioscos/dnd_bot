@@ -2,7 +2,7 @@ import html
 import json
 import logging
 import traceback
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Union
 from warnings import filterwarnings
 
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
@@ -24,20 +24,26 @@ from src.class_submenus import class_submenus_query_handler, class_spells_menu_b
 from src.environment_variables_mg import keyring_initialize, keyring_get
 from src.equipment_categories_submenus import equipment_categories_first_menu_query_handler, \
     equipment_visualization_query_handler
+from src.graphql_queries import CATEGORY_TO_QUERY_MAP
+from src.model import models
 from src.model.APIResource import APIResource
 from src.model.AbilityScore import AbilityScore
 from src.model.Alignment import Alignment
 from src.model.ClassResource import ClassResource
 from src.model.Condition import Condition
 from src.model.DamageType import DamageType
-from src.util import split_text_into_chunks, format_camel_case_to_title, generate_resource_list_keyboard, chunk_list
+from src.model.Language import Language
+from src.model.models import GraphQLBaseModel
+from src.util import split_text_into_chunks, format_camel_case_to_title, generate_resource_list_keyboard, chunk_list, \
+    async_graphql_query
 
 # Setup logging
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     datefmt='%y-%m-%d %H:%M:%S',
-    filename='dnd_beyond.log'
+    filename='dnd_beyond.log',
+    filemode='w'
 )
 
 filterwarnings(action="ignore", message=r".*CallbackQueryHandler", category=PTBUserWarning)
@@ -56,6 +62,9 @@ CLASS_SUBMENU, CLASS_SPELLS_SUBMENU, CLASS_RESOURCES_SUBMENU, CLASS_MANUAL_SPELL
 
 # state definitions for equipment-categories conversation
 EQUIPMENT_CATEGORIES_SUBMENU, EQUIPMENT_VISUALIZATION = map(chr, range(8, 10))
+
+# state definitions for features conversation
+FEATURES_SUBMENU, FEATURE_VISUALIZATION = map(chr, range(10, 12))
 
 STOPPING = 99
 
@@ -81,12 +90,18 @@ CONDITIONS = 'conditions'
 DAMAGE_TYPES = 'damage-types'
 EQUIPMENT_CATEGORIES = 'equipment-categories'
 EQUIPMENT = 'equipment'
+LANGUAGES = 'languages'
+MONSTERS = 'monsters'
 
 # Excluded categories: These categories won't be shown in the first wiki menu
-EXCLUDED_CATEGORIES = ['backgrounds', 'equipment']
+EXCLUDED_CATEGORIES = ['backgrounds', 'equipment', 'feats', 'features', 'magic-items', 'magic-schools']
 
 # Not standard menù categories
 NOT_STANDARD_MENU_CATEGORIES = ['equipment-categories']
+
+# graphql categories
+GRAPHQL_ENDPOINT = 'https://www.dnd5eapi.co/graphql'
+GRAPHQL_CATEOGRIES = [MONSTERS]
 
 
 async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE):
@@ -156,11 +171,13 @@ def parse_resource(category: str, data: Dict[str, Any]) -> APIResource:
         return Condition(**data)
     elif category == DAMAGE_TYPES:
         return DamageType(**data)
+    elif category == LANGUAGES:
+        return Language(**data)
     else:
         return APIResource(**data)
 
 
-def process_keyboard_by_category(category: str, class_: APIResource) -> List:
+def process_keyboard_by_category(category: str, class_: Union[APIResource, GraphQLBaseModel]) -> List:
     if category == CLASSES:
         return [
             [InlineKeyboardButton('Spell', callback_data=f"spells|{class_.spells}|{class_.name}")],
@@ -228,23 +245,40 @@ async def main_menu_buttons_query_handler(update: Update, context: ContextTypes.
     async with DndService() as dnd_service:
         resources = await dnd_service.get_available_resources(category)
 
-    # Create the keyboard
-    keyboard = []
-    row = []
+    if len(resources) <= 100:
 
-    for resource in resources:
-        button = InlineKeyboardButton(resource.name, callback_data=f"{category}/{resource.index}")
-        row.append(button)
+        # Create the keyboard
+        keyboard = []
+        row = []
 
-        if len(row) == 2:
+        for resource in resources:
+            button = InlineKeyboardButton(resource.name, callback_data=f"{category}/{resource.index}")
+            row.append(button)
+
+            if len(row) == 2:
+                keyboard.append(row)
+                row = []
+
+        if row:
             keyboard.append(row)
-            row = []
 
-    if row:
-        keyboard.append(row)
+        # send the keyboard
+        reply_markup = InlineKeyboardMarkup(keyboard)
 
-    # send the keyboard
-    reply_markup = InlineKeyboardMarkup(keyboard)
+    else:
+        # split the list into pages
+        resource_pages = chunk_list(resources, 10)
+
+        # save the inline pages in the context data
+        context.chat_data[WIKI][INLINE_PAGES] = resource_pages
+
+        if CURRENT_INLINE_PAGE_FOR_SUBMENUS not in context.chat_data[WIKI]:
+            context.chat_data[WIKI][CURRENT_INLINE_PAGE_FOR_SUBMENUS] = 0
+
+        # send the keyboard
+        reply_markup = generate_resource_list_keyboard(
+            resource_pages[context.chat_data[WIKI][CURRENT_INLINE_PAGE_FOR_SUBMENUS]])
+
     await query.answer()
     await query.edit_message_text(f"Seleziona un elemento in {category} o usa /stop per annullare il comando:",
                                   reply_markup=reply_markup)
@@ -252,56 +286,108 @@ async def main_menu_buttons_query_handler(update: Update, context: ContextTypes.
     return ITEM_DETAILS_MENU
 
 
+async def handle_pagination(query, context, direction):
+    """Handle pagination of resource lists."""
+    if direction == "prev_page":
+        if context.chat_data[WIKI][CURRENT_INLINE_PAGE_FOR_SUBMENUS] == 0:
+            await query.answer('Sei alla prima pagina!')
+            return ITEM_DETAILS_MENU
+
+        context.chat_data[WIKI][CURRENT_INLINE_PAGE_FOR_SUBMENUS] -= 1
+
+    elif direction == "next_page":
+        context.chat_data[WIKI][CURRENT_INLINE_PAGE_FOR_SUBMENUS] += 1
+
+    try:
+        resource_page = context.chat_data[WIKI][INLINE_PAGES][context.chat_data[WIKI][CURRENT_INLINE_PAGE_FOR_SUBMENUS]]
+    except IndexError:
+        await query.answer("Non ci sono altre pagine!")
+        context.chat_data[WIKI][CURRENT_INLINE_PAGE_FOR_SUBMENUS] -= 1
+        return ITEM_DETAILS_MENU
+
+    reply_markup = generate_resource_list_keyboard(resource_page)
+    await query.answer()
+    await query.edit_message_text(f"(Premi /stop per tornare al menu principale)\n"
+                                  f"Ecco la lista di equipaggiamenti:", reply_markup=reply_markup)
+    return ITEM_DETAILS_MENU
+
+
+async def handle_standard_category(query, context, category, path):
+    """Handle standard categories."""
+    async with DndService() as dnd_service:
+        resource_details = await dnd_service.get_resource_detail(f"{category}/{path}")
+
+    resource = parse_resource(category, resource_details)
+    details = str(resource)
+
+    keyboard = process_keyboard_by_category(category, resource)
+    reply_markup = InlineKeyboardMarkup(keyboard) if keyboard else None
+
+    if len(details) <= 4096:
+        await query.edit_message_text(details, parse_mode=ParseMode.HTML, reply_markup=reply_markup)
+    else:
+        await split_text_into_chunks(details, query, reply_markup=reply_markup)
+
+    return ConversationHandler.END
+
+
+async def handle_not_standard_category(query, context, resource_details):
+    """Handle non-standard categories."""
+    key_name = next(k for k, v in resource_details.items() if isinstance(v, list))
+
+    resource_list = [APIResource(**result) for result in resource_details[key_name]]
+    resource_pages = chunk_list(resource_list, 8)
+
+    context.chat_data[WIKI][INLINE_PAGES] = resource_pages
+
+    reply_markup = generate_resource_list_keyboard(resource_pages[0])
+    await query.edit_message_text("Seleziona un elemento dalla lista o premi "
+                                  "/stop per terminare la conversazione", reply_markup=reply_markup)
+    return ITEM_DETAILS_MENU
+
+
 async def details_menu_buttons_query_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     query = update.callback_query
-    path = query.data
+    data = query.data
 
-    await query.answer()
+    if data in ["prev_page", "next_page"]:
+        return await handle_pagination(query, context, data)
 
-    category, _ = path.split('/', 1)
+    if not data.startswith("/api"):
+        category, path = (data.split('/', 1) + [""])[:2]  # Safely split data into category and path
 
-    async with DndService() as dnd_service:
-        resource_details = await dnd_service.get_resource_detail(path)
+        if category in NOT_STANDARD_MENU_CATEGORIES:
+            async with DndService() as dnd_service:
+                resource_details = await dnd_service.get_resource_detail(path)
+            await handle_not_standard_category(query, context, resource_details)
+        else:
+            await handle_standard_category(query, context, category, path)
 
-    if category not in NOT_STANDARD_MENU_CATEGORIES:
-        resource = parse_resource(category, resource_details)
+    else:
+        category = data.split('/')[2]
+        if category not in GRAPHQL_CATEOGRIES:
+            async with DndService() as dnd_service:
+                resource_details = await dnd_service.get_resource_by_class_resource(data)
+            resource = parse_resource(category, resource_details)
+        else:
+            variables = {'index': data.split('/')[3]}
+            resource_details = await async_graphql_query(GRAPHQL_ENDPOINT, CATEGORY_TO_QUERY_MAP[category],
+                                                         variables=variables)
+            await query.answer()
+            key = list(resource_details.keys())[0]
+            resource = models.Monster(**resource_details[key])
         details = str(resource)
 
-        # process the keyboard based on the category
         keyboard = process_keyboard_by_category(category, resource)
+        reply_markup = InlineKeyboardMarkup(keyboard) if keyboard else None
 
-        reply_markup = None
-        if keyboard:
-            reply_markup = InlineKeyboardMarkup(keyboard)
+        logger.info("Message: %s", details)
 
         if len(details) <= 4096:
             await query.edit_message_text(details, parse_mode=ParseMode.HTML, reply_markup=reply_markup)
         else:
             await split_text_into_chunks(details, update, reply_markup=reply_markup)
 
-    else:
-        # if we are here means that we have another list of APIResource objects
-        # continue sending another list of items with pagination
-        # this mean that the category is here this function must return a state for the submenus management
-
-        # try to understand the key name which has a list has value
-        key_name = ''
-        for k, v in resource_details.items():
-            if isinstance(v, list):
-                key_name = k
-
-        resource_list = [APIResource(**result) for result in resource_details[key_name]]
-        resource_pages = chunk_list(resource_list, 8)
-
-        # save the inline pages in the context data
-        context.chat_data[WIKI][INLINE_PAGES] = resource_pages
-
-        reply_markup = generate_resource_list_keyboard(resource_pages[0])
-        await update.effective_message.reply_text("Seleziona un elemento dalla lista o premi "
-                                                  "/stop per terminare la conversazione", reply_markup=reply_markup)
-
-    # choose the type of return based on the category selected. Returns END if there is no need to go deeper in the
-    # conversation
     if category == CLASSES:
         return CLASS_SUBMENU
     elif category == EQUIPMENT_CATEGORIES:
@@ -368,7 +454,7 @@ def main() -> None:
         states={
             MAIN_MENU: [CallbackQueryHandler(main_menu_buttons_query_handler, pattern='^[^/]+$'),
                         CommandHandler('start', start_handler)],
-            ITEM_DETAILS_MENU: [CallbackQueryHandler(details_menu_buttons_query_handler, pattern='^.*/.*$')],
+            ITEM_DETAILS_MENU: [CallbackQueryHandler(details_menu_buttons_query_handler)],
             CLASS_SUBMENU: [class_options_handler],
             EQUIPMENT_CATEGORIES_SUBMENU: [equipment_categories_handler]
         },

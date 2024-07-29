@@ -1,6 +1,6 @@
 from typing import List, Optional, Dict
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from src.model.APIResource import APIResource
 from src.model.subclasses import DamageType
@@ -20,6 +20,22 @@ class Damage(BaseModel):
 class Dc(BaseModel):
     dc_type: APIResource
     dc_success: str
+
+
+class SpellOption(BaseModel):
+    item: 'SpellResource'
+    option_type: str
+
+
+class SpellOptionSet(BaseModel):
+    option_set_type: str
+    options: Optional[List[SpellOption]] = None
+
+
+class SpellChoice(BaseModel):
+    choose: int
+    type: str
+    from_: SpellOptionSet = Field(..., alias='from')
 
 
 class SpellResource(APIResource):

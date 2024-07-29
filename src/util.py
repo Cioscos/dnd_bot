@@ -1,10 +1,16 @@
+import logging
+import re
 from typing import List, Union
 
+from gql import Client, gql
+from gql.transport.aiohttp import AIOHTTPTransport
+from gql.transport.aiohttp import log as graphql_requests_logger
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.constants import ParseMode
 
 from src.model.APIResource import APIResource
 
+graphql_requests_logger.setLevel(logging.WARNING)
 ABILITY_SCORE_CALLBACK = 'ability_score'
 
 
@@ -28,31 +34,72 @@ def is_string_in_nested_lists(target: str, nested_lists: List[Union[str, List]])
     return False
 
 
-async def split_text_into_chunks(text: str, update: Update, reply_markup: InlineKeyboardMarkup = None, max_length: int = 4096) -> None:
+async def split_text_into_chunks(text: str, update: Update, reply_markup: InlineKeyboardMarkup = None,
+                                 max_length: int = 4096) -> None:
     """
-    Split a given text into chunks that do not exceed the maximum Telegram message length.
+    Split a given text into chunks that do not exceed the maximum Telegram message length,
+    ensuring that HTML tags are not cut in half.
 
     Args:
         text (str): The text to be split.
         update (Update): The bot update object.
+        reply_markup (InlineKeyboardMarkup): Optional keyboard markup for the messages.
         max_length (int): The maximum length of each chunk (default is 4096).
 
     Returns:
-        List[str]: A list of text chunks.
+        None
     """
     if len(text) <= max_length:
         await update.effective_message.reply_text(text, parse_mode=ParseMode.HTML, reply_markup=reply_markup)
         return
 
+    tag_regex = re.compile(r'(<!--.*?-->|<[^>]*>)')
     chunks = []
-    while len(text) > max_length:
-        # Find the last space within the allowed length to avoid breaking words
-        split_point = text.rfind(' ', 0, max_length)
-        if split_point == -1:
-            split_point = max_length  # If no space is found, split at the max_length
-        chunks.append(text[:split_point])
-        text = text[split_point:].strip()
-    chunks.append(text)  # Add the last remaining part
+    current_chunk = ""
+    current_length = 0
+    open_tags = []
+
+    for part in tag_regex.split(text):
+        if not part:
+            continue
+
+        if part.startswith('<') and part.endswith('>'):
+            if part.startswith('</'):
+                if open_tags and open_tags[-1] == part.replace('/', ''):
+                    open_tags.pop()
+            elif not part.endswith('/>'):
+                open_tags.append(part)
+
+            if current_length + len(part) > max_length:
+                closing_tags = ''.join([f"</{tag[1:]}" for tag in open_tags[::-1]])
+                chunks.append(current_chunk + closing_tags)
+                current_chunk = ''.join(open_tags) + part
+                current_length = len(current_chunk)
+            else:
+                current_chunk += part
+                current_length += len(part)
+        else:
+            while len(part) > 0:
+                remaining_length = max_length - current_length
+                if len(part) <= remaining_length:
+                    current_chunk += part
+                    current_length += len(part)
+                    part = ""
+                else:
+                    split_point = part.rfind(' ', 0, remaining_length)
+                    if split_point == -1:
+                        split_point = remaining_length
+
+                    current_chunk += part[:split_point]
+                    part = part[split_point:].strip()
+
+                    closing_tags = ''.join([f"</{tag[1:]}" for tag in open_tags[::-1]])
+                    chunks.append(current_chunk + closing_tags)
+                    current_chunk = ''.join(open_tags)
+                    current_length = len(current_chunk)
+
+    if current_chunk:
+        chunks.append(current_chunk)
 
     for chunk in chunks:
         await update.effective_message.reply_text(chunk, parse_mode=ParseMode.HTML, reply_markup=reply_markup)
@@ -121,3 +168,24 @@ def format_camel_case_to_title(input_string: str) -> str:
     words = input_string.split('-')
     formatted_string = ' '.join(word.capitalize() for word in words)
     return formatted_string
+
+
+async def async_graphql_query(endpoint, query, variables=None, headers=None):
+    """
+    Perform an asynchronous GraphQL query using the gql library.
+
+    :param endpoint: The GraphQL endpoint URL.
+    :param query: The GraphQL query as a string.
+    :param variables: A dictionary of variables for the query (default is None).
+    :param headers: A dictionary of headers to include in the request (default is None).
+    :return: The JSON response from the GraphQL server.
+    """
+    transport = AIOHTTPTransport(
+        url=endpoint,
+        headers=headers
+    )
+
+    async with Client(transport=transport, fetch_schema_from_transport=True) as session:
+        gql_query = gql(query)
+        response = await session.execute(gql_query, variable_values=variables)
+        return response
