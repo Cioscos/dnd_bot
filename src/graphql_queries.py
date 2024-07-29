@@ -239,223 +239,116 @@ CATEGORY_TO_QUERY_MAP = {
       image
     }
   }
+}""",
+    "proficiencies": """query Proficiency($index: String) {
+  proficiency(index: $index) {
+    name
+    classes {
+      name
+    }
+    races {
+      name
+      ... on Race {
+        subraces {
+          name
+        }
+      }
+    }
+    reference {
+      ... on EquipmentCategory {
+        name
+      }
+      ... on Skill {
+        name
+      }
+      ... on AbilityScore {
+        name
+      }
+      ... on Tool {
+        name
+      }
+      ... on Armor {
+        name
+      }
+      ... on Weapon {
+        name
+      }
+      ... on Vehicle {
+        name
+      }
+      ... on Gear {
+        name
+      }
+      ... on Pack {
+        name
+      }
+      ... on Ammunition {
+        name
+      }
+    }
+    type
+  }
+}""",
+    "race": """query Race($index: String) {
+  race(index: $index) {
+    name
+    size_description
+    speed
+    alignment
+    age
+    language_desc
+    languages {
+      name
+      typical_speakers
+    }
+    ability_bonuses {
+      bonus
+      ability_score {
+        full_name
+        skills {
+          name
+        }
+      }
+    }
+    starting_proficiencies {
+      name
+    }
+    starting_proficiency_options {
+      choose
+      desc
+    }
+    traits {
+      name
+      desc
+    }
+    subraces {
+      name
+      desc
+      ability_bonuses {
+        bonus
+        ability_score {
+          full_name
+        }
+      }
+      language_options {
+        choose
+        type
+        from {
+          options {
+            item {
+              name
+            }
+          }
+        }
+      }
+      racial_traits {
+        name
+        desc
+      }
+      starting_proficiencies {
+        name
+      }
+    }
+  }
 }"""
 }
-
-# query Monster($index: String) {
-#   monster(index: $index) {
-#     name
-#     alignment
-#     challenge_rating
-#     charisma
-#     constitution
-#     damage_immunities
-#     damage_resistances
-#     damage_vulnerabilities
-#     desc
-#     dexterity
-#     hit_dice
-#     hit_points
-#     hit_points_roll
-#     image
-#     index
-#     intelligence
-#     languages
-#     proficiency_bonus
-#     size
-#     speed {
-#       burrow
-#       climb
-#       fly
-#       hover
-#       swim
-#       walk
-#     }
-#     strength
-#     subtype
-#     type
-#     wisdom
-#     xp
-#     actions {
-#       name
-#       desc
-#       dc {
-#         type {
-#           name
-#           full_name
-#           desc
-#           skills {
-#             name
-#             desc
-#           }
-#         }
-#         value
-#         success
-#       }
-#       damage {
-#         type
-#         dc {
-#           type {
-#             name
-#             full_name
-#             desc
-#           }
-#           value
-#           success
-#         }
-#         damage_type {
-#           name
-#           desc
-#         }
-#         damage_dice
-#         choose
-#       }
-#       attacks {
-#         name
-#         dc {
-#           type {
-#             name
-#             full_name
-#             desc
-#           }
-#           value
-#           success
-#         }
-#       }
-#       attack_bonus
-#       options {
-#         type
-#         choose
-#       }
-#       multiattack_type
-#       actions {
-#         type
-#         action_name
-#         count
-#       }
-#       usage {
-#         dice
-#         min_value
-#         rest_types
-#         times
-#         type
-#       }
-#     }
-#     armor_class {
-#       value
-#       desc
-#       condition {
-#         name
-#         desc
-#       }
-#       armor {
-#         name
-#         desc
-#         armor_class {
-#           max_bonus
-#           dex_bonus
-#           base
-#         }
-#         stealth_disadvantage
-#         str_minimum
-#         weight
-#         armor_category {
-#           name
-#         }
-#       }
-#       spell {
-#         name
-#       }
-#     }
-#     condition_immunities {
-#       name
-#       desc
-#     }
-#     legendary_actions {
-#       name
-#       desc
-#       dc {
-#         value
-#         success
-#         type {
-#           name
-#           full_name
-#           desc
-#           skills {
-#             name
-#             desc
-#             ability_score {
-#               full_name
-#               desc
-#               name
-#             }
-#           }
-#         }
-#       }
-#       damage {
-#         damage_type {
-#           name
-#           desc
-#         }
-#         damage_dice
-#       }
-#     }
-#     special_abilities {
-#       name
-#       desc
-#       usage {
-#         dice
-#         min_value
-#         times
-#         rest_types
-#         type
-#       }
-#       dc {
-#         value
-#         success
-#         type {
-#           full_name
-#           desc
-#         }
-#       }
-#       damage {
-#         damage_dice
-#         damage_type {
-#           name
-#           desc
-#         }
-#       }
-#     }
-#     reactions {
-#       name
-#       desc
-#       dc {
-#         success
-#         value
-#         type {
-#           full_name
-#           desc
-#         }
-#       }
-#     }
-#     senses {
-#       blindsight
-#       darkvision
-#       passive_perception
-#       tremorsense
-#       truesight
-#     }
-#     proficiencies {
-#       value
-#       proficiency {
-#         name
-#       }
-#     }
-#     forms {
-#       name
-#       type
-#       alignment
-#       image
-#     }
-#   }
-# }
