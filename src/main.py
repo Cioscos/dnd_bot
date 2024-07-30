@@ -367,7 +367,7 @@ async def handle_not_standard_category(query, context, resource_details):
 
 async def handle_graphql_category(query, update, category, data):
     """Handle GraphQL categories."""
-    variables = {'index': data.split('/')[1]}
+    variables = {'index': data.split('/')[3]}
     resource_details = await async_graphql_query(GRAPHQL_ENDPOINT, CATEGORY_TO_QUERY_MAP[category], variables=variables)
     key = list(resource_details.keys())[0]
     resource = parse_resource(category, resource_details, key)
@@ -378,10 +378,10 @@ async def handle_graphql_category(query, update, category, data):
 
     await query.answer()
 
-    if len(details) <= 4096:
+    if len(details) <= 4096 and not hasattr(resource, 'image'):
         await query.edit_message_text(details, parse_mode=ParseMode.HTML, reply_markup=reply_markup)
     else:
-        await split_text_into_chunks(details, update, reply_markup=reply_markup)
+        await split_text_into_chunks(details, update, reply_markup=reply_markup, image=resource.image)
 
 
 async def details_menu_buttons_query_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:

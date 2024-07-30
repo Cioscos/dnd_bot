@@ -13,6 +13,8 @@ from src.model.APIResource import APIResource
 graphql_requests_logger.setLevel(logging.WARNING)
 ABILITY_SCORE_CALLBACK = 'ability_score'
 
+API = 'https://www.dnd5eapi.co'
+
 
 def is_string_in_nested_lists(target: str, nested_lists: List[Union[str, List]]) -> bool:
     """
@@ -35,7 +37,7 @@ def is_string_in_nested_lists(target: str, nested_lists: List[Union[str, List]])
 
 
 async def split_text_into_chunks(text: str, update: Update, reply_markup: InlineKeyboardMarkup = None,
-                                 max_length: int = 4096) -> None:
+                                 max_length: int = 4096, image: str = None) -> None:
     """
     Split a given text into chunks that do not exceed the maximum Telegram message length,
     ensuring that HTML tags are not cut in half.
@@ -45,6 +47,7 @@ async def split_text_into_chunks(text: str, update: Update, reply_markup: Inline
         update (Update): The bot update object.
         reply_markup (InlineKeyboardMarkup): Optional keyboard markup for the messages.
         max_length (int): The maximum length of each chunk (default is 4096).
+        image: (str): The image to be used for the message.
 
     Returns:
         None
@@ -103,6 +106,9 @@ async def split_text_into_chunks(text: str, update: Update, reply_markup: Inline
 
     for chunk in chunks:
         await update.effective_message.reply_text(chunk, parse_mode=ParseMode.HTML, reply_markup=reply_markup)
+
+    if image:
+        await update.effective_message.reply_photo(API + image)
 
 
 def generate_resource_list_keyboard(resources: List[APIResource],
