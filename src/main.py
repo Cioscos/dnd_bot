@@ -94,6 +94,8 @@ LANGUAGES = 'languages'
 MONSTERS = 'monsters'
 PROFICIENCIES = 'proficiencies'
 RACES = 'races'
+RULE_SECTIONS = 'rule-sections'
+RULES = 'rules'
 
 # Excluded categories: These categories won't be shown in the first wiki menu
 EXCLUDED_CATEGORIES = ['backgrounds', 'equipment', 'feats', 'features', 'magic-items', 'magic-schools', PROFICIENCIES]
@@ -103,7 +105,7 @@ NOT_STANDARD_MENU_CATEGORIES = [EQUIPMENT_CATEGORIES]
 
 # graphql categories
 GRAPHQL_ENDPOINT = 'https://www.dnd5eapi.co/graphql'
-GRAPHQL_CATEOGRIES = [MONSTERS, PROFICIENCIES, RACES]
+GRAPHQL_CATEOGRIES = [MONSTERS, PROFICIENCIES, RACES, RULE_SECTIONS, RULES]
 
 
 async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE):
@@ -182,6 +184,10 @@ def parse_resource(category: str, data: Dict[str, Any], graphql_key: str = None)
         return models.Proficiency(**data[graphql_key])
     elif category == RACES:
         return models.Race(**data[graphql_key])
+    elif category == RULE_SECTIONS:
+        return models.RuleSection(**data[graphql_key])
+    elif category == RULES:
+        return models.Rule(**data[graphql_key])
     else:
         return APIResource(**data)
 
@@ -335,6 +341,8 @@ async def handle_standard_category(query, update, category, path):
     keyboard = process_keyboard_by_category(category, resource)
     reply_markup = InlineKeyboardMarkup(keyboard) if keyboard else None
 
+    await query.answer()
+
     if len(details) <= 4096:
         await query.edit_message_text(details, parse_mode=ParseMode.HTML, reply_markup=reply_markup)
     else:
@@ -351,6 +359,8 @@ async def handle_not_standard_category(query, context, resource_details):
     context.chat_data[WIKI][INLINE_PAGES] = resource_pages
 
     reply_markup = generate_resource_list_keyboard(resource_pages[0])
+
+    await query.answer()
     await query.edit_message_text("Seleziona un elemento dalla lista o premi "
                                   "/stop per terminare la conversazione", reply_markup=reply_markup)
 
@@ -365,6 +375,8 @@ async def handle_graphql_category(query, update, category, data):
 
     keyboard = process_keyboard_by_category(category, resource)
     reply_markup = InlineKeyboardMarkup(keyboard) if keyboard else None
+
+    await query.answer()
 
     if len(details) <= 4096:
         await query.edit_message_text(details, parse_mode=ParseMode.HTML, reply_markup=reply_markup)
@@ -400,6 +412,8 @@ async def details_menu_buttons_query_handler(update: Update, context: ContextTyp
         else:
             await handle_graphql_category(query, update, category, data)
 
+        await query.answer()
+
         details = str(resource)
         keyboard = process_keyboard_by_category(category, resource)
         reply_markup = InlineKeyboardMarkup(keyboard) if keyboard else None
@@ -408,8 +422,6 @@ async def details_menu_buttons_query_handler(update: Update, context: ContextTyp
             await query.edit_message_text(details, parse_mode=ParseMode.HTML, reply_markup=reply_markup)
         else:
             await split_text_into_chunks(details, update, reply_markup=reply_markup)
-
-    await query.answer()
 
     if category == CLASSES:
         return CLASS_SUBMENU

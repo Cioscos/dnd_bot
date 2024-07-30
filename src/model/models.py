@@ -4,6 +4,7 @@
 # mypy: ignore-errors
 
 import enum
+import re
 import typing as _t
 
 from pydantic import BaseModel, Field, ConfigDict
@@ -269,6 +270,14 @@ String = str
 
 # String or list of strings
 StringFilter = str
+
+
+def markdown_to_html(text: str) -> str:
+    # Convert headers (#, ##, ###, etc.) to bold
+    text = re.sub(r'#{1,}\s*(.+)', r'<b>\1</b>', text)
+    # Convert bold text (**text**) to <b>
+    text = re.sub(r'\*\*(.+?)\*\*', r'<b>\1</b>', text)
+    return text
 
 
 class AreaOfEffectType(enum.Enum):
@@ -3712,12 +3721,24 @@ class Rule(GraphQLBaseModel):
         return self.__str__()
 
     def __str__(self):
-        desc = self.desc if self.desc else "None"
-        index = self.index if self.index else "None"
-        name = self.name if self.name else "None"
-        subsections = ', '.join([str(subsection) for subsection in self.subsections]) if self.subsections else "None"
+        """
+        Returns a human-readable string representation of the instance.
+        """
+        elements = []
+        if self.name:
+            elements.append(f"🏷️ Name: {self.name}")
+        if self.desc:
+            if self.desc.startswith("#"):
+                desc = self.desc[2:]
+            else:
+                desc = self.desc
+            elements.append(f"📜 Description:\n{desc}")
+        if self.index:
+            elements.append(f"🔢 Index: {self.index}")
+        if self.subsections:
+            elements.append(f"📚 Subsections:\n{', '.join(map(str, self.subsections))}")
 
-        return f"Description: {desc}, Index: {index}, Name: {name}, Subsections: {subsections}"
+        return '\n'.join(elements)
 
 
 class RuleSection(GraphQLBaseModel):
@@ -3734,11 +3755,21 @@ class RuleSection(GraphQLBaseModel):
         return self.__str__()
 
     def __str__(self):
-        desc = self.desc if self.desc else "None"
-        index = self.index if self.index else "None"
-        name = self.name if self.name else "None"
+        """
+        Returns a human-readable string representation of the instance.
+        """
+        elements = []
+        if self.name:
+            elements.append(f"🏷️ Name: {self.name}")
+        if self.desc:
+            desc = markdown_to_html(self.desc)
+            if desc.startswith("#"):
+                desc = desc[2:]
+            elements.append(f"📜 Description: {desc}")
+        if self.index:
+            elements.append(f"🔢 Index: {self.index}")
 
-        return f"Description: {desc}, Index: {index}, Name: {name}"
+        return '\n'.join(elements)
 
 
 class Senses(GraphQLBaseModel):

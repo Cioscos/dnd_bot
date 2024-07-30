@@ -339,5 +339,21 @@ CATEGORY_TO_QUERY_MAP = {
       }
     }
   }
+}""",
+    "rule-sections": """query RuleSection($index: String) {
+  ruleSection(index: $index) {
+    name
+    desc
+  }
+}""",
+    "rules": """query Rule($index: String) {
+  rule(index: $index) {
+    name
+    desc
+    subsections {
+      name
+      desc
+    }
+  }
 }"""
 }
