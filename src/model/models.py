@@ -980,13 +980,16 @@ class ProficiencyRace(GraphQLBaseModel):
         """
         Returns a human-readable string representation of the instance.
         """
-        ability_bonuses = ', '.join([str(ab) for ab in self.ability_bonuses]) if self.ability_bonuses else "None"
-        index = self.index if self.index else "None"
-        name = self.name if self.name else "None"
+        elements = []
 
-        return (f"Ability Bonuses: {ability_bonuses}, "
-                f"Index: {index}, "
-                f"Name: {name}")
+        if self.name:
+            elements.append(f"⚛️ <b>{self.name}</b>")
+        if self.ability_bonuses:
+            elements.append(f"💪 <b>Ability Bonuses</b>:\n{', '.join(map(str, self.ability_bonuses))}")
+        if self.index:
+            elements.append(f"🔢 <b>Index</b>: {self.index}")
+
+        return '\n'.join(elements)
 
 
 class IEquipment(IEquipmentBase):
@@ -1061,11 +1064,14 @@ class AbilityBonus(GraphQLBaseModel):
         """
         Returns a human-readable string representation of the instance.
         """
-        ability_score = self.ability_score.name if self.ability_score else "None"
-        bonus = self.bonus if self.bonus is not None else "None"
+        elements = []
 
-        return (f"Ability Score: {ability_score}, "
-                f"Bonus: {bonus}")
+        if self.ability_score:
+            elements.append(f"Ability Score: {self.ability_score}")
+        if self.bonus:
+            elements.append(f"Bonus: {self.bonus}")
+
+        return '\n'.join(elements)
 
 
 class AbilityBonusChoice(GraphQLBaseModel):
@@ -1178,17 +1184,19 @@ class AbilityScore(GraphQLBaseModel):
         """
         Returns a human-readable string representation of the instance.
         """
-        desc = ', '.join(self.desc) if self.desc else "None"
-        full_name = self.full_name if self.full_name else "None"
-        index = self.index if self.index else "None"
-        name = self.name if self.name else "None"
-        skills = ', '.join([skill.name for skill in self.skills]) if self.skills else "None"
+        elements = []
+        if self.desc:
+            elements.append(f"📜 Description: {', '.join(self.desc)}")
+        if self.full_name:
+            elements.append(f"🏷️ Full Name: {self.full_name}")
+        if self.index:
+            elements.append(f"🔢 Index: {self.index}")
+        if self.name:
+            elements.append(f"🏷️ Name: {self.name}")
+        if self.skills:
+            elements.append(f"🛠️ Skills: {', '.join([skill.name for skill in self.skills])}")
 
-        return (f"Description: {desc}, "
-                f"Full Name: {full_name}, "
-                f"Index: {index}, "
-                f"Name: {name}, "
-                f"Skills: {skills}")
+        return ', '.join(elements)
 
 
 class AbilityScorePrerequisite(GraphQLBaseModel):
@@ -3406,17 +3414,22 @@ class Proficiency(GraphQLBaseModel):
         return self.__str__()
 
     def __str__(self):
-        classes = ', '.join([str(cls) for cls in self.classes]) if self.classes else "None"
-        name = self.name if self.name else "None"
-        races = ', '.join([str(race) for race in self.races]) if self.races else "None"
-        reference = str(self.reference) if self.reference else "None"
-        type_str = self.type if self.type else "None"
+        """
+        Returns a human-readable string representation of the instance.
+        """
+        elements = []
+        if self.classes:
+            elements.append(f"🏫 Classes: {', '.join(map(str, self.classes))}")
+        if self.name:
+            elements.append(f"🏷️ Name: {self.name}")
+        if self.races:
+            elements.append(f"🌿 Races: {', '.join(map(str, self.races))}")
+        if self.reference:
+            elements.append(f"📖 Reference: {self.reference}")
+        if self.type:
+            elements.append(f"🔍 Type: {self.type}")
 
-        return (f"<b>Classes</b>: {classes}\n"
-                f"<b>Name</b>: {name}\n"
-                f"<b>Races</b>: {races}\n"
-                f"<b>Reference</b>: {reference}\n"
-                f"<b>Type</b>: {type_str}")
+        return '\n'.join(elements)
 
 
 class ProficiencyChoice(GraphQLBaseModel):
@@ -3434,12 +3447,20 @@ class ProficiencyChoice(GraphQLBaseModel):
         return self.__str__()
 
     def __str__(self):
-        choose = self.choose if self.choose is not None else "None"
-        desc = self.desc if self.desc else "None"
-        from_ = str(self.from_) if self.from_ else "None"
-        type_str = self.type if self.type else "None"
+        """
+        Returns a human-readable string representation of the instance.
+        """
+        elements = []
+        if self.choose is not None:
+            elements.append(f"🔢 Choose: {self.choose}")
+        if self.desc:
+            elements.append(f"📜 Description: {self.desc}")
+        if self.from_:
+            elements.append(f"🔗 From: {self.from_}")
+        if self.type:
+            elements.append(f"🔍 Type: {self.type}")
 
-        return f"Choose: {choose}, Description: {desc}, From: {from_}, Type: {type_str}"
+        return ', '.join(elements)
 
 
 class ProficiencyChoiceOption(GraphQLBaseModel):
@@ -3564,28 +3585,40 @@ class Race(
         return self.__str__()
 
     def __str__(self):
+        """
+        Returns a human-readable string representation of the instance.
+        """
         base_str = super().__str__()
-        ability_bonus_options = str(self.ability_bonus_options) if self.ability_bonus_options else "None"
-        age = self.age if self.age else "None"
-        alignment = self.alignment if self.alignment else "None"
-        language_desc = self.language_desc if self.language_desc else "None"
-        language_options = str(self.language_options) if self.language_options else "None"
-        languages = ', '.join([str(language) for language in self.languages]) if self.languages else "None"
-        size = str(self.size) if self.size else "None"
-        size_description = self.size_description if self.size_description else "None"
-        speed = self.speed if self.speed is not None else "None"
-        starting_proficiencies = ', '.join(
-            [str(prof) for prof in self.starting_proficiencies]) if self.starting_proficiencies else "None"
-        starting_proficiency_options = str(
-            self.starting_proficiency_options) if self.starting_proficiency_options else "None"
-        subraces = ', '.join([str(subrace) for subrace in self.subraces]) if self.subraces else "None"
-        traits = ', '.join([str(trait) for trait in self.traits]) if self.traits else "None"
+        elements = [base_str]
 
-        return (f"{base_str}, Ability Bonus Options: {ability_bonus_options}, Age: {age}, Alignment: {alignment}, "
-                f"Language Description: {language_desc}, Language Options: {language_options}, Languages: {languages}, "
-                f"Size: {size}, Size Description: {size_description}, Speed: {speed}, "
-                f"Starting Proficiencies: {starting_proficiencies}, Starting Proficiency Options: {starting_proficiency_options}, "
-                f"Subraces: {subraces}, Traits: {traits}")
+        if self.ability_bonus_options:
+            elements.append(f"💪✨ <b>Ability Bonus Options</b>: {self.ability_bonus_options}")
+        if self.age:
+            elements.append(f"⏳ <b>Age</b>: {self.age}")
+        if self.alignment:
+            elements.append(f"⚖️ <b>Alignment</b>: {self.alignment}")
+        if self.language_desc:
+            elements.append(f"🗣️ <b>Language Description</b>: {self.language_desc}")
+        if self.language_options:
+            elements.append(f"🔤 <b>Language Options</b>: {self.language_options}")
+        if self.languages:
+            elements.append(f"🗣️ <b>Languages</b>: {', '.join(map(str, self.languages))}")
+        if self.size:
+            elements.append(f"📏 <b>Size</b>: {self.size}")
+        if self.size_description:
+            elements.append(f"📏📜 <b>Size Description</b>: {self.size_description}")
+        if self.speed is not None:
+            elements.append(f"💨 <b>Speed</b>: {self.speed}")
+        if self.starting_proficiencies:
+            elements.append(f"🛡️ <b>Starting Proficiencies</b>:\n{'\n'.join(map(str, self.starting_proficiencies))}")
+        if self.starting_proficiency_options:
+            elements.append(f"🛡️✨ <b>Starting Proficiency Options</b>:\n{self.starting_proficiency_options}")
+        if self.subraces:
+            elements.append(f"🌿 <b>Subraces</b>:\n{'\n'.join(map(str, self.subraces))}")
+        if self.traits:
+            elements.append(f"🔮 <b>Traits</b>:\n{'\n'.join(map(str, self.traits))}")
+
+        return '\n'.join(elements)
 
 
 class Range(GraphQLBaseModel):
@@ -4171,9 +4204,7 @@ class Subclass(GraphQLBaseModel):
                 f"Spells: {spells}, Subclass Flavor: {subclass_flavor}, Subclass Levels: {subclass_levels}")
 
 
-class Subrace(
-    ProficiencyRace,
-):
+class Subrace(ProficiencyRace):
     """
     An Object type
     See https://graphql.org/learn/schema/#object-types-and-fields
@@ -4190,15 +4221,20 @@ class Subrace(
 
     def __str__(self):
         base_str = super().__str__()
-        desc = self.desc if self.desc else "None"
-        language_options = str(self.language_options) if self.language_options else "None"
-        race = str(self.race) if self.race else "None"
-        racial_traits = ', '.join([str(trait) for trait in self.racial_traits]) if self.racial_traits else "None"
-        starting_proficiencies = ', '.join(
-            [str(prof) for prof in self.starting_proficiencies]) if self.starting_proficiencies else "None"
+        elements = [base_str]
 
-        return (f"{base_str}, Description: {desc}, Language Options: {language_options}, "
-                f"Race: {race}, Racial Traits: {racial_traits}, Starting Proficiencies: {starting_proficiencies}")
+        if self.desc:
+            elements.append(f"📜 Description: {self.desc}")
+        if self.language_options:
+            elements.append(f"🔤 Language Options: {self.language_options}")
+        if self.race:
+            elements.append(f"🧝 Race: {self.race}")  # Updated emoji for race
+        if self.racial_traits:
+            elements.append(f"🌟 Racial Traits:\n{', '.join(map(str, self.racial_traits))}")
+        if self.starting_proficiencies:
+            elements.append(f"🛡️ Starting Proficiencies: {', '.join(map(str, self.starting_proficiencies))}")
+
+        return '\n'.join(elements)
 
 
 class Tool(
@@ -4242,20 +4278,33 @@ class Trait(GraphQLBaseModel):
         return self.__str__()
 
     def __str__(self):
-        desc = ', '.join(self.desc) if self.desc else "None"
-        index = self.index if self.index else "None"
-        language_options = str(self.language_options) if self.language_options else "None"
-        name = self.name if self.name else "None"
-        parent = str(self.parent) if self.parent else "None"
-        proficiencies = ', '.join([str(prof) for prof in self.proficiencies]) if self.proficiencies else "None"
-        proficiency_choices = str(self.proficiency_choices) if self.proficiency_choices else "None"
-        races = ', '.join([str(race) for race in self.races]) if self.races else "None"
-        subraces = ', '.join([str(subrace) for subrace in self.subraces]) if self.subraces else "None"
-        trait_specific = str(self.trait_specific) if self.trait_specific else "None"
+        """
+        Returns a human-readable string representation of the instance.
+        """
+        elements = []
+        if self.name:
+            elements.append(f"🏷️ {self.name}")
+        if self.desc:
+            elements.append(f"📜 {', '.join(self.desc)}")
+        if self.index:
+            elements.append(f"🔢 Index: {self.index}")
+        if self.language_options:
+            elements.append(f"🔤 Language Options: {self.language_options}")
+        if self.parent:
+            elements.append(f"👪 Parent: {self.parent}")
+        if self.proficiencies:
+            elements.append(f"🛡️ Proficiencies: {', '.join(map(str, self.proficiencies))}")
+        if self.proficiency_choices:
+            elements.append(f"🔍 Proficiency Choices: {self.proficiency_choices}")
+        if self.races:
+            elements.append(f"🧝 Races: {', '.join(map(str, self.races))}")
+        if self.subraces:
+            elements.append(f"🌿 Subraces: {', '.join(map(str, self.subraces))}")
+        if self.trait_specific:
+            elements.append(f"🌟 Trait Specific: {self.trait_specific}")
 
-        return (f"Description: {desc}, Index: {index}, Language Options: {language_options}, Name: {name}, "
-                f"Parent: {parent}, Proficiencies: {proficiencies}, Proficiency Choices: {proficiency_choices}, "
-                f"Races: {races}, Subraces: {subraces}, Trait Specific: {trait_specific}")
+        return '\n'.join(elements)
+
 
 
 class TraitChoice(GraphQLBaseModel):

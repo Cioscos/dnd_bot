@@ -296,6 +296,10 @@ async def main_menu_buttons_query_handler(update: Update, context: ContextTypes.
 
 async def handle_pagination(query, context, direction):
     """Handle pagination of resource lists."""
+    # initialize the CURRENT_INLINE_PAGE_FOR_SUBMENUS
+    if CURRENT_INLINE_PAGE_FOR_SUBMENUS not in context.chat_data[WIKI]:
+        context.chat_data[WIKI][CURRENT_INLINE_PAGE_FOR_SUBMENUS] = 0
+
     if direction == "prev_page":
         if context.chat_data[WIKI][CURRENT_INLINE_PAGE_FOR_SUBMENUS] == 0:
             await query.answer('Sei alla prima pagina!')
@@ -320,7 +324,7 @@ async def handle_pagination(query, context, direction):
     return ITEM_DETAILS_MENU
 
 
-async def handle_standard_category(query, context, category, path):
+async def handle_standard_category(query, update, category, path):
     """Handle standard categories."""
     async with DndService() as dnd_service:
         resource_details = await dnd_service.get_resource_detail(f"{category}/{path}")
@@ -334,9 +338,7 @@ async def handle_standard_category(query, context, category, path):
     if len(details) <= 4096:
         await query.edit_message_text(details, parse_mode=ParseMode.HTML, reply_markup=reply_markup)
     else:
-        await split_text_into_chunks(details, query, reply_markup=reply_markup)
-
-    return ConversationHandler.END
+        await split_text_into_chunks(details, update, reply_markup=reply_markup)
 
 
 async def handle_not_standard_category(query, context, resource_details):
@@ -351,7 +353,23 @@ async def handle_not_standard_category(query, context, resource_details):
     reply_markup = generate_resource_list_keyboard(resource_pages[0])
     await query.edit_message_text("Seleziona un elemento dalla lista o premi "
                                   "/stop per terminare la conversazione", reply_markup=reply_markup)
-    return ITEM_DETAILS_MENU
+
+
+async def handle_graphql_category(query, update, category, data):
+    """Handle GraphQL categories."""
+    variables = {'index': data.split('/')[1]}
+    resource_details = await async_graphql_query(GRAPHQL_ENDPOINT, CATEGORY_TO_QUERY_MAP[category], variables=variables)
+    key = list(resource_details.keys())[0]
+    resource = parse_resource(category, resource_details, key)
+    details = str(resource)
+
+    keyboard = process_keyboard_by_category(category, resource)
+    reply_markup = InlineKeyboardMarkup(keyboard) if keyboard else None
+
+    if len(details) <= 4096:
+        await query.edit_message_text(details, parse_mode=ParseMode.HTML, reply_markup=reply_markup)
+    else:
+        await split_text_into_chunks(details, update, reply_markup=reply_markup)
 
 
 async def details_menu_buttons_query_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -366,10 +384,12 @@ async def details_menu_buttons_query_handler(update: Update, context: ContextTyp
 
         if category in NOT_STANDARD_MENU_CATEGORIES:
             async with DndService() as dnd_service:
-                resource_details = await dnd_service.get_resource_detail(path)
+                resource_details = await dnd_service.get_resource_detail(f"{category}/{path}")
             await handle_not_standard_category(query, context, resource_details)
+        elif category in GRAPHQL_CATEOGRIES:
+            await handle_graphql_category(query, update, category, data)
         else:
-            await handle_standard_category(query, context, category, path)
+            await handle_standard_category(query, update, category, path)
 
     else:
         category = data.split('/')[2]
@@ -378,23 +398,18 @@ async def details_menu_buttons_query_handler(update: Update, context: ContextTyp
                 resource_details = await dnd_service.get_resource_by_class_resource(data)
             resource = parse_resource(category, resource_details)
         else:
-            variables = {'index': data.split('/')[3]}
-            resource_details = await async_graphql_query(GRAPHQL_ENDPOINT, CATEGORY_TO_QUERY_MAP[category],
-                                                         variables=variables)
-            await query.answer()
-            key = list(resource_details.keys())[0]
-            resource = parse_resource(category, resource_details, key)
-        details = str(resource)
+            await handle_graphql_category(query, update, category, data)
 
+        details = str(resource)
         keyboard = process_keyboard_by_category(category, resource)
         reply_markup = InlineKeyboardMarkup(keyboard) if keyboard else None
-
-        logger.info("Message: %s", details)
 
         if len(details) <= 4096:
             await query.edit_message_text(details, parse_mode=ParseMode.HTML, reply_markup=reply_markup)
         else:
             await split_text_into_chunks(details, update, reply_markup=reply_markup)
+
+    await query.answer()
 
     if category == CLASSES:
         return CLASS_SUBMENU

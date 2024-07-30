@@ -289,7 +289,7 @@ CATEGORY_TO_QUERY_MAP = {
     type
   }
 }""",
-    "race": """query Race($index: String) {
+    "races": """query Race($index: String) {
   race(index: $index) {
     name
     size_description
@@ -328,17 +328,6 @@ CATEGORY_TO_QUERY_MAP = {
         bonus
         ability_score {
           full_name
-        }
-      }
-      language_options {
-        choose
-        type
-        from {
-          options {
-            item {
-              name
-            }
-          }
         }
       }
       racial_traits {
