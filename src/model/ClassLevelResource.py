@@ -1,11 +1,10 @@
 from typing import Optional, Any, Dict, List
 
-import aiohttp
 from pydantic import BaseModel, Field, PrivateAttr
 
-from src.DndService import DndService
-from src.model.APIResource import APIResource
-from src.model.Feature import Feature
+from APIResource import APIResource
+from Feature import Feature
+from ..DndService import DndService
 
 
 class SpellCasting(BaseModel):
