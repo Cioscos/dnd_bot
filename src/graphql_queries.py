@@ -421,5 +421,11 @@ CATEGORY_TO_QUERY_MAP = {
     }
     material
   }
+}""",
+    "weapon-properties": """query WeaponProperty($index: String) {
+  weaponProperty(index: $index) {
+    name
+    desc
+  }
 }"""
 }

@@ -4606,11 +4606,15 @@ class WeaponProperty(GraphQLBaseModel):
         return self.__str__()
 
     def __str__(self):
-        desc = ', '.join(self.desc) if self.desc else "None"
-        index = self.index if self.index else "None"
-        name = self.name if self.name else "None"
+        elements = []
+        if self.name:
+            elements.append(f"🏷️ <b>Name:</b> {self.name}")
+        if self.desc:
+            elements.append(f"📜 <b>Description:</b> {' '.join(self.desc)}")
+        if self.index:
+            elements.append(f"🔢 <b>Index:</b> {self.index}")
 
-        return f"Description: {desc}, Index: {index}, Name: {name}"
+        return '\n'.join(elements)
 
 
 class WizardSpecific(GraphQLBaseModel):

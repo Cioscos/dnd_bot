@@ -98,19 +98,32 @@ RULE_SECTIONS = 'rule-sections'
 RULES = 'rules'
 SKILLS = 'skills'
 SPELLS = 'spells'
+SUBCLASSES = 'subclasses'
+SUBRACES = 'subraces'
+TRAITS = 'traits'
+WEAPON_PROPERTIES = 'weapon-properties'
 
 # Excluded categories: These categories won't be shown in the first wiki menu
-EXCLUDED_CATEGORIES = ['backgrounds', 'equipment', 'feats', 'features', 'magic-items', 'magic-schools', PROFICIENCIES]
+EXCLUDED_CATEGORIES = ['backgrounds',
+                       'equipment',
+                       'feats',
+                       'features',
+                       'magic-items',
+                       'magic-schools',
+                       PROFICIENCIES,
+                       SUBCLASSES,
+                       SUBRACES,
+                       TRAITS]
 
 # Not standard menù categories
 NOT_STANDARD_MENU_CATEGORIES = [EQUIPMENT_CATEGORIES]
 
 # graphql categories
 GRAPHQL_ENDPOINT = 'https://www.dnd5eapi.co/graphql'
-GRAPHQL_CATEOGRIES = [MONSTERS, PROFICIENCIES, RACES, RULE_SECTIONS, RULES, SKILLS, SPELLS]
+GRAPHQL_CATEOGRIES = [MONSTERS, PROFICIENCIES, RACES, RULE_SECTIONS, RULES, SKILLS, SPELLS, WEAPON_PROPERTIES]
 
 # categories with HTML Parsing
-HTML_PARSING_CATEGORIES = [MONSTERS, PROFICIENCIES, RACES, SKILLS, SPELLS]
+HTML_PARSING_CATEGORIES = [MONSTERS, PROFICIENCIES, RACES, SKILLS, SPELLS, WEAPON_PROPERTIES]
 
 
 async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE):
@@ -197,6 +210,8 @@ def parse_resource(category: str, data: Dict[str, Any], graphql_key: str = None)
         return models.Skill(**data[graphql_key])
     elif category == SPELLS:
         return models.Spell(**data[graphql_key])
+    elif category == WEAPON_PROPERTIES:
+        return models.WeaponProperty(**data[graphql_key])
     else:
         return APIResource(**data)
 
