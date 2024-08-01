@@ -5,11 +5,11 @@ from telegram.constants import ParseMode
 from telegram.ext import ContextTypes, ConversationHandler
 from thefuzz import fuzz
 
-from src.DndService import DndService
-from src.model.APIResource import APIResource
-from src.model.ClassLevelResource import ClassLevelResource
-from src.model.SpellResource import SpellResource
-from src.util import chunk_list, generate_resource_list_keyboard
+from DndService import DndService
+from model.APIResource import APIResource
+from model.ClassLevelResource import ClassLevelResource
+from model.SpellResource import SpellResource
+from util import chunk_list, generate_resource_list_keyboard
 
 # State definitions for class sub conversation
 CLASS_SUBMENU, CLASS_SPELLS_SUBMENU, CLASS_RESOURCES_SUBMENU, CLASS_MANUAL_SPELLS_SEARCHING, CLASS_READING_SPELLS_SEARCHING, CLASS_SPELL_VISUALIZATION = map(

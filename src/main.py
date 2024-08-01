@@ -16,14 +16,14 @@ from telegram.ext import (
 )
 from telegram.warnings import PTBUserWarning
 
-from src.character_creator import character_creator_start_handler
-from src.class_submenus import class_submenus_query_handler, class_spells_menu_buttons_query_handler, \
+from character_creator import character_creator_start_handler
+from class_submenus import class_submenus_query_handler, class_spells_menu_buttons_query_handler, \
     class_search_spells_text_handler, class_reading_spells_menu_buttons_query_handler, \
     class_spell_visualization_buttons_query_handler, class_resources_submenu_text_handler
-from src.environment_variables_mg import keyring_initialize, keyring_get
-from src.equipment_categories_submenus import equipment_categories_first_menu_query_handler, \
+from environment_variables_mg import keyring_initialize, keyring_get
+from equipment_categories_submenus import equipment_categories_first_menu_query_handler, \
     equipment_visualization_query_handler
-from src.wiki import wiki_main_menu_handler, main_menu_buttons_query_handler, details_menu_buttons_query_handler
+from wiki import wiki_main_menu_handler, main_menu_buttons_query_handler, details_menu_buttons_query_handler
 
 # Setup logging
 logging.basicConfig(

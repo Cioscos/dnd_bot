@@ -4,10 +4,10 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.constants import ParseMode
 from telegram.ext import ContextTypes
 
-from src.DndService import DndService
-from src.model.APIResource import APIResource
-from src.model.Equipment import Equipment
-from src.util import generate_resource_list_keyboard
+from DndService import DndService
+from model.APIResource import APIResource
+from model.Equipment import Equipment
+from util import generate_resource_list_keyboard
 
 # chat data keys
 WIKI = 'wiki'

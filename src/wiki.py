@@ -5,18 +5,18 @@ from telegram import InlineKeyboardButton, Update, InlineKeyboardMarkup
 from telegram.constants import ParseMode
 from telegram.ext import ConversationHandler, ContextTypes
 
-from src.DndService import DndService
-from src.graphql_queries import CATEGORY_TO_QUERY_MAP
-from src.model import models
-from src.model.APIResource import APIResource
-from src.model.AbilityScore import AbilityScore
-from src.model.Alignment import Alignment
-from src.model.ClassResource import ClassResource
-from src.model.Condition import Condition
-from src.model.DamageType import DamageType
-from src.model.Language import Language
-from src.model.models import GraphQLBaseModel
-from src.util import format_camel_case_to_title, chunk_list, generate_resource_list_keyboard, split_text_into_chunks, \
+from DndService import DndService
+from graphql_queries import CATEGORY_TO_QUERY_MAP
+from model import models
+from model.APIResource import APIResource
+from model.AbilityScore import AbilityScore
+from model.Alignment import Alignment
+from model.ClassResource import ClassResource
+from model.Condition import Condition
+from model.DamageType import DamageType
+from model.Language import Language
+from model.models import GraphQLBaseModel
+from util import format_camel_case_to_title, chunk_list, generate_resource_list_keyboard, split_text_into_chunks, \
     async_graphql_query
 
 logger = logging.getLogger(__name__)

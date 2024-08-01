@@ -8,7 +8,7 @@ from gql.transport.aiohttp import log as graphql_requests_logger
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.constants import ParseMode
 
-from src.model.APIResource import APIResource
+from model.APIResource import APIResource
 
 graphql_requests_logger.setLevel(logging.WARNING)
 ABILITY_SCORE_CALLBACK = 'ability_score'
