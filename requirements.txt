@@ -1,0 +1,5 @@
+python-telegram-bot
+pydantic
+aiohttp
+gql
+thefuzz
