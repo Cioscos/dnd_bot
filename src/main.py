@@ -471,7 +471,7 @@ async def stop(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 
 
 async def stop_nested(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    await update.message.reply_text("Comando stoppato")
+    await update.message.reply_text("Ok! Use /start to start a new conversation!")
     context.chat_data[WIKI] = {}
     return STOPPING
 

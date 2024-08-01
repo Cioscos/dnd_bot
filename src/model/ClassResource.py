@@ -36,16 +36,16 @@ class ClassResource(APIResource):
         multi_classing_prerequisites_str = "\n".join([str(prereq) for prereq in (self.multi_classing.prerequisites if self.multi_classing else [])])
         multi_classing_proficiencies_str = ", ".join([prof.name for prof in (self.multi_classing.proficiencies if self.multi_classing else [])])
 
-        return (f"<b>Class</b>: {self.name}\n"
-                f"<b>Hit Die</b>: {self.hit_die}\n"
-                f"<b>Proficiency Choices</b>:\n{proficiency_choices_str}\n"
-                f"<b>Proficiencies</b>: {proficiencies_str}\n"
-                f"<b>Saving Throws</b>: {saving_throws_str}\n"
-                f"<b>Starting Equipment</b>:\n{starting_equipment_str}\n"
-                f"<b>Starting Equipment Options</b>:\n{starting_equipment_options_str}\n"
-                f"<b>Multi-classing Prerequisites</b>:\n{multi_classing_prerequisites_str}\n"
-                f"<b>Multi-classing Proficiencies</b>: {multi_classing_proficiencies_str}\n"
-                f"<b>Subclasses</b>: {subclasses_str}\n"
-                f"<b>Spellcasting Level</b>: {self.spellcasting.level if self.spellcasting else 'There are no spells'}\n"
-                f"<b>Spellcasting Ability</b>: {self.spellcasting.spellcasting_ability.name if self.spellcasting else 'There are no spells'}\n"
-                f"<b>Spellcasting Info</b>:\n{spellcasting_info_str}\n")
+        return (f"🛡️ <b>Class</b>: {self.name}\n"
+                f"🎲 <b>Hit Die</b>: {self.hit_die}\n"
+                f"📜 <b>Proficiency Choices</b>:\n{proficiency_choices_str}\n"
+                f"🛠️ <b>Proficiencies</b>: {proficiencies_str}\n"
+                f"🛡️ <b>Saving Throws</b>: {saving_throws_str}\n"
+                f"🗡️ <b>Starting Equipment</b>:\n{starting_equipment_str}\n"
+                f"🗡️ <b>Starting Equipment Options</b>:\n{starting_equipment_options_str}\n"
+                f"🔀 <b>Multi-classing Prerequisites</b>:\n{multi_classing_prerequisites_str}\n"
+                f"🔀 <b>Multi-classing Proficiencies</b>: {multi_classing_proficiencies_str}\n"
+                f"📚 <b>Subclasses</b>: {subclasses_str}\n"
+                f"✨ <b>Spellcasting Level</b>: {self.spellcasting.level if self.spellcasting else 'There are no spells'}\n"
+                f"✨ <b>Spellcasting Ability</b>: {self.spellcasting.spellcasting_ability.name if self.spellcasting else 'There are no spells'}\n"
+                f"✨ <b>Spellcasting Info</b>:\n{spellcasting_info_str}\n")
