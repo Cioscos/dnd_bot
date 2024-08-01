@@ -37,7 +37,8 @@ def is_string_in_nested_lists(target: str, nested_lists: List[Union[str, List]])
 
 
 async def split_text_into_chunks(text: str, update: Update, reply_markup: InlineKeyboardMarkup = None,
-                                 max_length: int = 4096, image: str = None) -> None:
+                                 max_length: int = 4096, image: str = None,
+                                 parse_mode: ParseMode = ParseMode.HTML) -> None:
     """
     Split a given text into chunks that do not exceed the maximum Telegram message length,
     ensuring that HTML tags are not cut in half.
@@ -48,12 +49,13 @@ async def split_text_into_chunks(text: str, update: Update, reply_markup: Inline
         reply_markup (InlineKeyboardMarkup): Optional keyboard markup for the messages.
         max_length (int): The maximum length of each chunk (default is 4096).
         image: (str): The image to be used for the message.
+        parse_mode: (ParseMode): Optional parse mode for telegram messages.
 
     Returns:
         None
     """
     if len(text) <= max_length:
-        await update.effective_message.reply_text(text, parse_mode=ParseMode.HTML, reply_markup=reply_markup)
+        await update.effective_message.reply_text(text, parse_mode=parse_mode, reply_markup=reply_markup)
         return
 
     tag_regex = re.compile(r'(<!--.*?-->|<[^>]*>)')
@@ -105,7 +107,7 @@ async def split_text_into_chunks(text: str, update: Update, reply_markup: Inline
         chunks.append(current_chunk)
 
     for chunk in chunks:
-        await update.effective_message.reply_text(chunk, parse_mode=ParseMode.HTML, reply_markup=reply_markup)
+        await update.effective_message.reply_text(chunk, parse_mode=parse_mode, reply_markup=reply_markup)
 
     if image:
         await update.effective_message.reply_photo(API + image)

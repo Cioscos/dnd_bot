@@ -272,11 +272,24 @@ String = str
 StringFilter = str
 
 
-def markdown_to_html(text: str) -> str:
-    # Convert headers (#, ##, ###, etc.) to bold
-    text = re.sub(r'#{1,}\s*(.+)', r'<b>\1</b>', text)
-    # Convert bold text (**text**) to <b>
-    text = re.sub(r'\*\*(.+?)\*\*', r'<b>\1</b>', text)
+def markdown_to_telegram_markdown(text: str) -> str:
+    """
+    Parse the input text and substitute patterns:
+    - Any occurrence of `#` before a word (like `### Test`, `# Test`, `#### Test`) with `*test*`.
+    - Any occurrence of `**test**` with `*test*`.
+
+    Args:
+    text (str): The input text to be parsed and substituted.
+
+    Returns:
+    str: The modified text with the substitutions made.
+    """
+    # Substitute patterns with '#' before a word
+    text = re.sub(r'#+\s*(\w+)', r'*\1*', text)
+
+    # Substitute '**test**' with '*test*'
+    text = re.sub(r'\*\*(\w+)\*\*', r'*\1*', text)
+
     return text
 
 
@@ -1194,16 +1207,16 @@ class AbilityScore(GraphQLBaseModel):
         Returns a human-readable string representation of the instance.
         """
         elements = []
-        if self.desc:
-            elements.append(f"📜 Description: {', '.join(self.desc)}")
-        if self.full_name:
-            elements.append(f"🏷️ Full Name: {self.full_name}")
-        if self.index:
-            elements.append(f"🔢 Index: {self.index}")
         if self.name:
-            elements.append(f"🏷️ Name: {self.name}")
+            elements.append(f"🏷️ <b>Name</b>: {self.name}")
+        if self.full_name:
+            elements.append(f"🏷️ <b>Full Name</b>: {self.full_name}")
+        if self.desc:
+            elements.append(f"📜 <b>Description</b>: {', '.join(self.desc)}")
+        if self.index:
+            elements.append(f"🔢 <b>Index</b>: {self.index}")
         if self.skills:
-            elements.append(f"🛠️ Skills: {', '.join([skill.name for skill in self.skills])}")
+            elements.append(f"🛠️ <b>Skills</b>: {', '.join([skill.name for skill in self.skills])}")
 
         return ', '.join(elements)
 
@@ -3726,17 +3739,17 @@ class Rule(GraphQLBaseModel):
         """
         elements = []
         if self.name:
-            elements.append(f"🏷️ Name: {self.name}")
+            elements.append(f"🏷️ *Name*: {self.name}")
         if self.desc:
-            if self.desc.startswith("#"):
-                desc = self.desc[2:]
-            else:
-                desc = self.desc
-            elements.append(f"📜 Description:\n{desc}")
+            # if self.desc.startswith("#"):
+            #     desc = self.desc[2:]
+            # else:
+            #     desc = self.desc
+            elements.append(f"📜 *Description*:\n{markdown_to_telegram_markdown(self.desc)}")
         if self.index:
-            elements.append(f"🔢 Index: {self.index}")
+            elements.append(f"🔢 *Index*: {self.index}")
         if self.subsections:
-            elements.append(f"📚 Subsections:\n{', '.join(map(str, self.subsections))}")
+            elements.append(f"📚 *Subsections*:\n{', '.join(map(str, self.subsections))}")
 
         return '\n'.join(elements)
 
@@ -3760,14 +3773,14 @@ class RuleSection(GraphQLBaseModel):
         """
         elements = []
         if self.name:
-            elements.append(f"🏷️ Name: {self.name}")
+            elements.append(f"🏷️ *Name*: {self.name}")
         if self.desc:
-            desc = markdown_to_html(self.desc)
-            if desc.startswith("#"):
-                desc = desc[2:]
-            elements.append(f"📜 Description: {desc}")
+            # desc = markdown_to_html(self.desc)
+            # if desc.startswith("#"):
+            #     desc = desc[2:]
+            elements.append(f"📜 *Description*:\n{markdown_to_telegram_markdown(self.desc)}")
         if self.index:
-            elements.append(f"🔢 Index: {self.index}")
+            elements.append(f"🔢 *Index*: {self.index}")
 
         return '\n'.join(elements)
 
@@ -3820,15 +3833,17 @@ class Skill(GraphQLBaseModel):
         """
         Returns a human-readable string representation of the instance.
         """
-        ability_score = self.ability_score.name if self.ability_score else "None"
-        desc = ', '.join(self.desc) if self.desc else "None"
-        index = self.index if self.index else "None"
-        name = self.name if self.name else "None"
+        elements = []
+        if self.name:
+            elements.append(f"🏷️ <b>Name</b>: {self.name}")
+        if self.desc:
+            elements.append(f"📜 <b>Description</b>: {', '.join(self.desc)}")
+        if self.ability_score:
+            elements.append(f"📊 <b>Ability Score</b>:\n{self.ability_score}")
+        if self.index:
+            elements.append(f"🔢 <b>Index</b>: {self.index}")
 
-        return (f"Ability Score: {ability_score}, "
-                f"Description: {desc}, "
-                f"Index: {index}, "
-                f"Name: {name}")
+        return '\n'.join(elements)
 
 
 class SorcererSpecific(GraphQLBaseModel):

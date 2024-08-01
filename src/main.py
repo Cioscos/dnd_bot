@@ -96,6 +96,7 @@ PROFICIENCIES = 'proficiencies'
 RACES = 'races'
 RULE_SECTIONS = 'rule-sections'
 RULES = 'rules'
+SKILLS = 'skills'
 
 # Excluded categories: These categories won't be shown in the first wiki menu
 EXCLUDED_CATEGORIES = ['backgrounds', 'equipment', 'feats', 'features', 'magic-items', 'magic-schools', PROFICIENCIES]
@@ -105,7 +106,10 @@ NOT_STANDARD_MENU_CATEGORIES = [EQUIPMENT_CATEGORIES]
 
 # graphql categories
 GRAPHQL_ENDPOINT = 'https://www.dnd5eapi.co/graphql'
-GRAPHQL_CATEOGRIES = [MONSTERS, PROFICIENCIES, RACES, RULE_SECTIONS, RULES]
+GRAPHQL_CATEOGRIES = [MONSTERS, PROFICIENCIES, RACES, RULE_SECTIONS, RULES, SKILLS]
+
+# categories with HTML Parsing
+HTML_PARSING_CATEGORIES = [MONSTERS, PROFICIENCIES, RACES, SKILLS]
 
 
 async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE):
@@ -188,6 +192,8 @@ def parse_resource(category: str, data: Dict[str, Any], graphql_key: str = None)
         return models.RuleSection(**data[graphql_key])
     elif category == RULES:
         return models.Rule(**data[graphql_key])
+    elif category == SKILLS:
+        return models.Skill(**data[graphql_key])
     else:
         return APIResource(**data)
 
@@ -367,7 +373,10 @@ async def handle_not_standard_category(query, context, resource_details):
 
 async def handle_graphql_category(query, update, category, data):
     """Handle GraphQL categories."""
-    variables = {'index': data.split('/')[3]}
+    if data.startswith("/api"):
+        variables = {'index': data.split('/')[3]}
+    else:
+        variables = {'index': data.split('/')[1]}
     resource_details = await async_graphql_query(GRAPHQL_ENDPOINT, CATEGORY_TO_QUERY_MAP[category], variables=variables)
     key = list(resource_details.keys())[0]
     resource = parse_resource(category, resource_details, key)
@@ -378,10 +387,16 @@ async def handle_graphql_category(query, update, category, data):
 
     await query.answer()
 
-    if len(details) <= 4096 and not hasattr(resource, 'image'):
-        await query.edit_message_text(details, parse_mode=ParseMode.HTML, reply_markup=reply_markup)
+    parse_mode = ParseMode.HTML if category in HTML_PARSING_CATEGORIES else ParseMode.MARKDOWN
+
+    if len(details) <= 4096:
+        if not hasattr(resource, 'image'):
+            await query.edit_message_text(details, parse_mode=parse_mode, reply_markup=reply_markup)
+        else:
+            await split_text_into_chunks(details, update, reply_markup=reply_markup, parse_mode=parse_mode,
+                                         image=resource.image)
     else:
-        await split_text_into_chunks(details, update, reply_markup=reply_markup, image=resource.image)
+        await split_text_into_chunks(details, update, reply_markup=reply_markup, parse_mode=parse_mode)
 
 
 async def details_menu_buttons_query_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:

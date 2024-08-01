@@ -355,5 +355,15 @@ CATEGORY_TO_QUERY_MAP = {
       desc
     }
   }
+}""",
+    "skills": """query Skill($index: String) {
+  skill(index: $index) {
+    name
+    desc
+    ability_score {
+      full_name
+      desc
+    }
+  }
 }"""
 }
