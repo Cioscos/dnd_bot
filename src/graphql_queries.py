@@ -365,5 +365,61 @@ CATEGORY_TO_QUERY_MAP = {
       desc
     }
   }
+}""",
+    "spells": """query Spell($index: String) {
+  spell(index: $index) {
+    name
+    desc
+    components
+    concentration
+    damage {
+      damage_at_character_level {
+        level
+        damage
+      }
+      damage_at_slot_level {
+        level
+        damage
+      }
+      damage_type {
+        name
+      }
+    }
+    casting_time
+    area_of_effect {
+      size
+      type
+    }
+    ritual
+    duration
+    attack_type
+    dc {
+      desc
+      success
+      type {
+        full_name
+      }
+    }
+    heal_at_slot_level {
+      level
+      healing
+    }
+    higher_level
+    level
+    range
+    school {
+      name
+    }
+    classes {
+      name
+    }
+    subclasses {
+      name
+      class {
+        name
+      }
+    }
+    material
+  }
 }"""
 }

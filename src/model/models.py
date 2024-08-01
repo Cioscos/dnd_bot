@@ -293,6 +293,27 @@ def markdown_to_telegram_markdown(text: str) -> str:
     return text
 
 
+def markdown_to_html(text: str) -> str:
+    """
+    Parse the input text and substitute patterns:
+    - Any occurrence of `#` before a word (like `### Test`, `# Test`, `#### Test`) with `<b>test</b>`.
+    - Any occurrence of `*test*`, `**test**`, `***test***`, or `****test****` with `<b>test</b>`.
+
+    Args:
+    text (str): The input text to be parsed and substituted.
+
+    Returns:
+    str: The modified text with the substitutions made.
+    """
+    # Substitute patterns with '#' before a word
+    text = re.sub(r'#+\s*(\w+)', r'<b>\1</b>', text)
+
+    # Substitute '*test*', '**test**', '***test***', or '****test****' with '<b>test</b>'
+    text = re.sub(r'\*{1,4}(\w+.*?)\*{1,4}', r'<b>\1</b>', text)
+
+    return text
+
+
 class AreaOfEffectType(enum.Enum):
     """
     An Enum type
@@ -2031,10 +2052,7 @@ class DamageAtLevel(GraphQLBaseModel):
         return self.__str__()
 
     def __str__(self):
-        damage = self.damage if self.damage else "None"
-        level = self.level if self.level is not None else "None"
-
-        return f"Damage: {damage}, Level: {level}"
+        return f"A livello {self.level} {self.damage} di danno"
 
 
 class DamageOption(GraphQLBaseModel):
@@ -2598,10 +2616,13 @@ class HealingAtLevel(GraphQLBaseModel):
         return self.__str__()
 
     def __str__(self):
-        healing = self.healing if self.healing else "None"
-        level = self.level if self.level is not None else "None"
+        elements = []
+        if self.healing:
+            elements.append(f"🩹 <b>Healing:</b> {self.healing}")
+        if self.level is not None:
+            elements.append(f"🎚️ <b>Level:</b> {self.level}")
 
-        return f"Healing: {healing}, Level: {level}"
+        return '\n'.join(elements)
 
 
 class IdealChoice(GraphQLBaseModel):
@@ -3947,33 +3968,49 @@ class Spell(GraphQLBaseModel):
         return self.__str__()
 
     def __str__(self):
-        area_of_effect = str(self.area_of_effect) if self.area_of_effect else "None"
-        attack_type = str(self.attack_type) if self.attack_type else "None"
-        casting_time = self.casting_time if self.casting_time else "None"
-        classes = ', '.join([str(cls) for cls in self.classes]) if self.classes else "None"
-        components = ', '.join([str(comp) for comp in self.components]) if self.components else "None"
-        concentration = self.concentration if self.concentration is not None else "None"
-        damage = str(self.damage) if self.damage else "None"
-        dc = str(self.dc) if self.dc else "None"
-        desc = ', '.join(self.desc) if self.desc else "None"
-        duration = self.duration if self.duration else "None"
-        heal_at_slot_level = ', '.join(
-            [str(heal) for heal in self.heal_at_slot_level]) if self.heal_at_slot_level else "None"
-        higher_level = ', '.join(self.higher_level) if self.higher_level else "None"
-        index = self.index if self.index else "None"
-        level = self.level if self.level is not None else "None"
-        material = self.material if self.material else "None"
-        name = self.name if self.name else "None"
-        range_ = self.range if self.range else "None"
-        ritual = self.ritual if self.ritual is not None else "None"
-        school = str(self.school) if self.school else "None"
-        subclasses = ', '.join([str(subclass) for subclass in self.subclasses]) if self.subclasses else "None"
+        elements = []
+        if self.name:
+            elements.append(f"🏷️ <b>Name:</b> {self.name}")
+        if self.desc:
+            elements.append(
+                f"📜 <b>Description:</b>\n{'\n'.join([markdown_to_html(desc) for desc in self.desc])}\nAt higher levels: {" ".join(self.higher_level)}")
+        if self.components:
+            elements.append(f"🔮 <b>Components:</b> {', '.join(map(str, self.components))}")
+        if self.material:
+            elements.append(f"📦 <b>Material:</b> {self.material}")
+        if self.concentration is not None:
+            elements.append(f"🧠 <b>Concentration:</b> {self.concentration}")
+        if self.level is not None:
+            elements.append(f"🎚️ <b>Level:</b> {self.level}")
+        if self.area_of_effect:
+            elements.append(f"🌐 <b>Area of Effect:</b> {self.area_of_effect}")
+        if self.range:
+            elements.append(f"📏 <b>Range:</b> {self.range}")
+        if self.attack_type:
+            elements.append(f"⚔️ <b>Attack Type:</b> {self.attack_type}")
+        if self.damage:
+            elements.append(f"💥 <b>Damage:</b>\n{self.damage}")
+        if self.heal_at_slot_level:
+            elements.append(f"🩹 <b>Heal at Slot Level:</b> {', '.join(map(str, self.heal_at_slot_level))}")
+        if self.casting_time:
+            elements.append(f"⏳ <b>Casting Time:</b> {self.casting_time}")
+        if self.ritual is not None:
+            elements.append(f"🔮 <b>Ritual:</b> {self.ritual}")
+        if self.duration:
+            elements.append(f"⏲️ <b>Duration:</b> {self.duration}")
+        if self.dc:
+            elements.append(f"⚖️ <b>DC:</b> {self.dc}")
+        if self.classes:
+            elements.append(f"🏫 <b>Classes:</b> {', '.join([class_.name for class_ in self.classes])}")
+        if self.subclasses:
+            elements.append(
+                f"📚 <b>Subclasses:</b>\n{', '.join([f"{subclass.name} sottoclasse di {subclass.class_.name}" for subclass in self.subclasses])}")
+        if self.index:
+            elements.append(f"🔢 <b>Index:</b> {self.index}")
+        if self.school:
+            elements.append(f"🏫 <b>School:</b> {self.school.name}")
 
-        return (f"Area of Effect: {area_of_effect}, Attack Type: {attack_type}, Casting Time: {casting_time}, "
-                f"Classes: {classes}, Components: {components}, Concentration: {concentration}, Damage: {damage}, "
-                f"DC: {dc}, Description: {desc}, Duration: {duration}, Heal at Slot Level: {heal_at_slot_level}, "
-                f"Higher Level: {higher_level}, Index: {index}, Level: {level}, Material: {material}, Name: {name}, "
-                f"Range: {range_}, Ritual: {ritual}, School: {school}, Subclasses: {subclasses}")
+        return '\n'.join(elements)
 
 
 class SpellChoice(GraphQLBaseModel):
@@ -4011,15 +4048,16 @@ class SpellDamage(GraphQLBaseModel):
         return self.__str__()
 
     def __str__(self):
-        damage_at_character_level = ', '.join(
-            [str(damage) for damage in self.damage_at_character_level]) if self.damage_at_character_level else "None"
-        damage_at_slot_level = ', '.join(
-            [str(damage) for damage in self.damage_at_slot_level]) if self.damage_at_slot_level else "None"
-        damage_type = str(self.damage_type) if self.damage_type else "None"
+        elements = []
+        if self.damage_at_character_level:
+            elements.append(
+                f"🎚️ <b>Damage at Character Level:</b>\n{', '.join(map(str, self.damage_at_character_level))}")
+        if self.damage_at_slot_level:
+            elements.append(f"🔝 <b>Damage at Slot Level:</b>\n{'\n'.join(map(str, self.damage_at_slot_level))}")
+        if self.damage_type:
+            elements.append(f"💥 <b>Damage Type:</b> {self.damage_type.name}")
 
-        return (
-            f"Damage at Character Level: {damage_at_character_level}, Damage at Slot Level: {damage_at_slot_level}, "
-            f"Damage Type: {damage_type}")
+        return '\n'.join(elements)
 
 
 class SpellDc(GraphQLBaseModel):
@@ -4036,11 +4074,15 @@ class SpellDc(GraphQLBaseModel):
         return self.__str__()
 
     def __str__(self):
-        desc = self.desc if self.desc else "None"
-        success = str(self.success) if self.success else "None"
-        type_str = str(self.type) if self.type else "None"
+        elements = []
+        if self.desc:
+            elements.append(f"📜 <b>Description:</b> {self.desc}")
+        if self.success:
+            elements.append(f"✅ <b>Success:</b> {self.success}")
+        if self.type:
+            elements.append(f"📊 <b>Type:</b> {self.type.full_name}")
 
-        return f"Description: {desc}, Success: {success}, Type: {type_str}"
+        return '\n'.join(elements)
 
 
 class SpellOption(GraphQLBaseModel):
@@ -4225,7 +4267,7 @@ class Subclass(GraphQLBaseModel):
     An Object type
     See https://graphql.org/learn/schema/#object-types-and-fields
     """
-    class_: _t.Optional['Class'] = Field(default=None)
+    class_: _t.Optional['Class'] = Field(default=None, alias="class")
     desc: _t.Optional[_t.List['String']] = Field(default_factory=list)
     index: _t.Optional['String'] = Field(default=None)
     name: _t.Optional['String'] = Field(default=None)
