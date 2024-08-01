@@ -2,8 +2,8 @@ from typing import Optional, Any, Dict, List
 
 from pydantic import BaseModel, Field, PrivateAttr
 
-from APIResource import APIResource
 from Feature import Feature
+from .APIResource import APIResource
 from ..DndService import DndService
 
 
