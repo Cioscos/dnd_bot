@@ -110,7 +110,9 @@ async def split_text_into_chunks(text: str, update: Update, reply_markup: Inline
         await update.effective_message.reply_text(chunk, parse_mode=parse_mode, reply_markup=reply_markup)
 
     if image:
+        message = await update.effective_message.reply_text("Caricamento foto...")
         await update.effective_message.reply_photo(API + image)
+        await message.delete()
 
 
 def generate_resource_list_keyboard(resources: List[APIResource],
