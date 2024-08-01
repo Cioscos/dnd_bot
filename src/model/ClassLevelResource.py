@@ -2,9 +2,9 @@ from typing import Optional, Any, Dict, List
 
 from pydantic import BaseModel, Field, PrivateAttr
 
-from Feature import Feature
+from src.DndService import DndService
 from .APIResource import APIResource
-from ..DndService import DndService
+from .Feature import Feature
 
 
 class SpellCasting(BaseModel):
