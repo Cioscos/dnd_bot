@@ -32,6 +32,13 @@ async def character_creator_start_handler(update: Update, context: ContextTypes.
         query = update.callback_query
         await query.answer()
 
+    # Check for BOT_DATA_CHAT_IDS initialization
+    if BOT_DATA_CHAT_IDS not in context.bot_data or update.effective_chat.id not in context.bot_data.get(
+            BOT_DATA_CHAT_IDS, []):
+        await update.effective_message.reply_text(
+            "La prima volta devi interagire con il bot usando il comando /start")
+        return ConversationHandler.END
+
     await update.effective_message.reply_text("<b>Questa sezione è ancora in sviluppo!</b>\n"
                                               "Visita la <a href=\"https://github.com/Cioscos/dnd_bot\">pagina Github"
                                               "</a> del progetto per saperne di più.", parse_mode=ParseMode.HTML)

@@ -182,6 +182,7 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
         context.bot_data[BOT_DATA_CHAT_IDS].add(update.effective_chat.id)
     else:
         context.bot_data[BOT_DATA_CHAT_IDS] = set()
+        context.bot_data[BOT_DATA_CHAT_IDS].add(update.effective_chat.id)
 
     # initialize WIKI section in chat_data
     context.chat_data[WIKI] = {}
