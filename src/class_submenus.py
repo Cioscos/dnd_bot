@@ -13,7 +13,7 @@ from util import chunk_list, generate_resource_list_keyboard
 
 # State definitions for class sub conversation
 CLASS_SUBMENU, CLASS_SPELLS_SUBMENU, CLASS_RESOURCES_SUBMENU, CLASS_MANUAL_SPELLS_SEARCHING, CLASS_READING_SPELLS_SEARCHING, CLASS_SPELL_VISUALIZATION = map(
-    chr, range(2, 8))
+    chr, range(4, 10))
 
 STOPPING = 99
 
@@ -35,8 +35,8 @@ async def class_submenus_query_handler(update: Update, context: ContextTypes.DEF
     context.chat_data[WIKI]['class-level-endpoint'] = endpoint
 
     if submenu == 'spells':
-        keyboard = [[InlineKeyboardButton('consulta', callback_data='read-spells'),
-                     InlineKeyboardButton('cerca', callback_data='search-spell')]]
+        keyboard = [[InlineKeyboardButton('Consulta', callback_data='read-spells'),
+                     InlineKeyboardButton('Cerca', callback_data='search-spell')]]
         reply_markup = InlineKeyboardMarkup(keyboard)
         await update.effective_message.reply_text(f"Vuoi consultare tutte le spell del {class_name} o cercarne una?\n"
                                                   "Manda /stop per terminare la conversazione",

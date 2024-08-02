@@ -225,7 +225,7 @@ def main() -> None:
         entry_points=[CallbackQueryHandler(class_submenus_query_handler, pattern=r"^(spells\|)|(resources\|)")],
         states={
             CLASS_SPELLS_SUBMENU: [
-                CallbackQueryHandler(class_spells_menu_buttons_query_handler, pattern='^read-spells$|^search-spell$')],
+                CallbackQueryHandler(class_spells_menu_buttons_query_handler, pattern='^(read-spells|search-spell)$')],
             CLASS_MANUAL_SPELLS_SEARCHING: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, class_search_spells_text_handler)],
             CLASS_READING_SPELLS_SEARCHING: [CallbackQueryHandler(class_reading_spells_menu_buttons_query_handler)],
@@ -260,7 +260,7 @@ def main() -> None:
         ],
         states={
             WIKI_MENU: [CallbackQueryHandler(main_menu_buttons_query_handler, pattern='^[^/]+$'),
-                        CommandHandler('start', start_handler)],
+                        CommandHandler('wiki', wiki_main_menu_handler)],
             ITEM_DETAILS_MENU: [CallbackQueryHandler(details_menu_buttons_query_handler)],
             CLASS_SUBMENU: [class_options_handler],
             EQUIPMENT_CATEGORIES_SUBMENU: [equipment_categories_handler]
