@@ -12,7 +12,7 @@ from telegram.ext import (
     CommandHandler,
     ConversationHandler,
     ContextTypes,
-    MessageHandler, filters, CallbackQueryHandler
+    MessageHandler, filters, CallbackQueryHandler, PicklePersistence
 )
 from telegram.warnings import PTBUserWarning
 
@@ -156,6 +156,13 @@ async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def post_init_callback(application: Application) -> None:
+    for chat_id in application.bot_data.get(BOT_DATA_CHAT_IDS, []):
+        try:
+            await application.bot.send_message(chat_id,
+                                               "🟢 Il Bot è ripartito dopo un riavvio 🟢")
+        except (BadRequest, TelegramError) as e:
+            logger.error(f"CHAT_ID: {chat_id} Telegram error stopping the bot: {e}")
+
     if CHARACTERS_CREATOR not in application.bot_data:
         application.bot_data[CHARACTERS_CREATOR] = {}
 
@@ -164,7 +171,7 @@ async def post_stop_callback(application: Application) -> None:
     for chat_id in application.bot_data.get(BOT_DATA_CHAT_IDS, []):
         try:
             await application.bot.send_message(chat_id,
-                                               "🔴 The bot was switched off... someone switched off the power 🔴")
+                                               "🔴 Il bot si è spento... qualcuno è a lavoro o è scattato il contatore! 🔴")
         except (BadRequest, TelegramError) as e:
             logger.error(f"CHAT_ID: {chat_id} Telegram error stopping the bot: {e}")
 
@@ -196,7 +203,8 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
 
 
 async def stop(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    await update.effective_message.reply_text('Ok! Usa il comando /start per avviare una nuova conversazione!')
+    await update.effective_message.reply_text('Ok! Usa il comando /start per avviare una nuova conversazione!\n'
+                                              'Oppure invia direttamente i comandi /wiki o /character')
     context.chat_data[WIKI] = {}
     return ConversationHandler.END
 
@@ -214,10 +222,14 @@ def main() -> None:
     if not keyring_initialize():
         exit(0xFF)
 
+    # Initialize the Pickle database
+    persistence = PicklePersistence(filepath='DB.pkl')
+
     application = (Application.builder()
                    .token(keyring_get('Telegram'))
                    .post_init(post_init_callback)
-                   .post_stop(post_stop_callback)).build()
+                   .post_stop(post_stop_callback)
+                   .persistence(persistence)).build()
 
     application.add_error_handler(error_handler)
 
@@ -235,9 +247,11 @@ def main() -> None:
         },
         fallbacks=[CommandHandler("stop", stop_nested)],
         map_to_parent={
-            STOPPING: WIKI_MENU,
-            ConversationHandler.END: WIKI_MENU
-        }
+            STOPPING: ConversationHandler.END,
+            ConversationHandler.END: ConversationHandler.END
+        },
+        name='class_options_handler_v1',
+        persistent=True
     )
 
     equipment_categories_handler = ConversationHandler(
@@ -248,9 +262,11 @@ def main() -> None:
         },
         fallbacks=[CommandHandler("stop", stop_nested)],
         map_to_parent={
-            STOPPING: WIKI_MENU,
-            ConversationHandler.END: WIKI_MENU
-        }
+            STOPPING: ConversationHandler.END,
+            ConversationHandler.END: ConversationHandler.END
+        },
+        name='equipment_categories_handler_v1',
+        persistent=True
     )
 
     wiki_handler = ConversationHandler(
@@ -267,9 +283,11 @@ def main() -> None:
         },
         fallbacks=[CommandHandler("stop", stop_nested)],
         map_to_parent={
-            STOPPING: START_MENU,
-            ConversationHandler.END: START_MENU
-        }
+            STOPPING: ConversationHandler.END,
+            ConversationHandler.END: ConversationHandler.END
+        },
+        name='wiki_handler_v1',
+        persistent=True
     )
 
     character_creator_handler = ConversationHandler(
@@ -280,17 +298,25 @@ def main() -> None:
         states={},
         fallbacks=[CommandHandler("stop", stop_nested)],
         map_to_parent={
-            STOPPING: START_MENU,
-            ConversationHandler.END: START_MENU
-        }
+            STOPPING: ConversationHandler.END,
+            ConversationHandler.END: ConversationHandler.END
+        },
+        name='character_creator_handler_v1',
+        persistent=True
     )
 
     main_handler = ConversationHandler(
-        entry_points=[CommandHandler('start', start_handler)],
+        entry_points=[
+            CommandHandler('start', start_handler),
+            wiki_handler,
+            character_creator_handler
+        ],
         states={
             START_MENU: [wiki_handler, character_creator_handler]
         },
         fallbacks=[CommandHandler("stop", stop)],
+        name='main_handler_v1',
+        persistent=True
     )
     application.add_handler(main_handler)
 
