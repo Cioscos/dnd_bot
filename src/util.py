@@ -70,15 +70,17 @@ async def split_text_into_chunks(text: str, update: Update, reply_markup: Inline
 
         if part.startswith('<') and part.endswith('>'):
             if part.startswith('</'):
-                if open_tags and open_tags[-1] == part.replace('/', ''):
+                tag_name = part[2:-1].split(' ')[0]
+                if open_tags and open_tags[-1] == tag_name:
                     open_tags.pop()
             elif not part.endswith('/>'):
-                open_tags.append(part)
+                tag_name = part[1:-1].split(' ')[0]
+                open_tags.append(tag_name)
 
             if current_length + len(part) > max_length:
-                closing_tags = ''.join([f"</{tag[1:]}" for tag in open_tags[::-1]])
+                closing_tags = ''.join([f"</{tag}>" for tag in open_tags[::-1]])
                 chunks.append(current_chunk + closing_tags)
-                current_chunk = ''.join(open_tags) + part
+                current_chunk = ''.join([f"<{tag}>" for tag in open_tags]) + part
                 current_length = len(current_chunk)
             else:
                 current_chunk += part
@@ -98,9 +100,9 @@ async def split_text_into_chunks(text: str, update: Update, reply_markup: Inline
                     current_chunk += part[:split_point]
                     part = part[split_point:].strip()
 
-                    closing_tags = ''.join([f"</{tag[1:]}" for tag in open_tags[::-1]])
+                    closing_tags = ''.join([f"</{tag}>" for tag in open_tags[::-1]])
                     chunks.append(current_chunk + closing_tags)
-                    current_chunk = ''.join(open_tags)
+                    current_chunk = ''.join([f"<{tag}>" for tag in open_tags])
                     current_length = len(current_chunk)
 
     if current_chunk:

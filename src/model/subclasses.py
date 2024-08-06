@@ -66,8 +66,8 @@ class Prerequisite(BaseModel):
 
 
 class MultiClassing(BaseModel):
-    prerequisites: List[Prerequisite]
-    proficiencies: List[APIResource]
+    prerequisites: Optional[List[Prerequisite]] = None
+    proficiencies: Optional[List[APIResource]] = None
 
 
 class SpellcastingInfo(BaseModel):

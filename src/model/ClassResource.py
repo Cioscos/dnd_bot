@@ -33,8 +33,8 @@ class ClassResource(APIResource):
         subclasses_str = ", ".join([subclass.name for subclass in (self.subclasses or [])])
         spellcasting_info_str = "\n".join([f"  - {info.name}: {', '.join(info.desc)}" for info in (self.spellcasting.info if self.spellcasting else [])]) if self.spellcasting else 'There are no spells'
 
-        multi_classing_prerequisites_str = "\n".join([str(prereq) for prereq in (self.multi_classing.prerequisites if self.multi_classing else [])])
-        multi_classing_proficiencies_str = ", ".join([prof.name for prof in (self.multi_classing.proficiencies if self.multi_classing else [])])
+        multi_classing_prerequisites_str = "\n".join([str(prereq) for prereq in (self.multi_classing.prerequisites if self.multi_classing and self.multi_classing.prerequisites else [])])
+        multi_classing_proficiencies_str = ", ".join([prof.name for prof in (self.multi_classing.proficiencies if self.multi_classing and self.multi_classing.proficiencies else [])])
 
         return (f"🛡️ <b>Class</b>: {self.name}\n"
                 f"🎲 <b>Hit Die</b>: {self.hit_die}\n"
