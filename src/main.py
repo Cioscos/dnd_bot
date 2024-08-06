@@ -249,7 +249,8 @@ def main() -> None:
         fallbacks=[CommandHandler("stop", stop_nested)],
         map_to_parent={
             STOPPING: ConversationHandler.END,
-            ConversationHandler.END: ConversationHandler.END
+            ConversationHandler.END: ConversationHandler.END,
+            CLASS_SUBMENU: CLASS_SUBMENU
         },
         name='class_options_handler_v1',
         persistent=True

@@ -64,27 +64,40 @@ async def split_text_into_chunks(text: str, update: Update, reply_markup: Inline
     current_length = 0
     open_tags = []
 
+    def close_open_tags(tags):
+        return ''.join([f"</{tag}>" for tag in tags[::-1]])
+
+    def open_tags_html(tags):
+        return ''.join([f"<{tag}>" for tag in tags])
+
+    def extract_tag_name(tag):
+        return tag[1:-1].split(' ')[0].replace('/', '')
+
     for part in tag_regex.split(text):
         if not part:
             continue
 
         if part.startswith('<') and part.endswith('>'):
+            tag_name = extract_tag_name(part)
+
+            if current_length + len(part) > max_length:
+                closing_tags = close_open_tags(open_tags)
+                chunks.append(current_chunk + closing_tags)
+                current_chunk = open_tags_html(open_tags)
+                current_length = len(current_chunk)
+
             if part.startswith('</'):
-                tag_name = part[2:-1].split(' ')[0]
                 if open_tags and open_tags[-1] == tag_name:
                     open_tags.pop()
             elif not part.endswith('/>'):
-                tag_name = part[1:-1].split(' ')[0]
+                if current_length + len(part) > max_length:
+                    chunks.append(current_chunk)
+                    current_chunk = ""
+                    current_length = 0
                 open_tags.append(tag_name)
 
-            if current_length + len(part) > max_length:
-                closing_tags = ''.join([f"</{tag}>" for tag in open_tags[::-1]])
-                chunks.append(current_chunk + closing_tags)
-                current_chunk = ''.join([f"<{tag}>" for tag in open_tags]) + part
-                current_length = len(current_chunk)
-            else:
-                current_chunk += part
-                current_length += len(part)
+            current_chunk += part
+            current_length += len(part)
         else:
             while len(part) > 0:
                 remaining_length = max_length - current_length
@@ -100,13 +113,14 @@ async def split_text_into_chunks(text: str, update: Update, reply_markup: Inline
                     current_chunk += part[:split_point]
                     part = part[split_point:].strip()
 
-                    closing_tags = ''.join([f"</{tag}>" for tag in open_tags[::-1]])
+                    closing_tags = close_open_tags(open_tags)
                     chunks.append(current_chunk + closing_tags)
-                    current_chunk = ''.join([f"<{tag}>" for tag in open_tags])
+                    current_chunk = open_tags_html(open_tags)
                     current_length = len(current_chunk)
 
     if current_chunk:
-        chunks.append(current_chunk)
+        closing_tags = close_open_tags(open_tags)
+        chunks.append(current_chunk + closing_tags)
 
     for chunk in chunks:
         await update.effective_message.reply_text(chunk, parse_mode=parse_mode, reply_markup=reply_markup)

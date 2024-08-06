@@ -35,6 +35,10 @@ async def class_submenus_query_handler(update: Update, context: ContextTypes.DEF
     context.chat_data[WIKI]['class-level-endpoint'] = endpoint
 
     if submenu == 'spells':
+        if endpoint == 'None':
+            await update.effective_message.reply_text("Questa classe non ha spell!")
+            return CLASS_SUBMENU
+
         keyboard = [[InlineKeyboardButton('Consulta', callback_data='read-spells'),
                      InlineKeyboardButton('Cerca', callback_data='search-spell')]]
         reply_markup = InlineKeyboardMarkup(keyboard)
