@@ -15,7 +15,7 @@ CURRENT_FIRST_MENU_INLINE_PAGE = 'current_first_menu_inline_page'
 INLINE_PAGES = 'inline_pages'
 
 # state definitions for equipment-categories conversation
-EQUIPMENT_CATEGORIES_SUBMENU, EQUIPMENT_VISUALIZATION = map(chr, range(8, 10))
+EQUIPMENT_CATEGORIES_SUBMENU, EQUIPMENT_VISUALIZATION = map(chr, range(10, 12))
 
 
 async def equipment_categories_first_menu_query_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
