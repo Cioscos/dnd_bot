@@ -11,7 +11,6 @@ from model import models
 from model.APIResource import APIResource
 from model.AbilityScore import AbilityScore
 from model.Alignment import Alignment
-from model.ClassResource import ClassResource
 from model.Condition import Condition
 from model.DamageType import DamageType
 from model.models import GraphQLBaseModel
@@ -73,10 +72,10 @@ NOT_STANDARD_MENU_CATEGORIES = [EQUIPMENT_CATEGORIES]
 # graphql categories
 GRAPHQL_ENDPOINT = 'https://www.dnd5eapi.co/graphql'
 GRAPHQL_CATEOGRIES = [MONSTERS, PROFICIENCIES, RACES, RULE_SECTIONS, RULES, SKILLS, SPELLS, WEAPON_PROPERTIES,
-                      LANGUAGES]
+                      LANGUAGES, CLASSES]
 
 # categories with HTML Parsing
-HTML_PARSING_CATEGORIES = [MONSTERS, PROFICIENCIES, RACES, SKILLS, SPELLS, WEAPON_PROPERTIES, LANGUAGES]
+HTML_PARSING_CATEGORIES = [MONSTERS, PROFICIENCIES, RACES, SKILLS, SPELLS, WEAPON_PROPERTIES, LANGUAGES, CLASSES]
 
 # State definitions for top-level conv handler
 START_MENU, WIKI_MENU, CHARACTERS_CREATOR_MENU, ITEM_DETAILS_MENU = map(chr, range(4))
@@ -98,7 +97,7 @@ def parse_resource(category: str, data: Dict[str, Any], graphql_key: str = None)
     if category == ABILITY_SCORES:
         return AbilityScore(**data)
     elif category == CLASSES:
-        return ClassResource(**data)
+        return models.Class(**data[graphql_key])
     elif category == ALIGNMENTS:
         return Alignment(**data)
     elif category == CONDITIONS:

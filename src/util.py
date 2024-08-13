@@ -122,8 +122,11 @@ async def split_text_into_chunks(text: str, update: Update, reply_markup: Inline
         closing_tags = close_open_tags(open_tags)
         chunks.append(current_chunk + closing_tags)
 
-    for chunk in chunks:
-        await update.effective_message.reply_text(chunk, parse_mode=parse_mode, reply_markup=reply_markup)
+    for index, chunk in enumerate(chunks):
+        if index == len(chunks) - 1:
+            await update.effective_message.reply_text(chunk, parse_mode=parse_mode, reply_markup=reply_markup)
+        else:
+            await update.effective_message.reply_text(chunk, parse_mode=parse_mode)
 
     if image:
         message = await update.effective_message.reply_text("Caricamento foto...")

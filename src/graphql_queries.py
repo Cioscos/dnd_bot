@@ -436,5 +436,57 @@ CATEGORY_TO_QUERY_MAP = {
     type
     typical_speakers
   }
+}""",
+    "classes": """query Class($index: String) {
+  class(index: $index) {
+    name
+    hit_die
+    saving_throws {
+      full_name
+    }
+    proficiencies {
+      name
+    }
+    proficiency_choices {
+      desc
+    }
+    starting_equipment {
+      equipment {
+        name
+        }
+      }
+    starting_equipment_options {
+      desc
+    }
+    multi_classing {
+      prerequisites {
+        minimum_score
+        ability_score {
+          full_name
+        }
+      }
+      proficiencies {
+        name
+      }
+      proficiency_choices {
+        desc
+      }
+    }
+    subclasses {
+      name
+      desc
+      subclass_flavor
+    }
+    spellcasting {
+      level
+      spellcasting_ability {
+        full_name
+      }
+      info {
+        name
+        desc
+      }
+    }
+  }
 }"""
 }

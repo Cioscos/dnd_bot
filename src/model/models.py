@@ -1885,28 +1885,50 @@ class Class(GraphQLBaseModel):
         return self.__str__()
 
     def __str__(self):
-        class_levels = ', '.join([str(level) for level in self.class_levels]) if self.class_levels else "None"
-        hit_die = self.hit_die if self.hit_die is not None else "None"
-        index = self.index if self.index else "None"
-        multi_classing = str(self.multi_classing) if self.multi_classing else "None"
-        name = self.name if self.name else "None"
-        proficiencies = ', '.join([str(prof) for prof in self.proficiencies]) if self.proficiencies else "None"
-        proficiency_choices = ', '.join(
-            [str(choice) for choice in self.proficiency_choices]) if self.proficiency_choices else "None"
-        saving_throws = ', '.join([str(st) for st in self.saving_throws]) if self.saving_throws else "None"
-        spellcasting = str(self.spellcasting) if self.spellcasting else "None"
-        spells = ', '.join([str(spell) for spell in self.spells]) if self.spells else "None"
-        starting_equipment = ', '.join(
-            [str(equip) for equip in self.starting_equipment]) if self.starting_equipment else "None"
-        starting_equipment_options = ', '.join(
-            [str(option) for option in self.starting_equipment_options]) if self.starting_equipment_options else "None"
-        subclasses = ', '.join([str(subclass) for subclass in self.subclasses]) if self.subclasses else "None"
+        hit_die = self.hit_die if self.hit_die is not None else "Dado vita non specificato."
+        name = self.name if self.name else "Nome della classe non specificato."
+        proficiencies = ', '.join(
+            [prof.name for prof in self.proficiencies]) if self.proficiencies else "Competenze non specificate."
+        proficiency_choices = '; '.join(choice.desc for choice in
+                                        self.proficiency_choices) if self.proficiency_choices else "Scelte di competenze non specificate."
+        saving_throws = ', '.join(
+            [st.full_name for st in self.saving_throws]) if self.saving_throws else "Tiri salvezza non specificati."
+        starting_equipment = ', '.join([eq.equipment.name for eq in
+                                        self.starting_equipment]) if self.starting_equipment else 'Equipaggiamento iniziale non specificato.'
+        starting_equipment_options = '\n'.join([f'{i + 1}) {se.desc}' for i, se in enumerate(
+            self.starting_equipment_options)]) if self.starting_equipment_options else "Opzioni di equipaggiamento iniziale non specificate."
+        subclasses = '\n'.join([f'Nome sottoclasse: {subclass.name}\n'
+                                f'Descrizione: {' '.join([desc for desc in subclass.desc])}\n'
+                                f'Flavor: {subclass.subclass_flavor}' for subclass in
+                                self.subclasses]) if self.subclasses else "Sottoclassi non specificate."
 
-        return (f"Class Levels: {class_levels}, Hit Die: {hit_die}, Index: {index}, "
-                f"Multi-classing: {multi_classing}, Name: {name}, Proficiencies: {proficiencies}, "
-                f"Proficiency Choices: {proficiency_choices}, Saving Throws: {saving_throws}, "
-                f"Spellcasting: {spellcasting}, Spells: {spells}, Starting Equipment: {starting_equipment}, "
-                f"Starting Equipment Options: {starting_equipment_options}, Subclasses: {subclasses}")
+        multi_classing = ''
+        if not self.multi_classing:
+            multi_classing = 'Multiclasse non specificato'
+        else:
+            multi_classing += f'Prerequisiti: {', '.join([f'Almeno {prerequisite.minimum_score} in {prerequisite.ability_score.full_name}' for prerequisite in self.multi_classing.prerequisites])}'
+
+        spellcasting = ''
+        if not self.spellcasting:
+            spellcasting = "Capacità di incantesimo non specificata."
+        else:
+            spellcasting += (f"Capacità di usare incantesimi dal livello: {self.spellcasting.level} utilizzando"
+                             f" l'abilità {self.spellcasting.spellcasting_ability.full_name}\n")
+            spellcasting += '\n\n'.join(
+                f'{info.name}: {' '.join([p for p in info.desc])}' for info in self.spellcasting.info)
+
+        return (
+            f"<b>🛡️️ Nome:</b> {name}\n"
+            f"<b>🎲 Dado Vita:</b> {hit_die}\n"
+            f"<b>📜 Scelte di Competenze:</b>\n{proficiency_choices}\n"
+            f"<b>🛡️ Tiri Salvezza:</b> {saving_throws}\n"
+            f"<b>🎒 Equipaggiamento Iniziale:</b> {starting_equipment}\n"
+            f"<b>⚙️ Opzioni di Equipaggiamento Iniziale:</b> {starting_equipment_options}\n"
+            f"<b>🔄 Multiclasse:</b>\n{multi_classing}\n"
+            f"<b>🛡️ Competenze:</b> {proficiencies}\n"
+            f"<b>🧩 Sottoclassi:</b>\n{subclasses}\n"
+            f"<b>🧙‍♂️ Capacità di Incantesimo:</b>\n{spellcasting}\n"
+        )
 
 
 class ClassSpellcasting(GraphQLBaseModel):
