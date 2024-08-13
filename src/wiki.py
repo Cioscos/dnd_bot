@@ -14,7 +14,6 @@ from model.Alignment import Alignment
 from model.ClassResource import ClassResource
 from model.Condition import Condition
 from model.DamageType import DamageType
-from model.Language import Language
 from model.models import GraphQLBaseModel
 from util import format_camel_case_to_title, chunk_list, generate_resource_list_keyboard, split_text_into_chunks, \
     async_graphql_query
@@ -73,10 +72,11 @@ NOT_STANDARD_MENU_CATEGORIES = [EQUIPMENT_CATEGORIES]
 
 # graphql categories
 GRAPHQL_ENDPOINT = 'https://www.dnd5eapi.co/graphql'
-GRAPHQL_CATEOGRIES = [MONSTERS, PROFICIENCIES, RACES, RULE_SECTIONS, RULES, SKILLS, SPELLS, WEAPON_PROPERTIES]
+GRAPHQL_CATEOGRIES = [MONSTERS, PROFICIENCIES, RACES, RULE_SECTIONS, RULES, SKILLS, SPELLS, WEAPON_PROPERTIES,
+                      LANGUAGES]
 
 # categories with HTML Parsing
-HTML_PARSING_CATEGORIES = [MONSTERS, PROFICIENCIES, RACES, SKILLS, SPELLS, WEAPON_PROPERTIES]
+HTML_PARSING_CATEGORIES = [MONSTERS, PROFICIENCIES, RACES, SKILLS, SPELLS, WEAPON_PROPERTIES, LANGUAGES]
 
 # State definitions for top-level conv handler
 START_MENU, WIKI_MENU, CHARACTERS_CREATOR_MENU, ITEM_DETAILS_MENU = map(chr, range(4))
@@ -106,7 +106,7 @@ def parse_resource(category: str, data: Dict[str, Any], graphql_key: str = None)
     elif category == DAMAGE_TYPES:
         return DamageType(**data)
     elif category == LANGUAGES:
-        return Language(**data)
+        return models.Language(**data[graphql_key])
     elif category == MONSTERS:
         return models.Monster(**data[graphql_key])
     elif category == PROFICIENCIES:

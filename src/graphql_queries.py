@@ -427,5 +427,14 @@ CATEGORY_TO_QUERY_MAP = {
     name
     desc
   }
+}""",
+    "languages": """query Language($index: String) {
+  language(index: $index) {
+    name
+    desc
+    script
+    type
+    typical_speakers
+  }
 }"""
 }

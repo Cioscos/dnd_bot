@@ -2703,15 +2703,21 @@ class Language(GraphQLBaseModel):
         return self.__str__()
 
     def __str__(self):
-        desc = self.desc if self.desc else "None"
-        index = self.index if self.index else "None"
-        name = self.name if self.name else "None"
-        script = str(self.script) if self.script else "None"
-        type_str = str(self.type) if self.type else "None"
-        typical_speakers = ', '.join(self.typical_speakers) if self.typical_speakers else "None"
+        desc = self.desc if self.desc else "Descrizione non fornita."
+        index = self.index if self.index else "Indice non fornito."
+        name = self.name if self.name else "Nome non specificato."
+        script = str(self.script) if self.script else "Scrittura non definita."
+        type_str = str(self.type) if self.type else "Tipo non specificato."
+        typical_speakers = ', '.join(
+            self.typical_speakers) if self.typical_speakers else "Nessun parlante tipico elencato."
 
-        return (f"Description: {desc}, Index: {index}, Name: {name}, Script: {script}, "
-                f"Type: {type_str}, Typical Speakers: {typical_speakers}")
+        return (
+            f"<b>🏷️ Nome:</b> {name}\n"
+            f"<b>📝 Descrizione:</b> {desc}\n"
+            f"<b>📜 Scrittura:</b> {script}\n"
+            f"<b>📂 Tipo:</b> {type_str}\n"
+            f"<b>🗣️ Parlanti tipici:</b> {typical_speakers}\n"
+        )
 
 
 class LanguageChoice(GraphQLBaseModel):
