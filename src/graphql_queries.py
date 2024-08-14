@@ -439,6 +439,7 @@ CATEGORY_TO_QUERY_MAP = {
 }""",
     "classes": """query Class($index: String) {
   class(index: $index) {
+    index
     name
     hit_die
     saving_throws {

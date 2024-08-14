@@ -1,17 +1,22 @@
 import logging
 from typing import Dict, List
+
 import aiohttp
+
 from model.APIResource import APIResource
 
 logger = logging.getLogger(__name__)
 
 
 class DndService:
+    DOMAIN = "https://www.dnd5eapi.co"
+    API = "https://www.dnd5eapi.co/api"
+
     def __init__(self):
         """
         Initialize the DndService with the base API URL, payload, and headers.
         """
-        self.__api = "https://www.dnd5eapi.co"
+        self.__api = self.DOMAIN
         self.__payload = {}
         self.__headers = {
             'Accept': 'application/json'
@@ -120,4 +125,12 @@ class DndService:
         :param endpoint: Resource string
         """
         url = f"{self.__api}{endpoint}"
+        return await self.__do_get(url)
+
+    async def get_spells_by_class_index(self, class_index: str) -> Dict:
+        url = f"{self.__api}/api/classes/{class_index}/spells"
+        return await self.__do_get(url)
+
+    async def get_class_levels_by_class_index(self, class_index: str, level: str) -> Dict:
+        url = f"{self.__api}/api/classes/{class_index}/levels/{level}"
         return await self.__do_get(url)

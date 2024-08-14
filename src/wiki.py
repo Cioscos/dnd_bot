@@ -129,9 +129,9 @@ def parse_resource(category: str, data: Dict[str, Any], graphql_key: str = None)
 def process_keyboard_by_category(category: str, class_: Union[APIResource, GraphQLBaseModel]) -> List:
     if category == CLASSES:
         return [
-            [InlineKeyboardButton('Spell', callback_data=f"spells|{class_.spells}|{class_.name}")],
+            [InlineKeyboardButton('Spell', callback_data=f"spells|{class_.index}|{class_.name}")],
             [InlineKeyboardButton('Risorse di classe per livello',
-                                  callback_data=f"resources|{class_.class_levels}|{class_.name}")]
+                                  callback_data=f"resources|{class_.index}|{class_.name}")]
         ]
 
     else:

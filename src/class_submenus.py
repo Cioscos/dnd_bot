@@ -23,6 +23,7 @@ CURRENT_CLASS_SPELLS_INLINE_PAGE = 'current_class_spells_inline_page'
 ABILITY_SCORE_CALLBACK = 'ability_score'
 CLASS_SPELLS_PAGES = 'class_spells'
 CLASS_SPELLS_PAGE = 'class_spells_page'
+CLASS_INDEX = 'class_index'
 
 
 async def class_submenus_query_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -30,12 +31,12 @@ async def class_submenus_query_handler(update: Update, context: ContextTypes.DEF
     data = query.data
     await query.answer()
 
-    submenu, endpoint, class_name = data.split('|')
+    submenu, class_index, class_name = data.split('|')
     # save the endpoint in chat data
-    context.chat_data[WIKI]['class-level-endpoint'] = endpoint
+    context.chat_data[WIKI][CLASS_INDEX] = class_index
 
     if submenu == 'spells':
-        if endpoint == 'None':
+        if class_index == 'None':
             await update.effective_message.reply_text("Questa classe non ha spell!")
             return CLASS_SUBMENU
 
@@ -65,9 +66,9 @@ async def class_spells_menu_buttons_query_handler(update: Update, context: Conte
         return CLASS_MANUAL_SPELLS_SEARCHING
 
     elif data == 'read-spells':
-        endpoint = context.chat_data[WIKI]['class-level-endpoint']
+        class_index = context.chat_data[WIKI][CLASS_INDEX]
         async with DndService() as dnd_service:
-            resource_details = await dnd_service.get_resource_by_class_resource(endpoint)
+            resource_details = await dnd_service.get_spells_by_class_index(class_index)
 
         # set the current inline page in chat_data
         context.chat_data[WIKI][CURRENT_CLASS_SPELLS_INLINE_PAGE] = 0
@@ -149,7 +150,7 @@ async def class_spell_visualization_buttons_query_handler(update: Update, contex
 
 async def class_search_spells_text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     text = update.effective_message.text
-    endpoint = context.chat_data[WIKI]['class-level-endpoint']
+    class_index = context.chat_data[WIKI][CLASS_INDEX]
 
     # check if the input is a number
     if text.isdigit():
@@ -157,7 +158,7 @@ async def class_search_spells_text_handler(update: Update, context: ContextTypes
         return CLASS_MANUAL_SPELLS_SEARCHING
 
     async with DndService() as dnd_service:
-        resource_details = await dnd_service.get_resource_by_class_resource(endpoint)
+        resource_details = await dnd_service.get_spells_by_class_index(class_index)
 
     spells = resource_details['results']
     spells_dict = {spell['name'].lower(): spell['url'] for spell in spells}
@@ -191,10 +192,10 @@ async def class_resources_submenu_text_handler(update: Update, context: ContextT
         await update.effective_message.reply_text('Inserisci un numero tra 1 a 20. Dovresti saperlo...')
         return CLASS_RESOURCES_SUBMENU
 
-    endpoint = context.chat_data[WIKI]['class-level-endpoint'] + f'/{text}'
+    class_index = context.chat_data[WIKI][CLASS_INDEX]
 
     async with DndService() as dnd_service:
-        resource_details = await dnd_service.get_resource_by_class_resource(endpoint)
+        resource_details = await dnd_service.get_class_levels_by_class_index(class_index, text)
 
     class_resource = ClassLevelResource(**resource_details)
     await class_resource.fetch_features()
