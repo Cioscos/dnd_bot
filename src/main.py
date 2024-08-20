@@ -16,13 +16,17 @@ from telegram.ext import (
 )
 from telegram.warnings import PTBUserWarning
 
-from character_creator import character_creator_start_handler
+from character_creator import character_creator_start_handler, character_creation_handler, \
+    character_spells_query_handler, character_abilities_query_handler, character_feature_point_query_handler, \
+    character_name_handler, character_race_handler, character_gender_handler, character_class_handler, \
+    character_subclass_query_handler, character_multiclassing_query_handler
 from class_submenus import class_submenus_query_handler, class_spells_menu_buttons_query_handler, \
     class_search_spells_text_handler, class_reading_spells_menu_buttons_query_handler, \
     class_spell_visualization_buttons_query_handler, class_resources_submenu_text_handler
 from environment_variables_mg import keyring_initialize, keyring_get
 from equipment_categories_submenus import equipment_categories_first_menu_query_handler, \
     equipment_visualization_query_handler
+from src.character_creator import character_bag_query_handler
 from wiki import wiki_main_menu_handler, main_menu_buttons_query_handler, details_menu_buttons_query_handler
 
 # Setup logging
@@ -42,17 +46,21 @@ logging.getLogger("httpx").setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
 
 # State definitions for top-level conv handler
-START_MENU, WIKI_MENU, CHARACTERS_CREATOR_MENU, ITEM_DETAILS_MENU = map(chr, range(4))
+START_MENU, WIKI_MENU, CHARACTERS_CREATOR_MENU, ITEM_DETAILS_MENU = map(int, range(4))
 
 # State definitions for class sub conversation
 CLASS_SUBMENU, CLASS_SPELLS_SUBMENU, CLASS_RESOURCES_SUBMENU, CLASS_MANUAL_SPELLS_SEARCHING, CLASS_READING_SPELLS_SEARCHING, CLASS_SPELL_VISUALIZATION = map(
-    chr, range(4, 10))
+    int, range(4, 10))
 
 # state definitions for equipment-categories conversation
-EQUIPMENT_CATEGORIES_SUBMENU, EQUIPMENT_VISUALIZATION = map(chr, range(10, 12))
+EQUIPMENT_CATEGORIES_SUBMENU, EQUIPMENT_VISUALIZATION = map(int, range(10, 12))
 
 # state definitions for features conversation
-FEATURES_SUBMENU, FEATURE_VISUALIZATION = map(chr, range(12, 14))
+FEATURES_SUBMENU, FEATURE_VISUALIZATION = map(int, range(12, 14))
+
+# states definition for character creator submenu
+(CHARACTER_CREATION, CHARACTER_SELECTION, NAME_SELECTION, RACE_SELECTION, GENDER_SELECTION,
+ CLASS_SELECTION, FUNCTION_SELECTION) = map(int, range(14, 21))
 
 STOPPING = 99
 
@@ -69,6 +77,14 @@ INLINE_PAGES = 'inline_pages'
 ABILITY_SCORE_CALLBACK = 'ability_score'
 CLASS_SPELLS_PAGES = 'class_spells'
 CLASS_SPELLS_PAGE = 'class_spells_page'
+
+# character creator callback keys
+BAG_CALLBACK_DATA = 'bag'
+SPELLS_CALLBACK_DATA = 'spells'
+ABILITIES_CALLBACK_DATA = 'abilities'
+FEATURE_POINTS_CALLBACK_DATA = 'feature_points'
+SUBCLASS_CALLBACK_DATA = 'subclass'
+MULTICLASSING_CALLBACK_DATA = 'multiclass'
 
 # Categories
 CLASSES = 'classes'
@@ -162,9 +178,6 @@ async def post_init_callback(application: Application) -> None:
                                                "🟢 Il Bot è ripartito dopo un riavvio 🟢")
         except (BadRequest, TelegramError) as e:
             logger.error(f"CHAT_ID: {chat_id} Telegram error stopping the bot: {e}")
-
-    if CHARACTERS_CREATOR not in application.bot_data:
-        application.bot_data[CHARACTERS_CREATOR] = {}
 
 
 async def post_stop_callback(application: Application) -> None:
@@ -297,7 +310,25 @@ def main() -> None:
             CallbackQueryHandler(character_creator_start_handler, pattern=r"^character_manager$"),
             CommandHandler('character', character_creator_start_handler)
         ],
-        states={},
+        states={
+            CHARACTER_CREATION: [CommandHandler('newCharacter', character_creation_handler)],
+            NAME_SELECTION: [MessageHandler(filters.TEXT & ~filters.COMMAND, character_name_handler)],
+            RACE_SELECTION: [MessageHandler(filters.TEXT & ~filters.COMMAND, character_race_handler)],
+            GENDER_SELECTION: [MessageHandler(filters.TEXT & ~filters.COMMAND, character_gender_handler)],
+            CLASS_SELECTION: [MessageHandler(filters.TEXT & ~filters.COMMAND, character_class_handler)],
+            FUNCTION_SELECTION: [
+                CallbackQueryHandler(character_bag_query_handler, pattern=fr"^{BAG_CALLBACK_DATA}$"),
+                CallbackQueryHandler(character_spells_query_handler, pattern=fr"^{SPELLS_CALLBACK_DATA}$"),
+                CallbackQueryHandler(character_abilities_query_handler, pattern=fr"^{ABILITIES_CALLBACK_DATA}$"),
+                CallbackQueryHandler(character_feature_point_query_handler,
+                                     pattern=fr"^{FEATURE_POINTS_CALLBACK_DATA}$"),
+                CallbackQueryHandler(character_subclass_query_handler,
+                                     pattern=fr"^{SUBCLASS_CALLBACK_DATA}$"),
+                CallbackQueryHandler(character_multiclassing_query_handler,
+                                     pattern=fr"^{MULTICLASSING_CALLBACK_DATA}$")
+            ],
+            CHARACTER_SELECTION: []
+        },
         fallbacks=[CommandHandler("stop", stop_nested)],
         map_to_parent={
             STOPPING: ConversationHandler.END,
