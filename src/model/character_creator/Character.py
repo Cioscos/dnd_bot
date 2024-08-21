@@ -4,6 +4,7 @@ from typing import List, Optional, Dict
 from src.model.character_creator.Ability import Ability
 from src.model.character_creator.FeaturePoints import FeaturePoints
 from src.model.character_creator.Item import Item
+from src.model.character_creator.MultiClass import MultiClass
 from src.model.character_creator.SpellSlot import SpellSlot
 from src.model.models import Spell
 
@@ -15,7 +16,7 @@ class Character:
     gender: Optional[str] = field(default=None)
     class_: Optional[str] = field(default=None)
     subClass: Optional[str] = field(default=None)
-    multiclass: Optional[List[str]] = field(default=list)
+    multi_class: MultiClass = field(default_factory=MultiClass)
     level: int = 1
     feature_points: FeaturePoints = field(default_factory=FeaturePoints)
     spell_slots: Dict[int, SpellSlot] = field(default_factory=dict)
@@ -84,18 +85,40 @@ class Character:
         for slot in self.spell_slots.values():
             slot.restore_all_slots()
 
+    def add_class(self, class_name: str, levels: int = 1):
+        """Adds levels to a specified class using multiclassing."""
+        self.multi_class.add_class(class_name, levels)
+
+    def remove_class(self, class_name: str):
+        """Removes a class from the character's multiclass."""
+        self.multi_class.remove_class(class_name)
+
+    def get_class_level(self, class_name: str) -> Optional[int]:
+        """Gets the level of a specified class."""
+        return self.multi_class.get_class_level(class_name)
+
+    def list_classes(self) -> str:
+        """Lists all classes and their levels for the character."""
+        return self.multi_class.list_classes()
+
+    def total_levels(self) -> int:
+        """Returns the total number of levels across all classes."""
+        return self.multi_class.total_levels()
+
     def list_spell_slots(self):
         """Lists all spell slots and their statuses."""
         return [str(slot) for slot in self.spell_slots.values()]
 
     def __str__(self):
         return (f"Character(name={self.name}, race={self.race}, gender={self.gender}, "
-                f"class_={self.class_}, level={self.level}, feature_points={self.feature_points}, "
-                f"items={len(self.bag)}, spells={len(self.spells)}, abilities={len(self.abilities)}, "
+                f"class_={self.class_}, level={self.level}, multi_class={self.multi_class}, "
+                f"feature_points={self.feature_points}, items={len(self.bag)}, "
+                f"spells={len(self.spells)}, abilities={len(self.abilities)}, "
                 f"spell_slots={len(self.spell_slots)})")
 
     def __repr__(self):
         return (f"Character(name={self.name!r}, race={self.race!r}, gender={self.gender!r}, "
-                f"class_={self.class_!r}, level={self.level!r}, feature_points={self.feature_points!r}, "
-                f"items={self.bag!r}, spells={self.spells!r}, abilities={self.abilities!r}, "
+                f"class_={self.class_!r}, level={self.level!r}, multi_class={self.multi_class!r}, "
+                f"feature_points={self.feature_points!r}, items={self.bag!r}, "
+                f"spells={self.spells!r}, abilities={self.abilities!r}, "
                 f"spell_slots={self.spell_slots!r})")
