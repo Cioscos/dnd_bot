@@ -65,8 +65,8 @@ async def character_creator_stop_nested(update: Update, context: ContextTypes.DE
                                     "/wiki per consultare la wiki\n"
                                     "/character per usare il gestore di personaggi")
 
-    context.user_data[CHARACTERS_CREATOR_KEY].pop(CURRENT_CHARACTER_KEY)
-    context.user_data[CHARACTERS_CREATOR_KEY].pop(TEMP_CHARACTER_KEY)
+    context.user_data[CHARACTERS_CREATOR_KEY].pop(CURRENT_CHARACTER_KEY, None)
+    context.user_data[CHARACTERS_CREATOR_KEY].pop(TEMP_CHARACTER_KEY, None)
 
     return STOPPING
 
