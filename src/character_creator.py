@@ -15,6 +15,8 @@ CHARACTER_CREATOR_VERSION = "0.0.1"
 (CHARACTER_CREATION, CHARACTER_SELECTION, NAME_SELECTION, RACE_SELECTION, GENDER_SELECTION,
  CLASS_SELECTION, FUNCTION_SELECTION) = map(int, range(14, 21))
 
+STOPPING = 99
+
 # bot data keys
 BOT_DATA_CHAT_IDS = 'bot_data_chat_ids'
 
@@ -36,17 +38,19 @@ MULTICLASSING_CALLBACK_DATA = 'multiclass'
 
 def create_main_menu_message(character: Character) -> Tuple[str, InlineKeyboardMarkup]:
     message_str = (f"Benvenuto nella gestione personaggio! v.{CHARACTER_CREATOR_VERSION}\n"
-                   f"<b>Nome personaggio:</b> {character.name}  <b>Livello</b>: {character.level}\n"
+                   f"<b>Nome personaggio:</b> {character.name} L. {character.level}\n"
                    f"<b>Razza:</b> {character.race}\n"
                    f"<b>Genere:</b> {character.gender}\n"
                    f"<b>Classe:</b> {character.class_}\n\n"
-                   f"<b>Slot incantesimo</b>\n{"\n".join([f"{slot.slots_remaining()} di livello {level}" for level, slot in character.spell_slots.items()]) if character.spell_slots else "Non hai registrato ancora nessuno Slot incantesimo"}")
+                   f"<b>Slot incantesimo</b>\n{"\n".join([f"{slot.slots_remaining()} di livello {level}" for level, slot in character.spell_slots.items()]) if character.spell_slots else "Non hai registrato ancora nessuno Slot incantesimo\n"}")
 
     message_str += f"<b>Punti caratteristica</b>\n{str(character.feature_points)}"
 
     keyboard = [
-        [InlineKeyboardButton('Borsa', callback_data=BAG_CALLBACK_DATA),
-         InlineKeyboardButton('Spell', callback_data=SPELLS_CALLBACK_DATA)],
+        [
+            InlineKeyboardButton('Borsa', callback_data=BAG_CALLBACK_DATA),
+            InlineKeyboardButton('Spell', callback_data=SPELLS_CALLBACK_DATA)
+        ],
         [InlineKeyboardButton('Abilità', callback_data=ABILITIES_CALLBACK_DATA)],
         [InlineKeyboardButton('Punti caratteristica', callback_data=FEATURE_POINTS_CALLBACK_DATA)],
         [InlineKeyboardButton('Aggiungi sotto-classe', callback_data=SUBCLASS_CALLBACK_DATA)],
@@ -54,6 +58,17 @@ def create_main_menu_message(character: Character) -> Tuple[str, InlineKeyboardM
     ]
 
     return message_str, InlineKeyboardMarkup(keyboard)
+
+
+async def character_creator_stop_nested(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    await update.message.reply_text("Ok! Usa i comandi:\n"
+                                    "/wiki per consultare la wiki\n"
+                                    "/character per usare il gestore di personaggi")
+
+    context.user_data[CHARACTERS_CREATOR_KEY].pop(CURRENT_CHARACTER_KEY)
+    context.user_data[CHARACTERS_CREATOR_KEY].pop(TEMP_CHARACTER_KEY)
+
+    return STOPPING
 
 async def character_creator_start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     if update.callback_query:
@@ -91,7 +106,7 @@ async def character_creator_start_handler(update: Update, context: ContextTypes.
 
     else:
         characters: List[Character] = context.user_data[CHARACTERS_CREATOR_KEY][CHARACTERS_KEY]
-        message_str += "Seleziona uno dei personaggi da gestire:"
+        message_str += "Seleziona uno dei personaggi da gestire o creane no nuovo con /newCharacter:"
         keyboard = []
 
         for character in characters:
@@ -102,12 +117,29 @@ async def character_creator_start_handler(update: Update, context: ContextTypes.
         return CHARACTER_SELECTION
 
 
+async def character_selection_query_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    query = update.callback_query
+    await query.answer()
+
+    character_name = query.data
+
+    characters: List[Character] = context.user_data[CHARACTERS_CREATOR_KEY][CHARACTERS_KEY]
+    character = next((character for character in characters if character.name == character_name), None)
+    context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_CHARACTER_KEY] = character
+
+    msg, reply_markup = create_main_menu_message(character)
+    await update.effective_message.reply_text(msg, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
+
+    return FUNCTION_SELECTION
+
+
 async def character_creation_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     # create a character oject and save it temporarly in the user date
     character = Character()
     context.user_data[CHARACTERS_CREATOR_KEY][TEMP_CHARACTER_KEY] = character
 
-    await update.effective_message.reply_text("Qual'è il nome del personaggio?\nRispondi a questo messaggio")
+    await update.effective_message.reply_text(
+        "Qual'è il nome del personaggio?\nRispondi a questo messaggio o premi /stop per terminare")
 
     return NAME_SELECTION
 
@@ -115,10 +147,18 @@ async def character_creation_handler(update: Update, context: ContextTypes.DEFAU
 async def character_name_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     name = update.effective_message.text
 
+    # check if the character already exists
+    if any(character.name == name for character in context.user_data[CHARACTERS_CREATOR_KEY].get(CHARACTERS_KEY, [])):
+        await update.effective_message.reply_text("🔴 Esiste già un personaggio con lo stesso nome! 🔴\n"
+                                                  "Inserisci un altro nome o premi /stop per terminare")
+
+        return NAME_SELECTION
+
     character = context.user_data[CHARACTERS_CREATOR_KEY][TEMP_CHARACTER_KEY]
     character.name = name
 
-    await update.effective_message.reply_text("Qual'è la razza del personaggio?\nRispondi a questo messaggio")
+    await update.effective_message.reply_text(
+        "Qual'è la razza del personaggio?\nRispondi a questo messaggio o premi /stop per terminare")
 
     return RACE_SELECTION
 
@@ -129,7 +169,8 @@ async def character_race_handler(update: Update, context: ContextTypes.DEFAULT_T
     character = context.user_data[CHARACTERS_CREATOR_KEY][TEMP_CHARACTER_KEY]
     character.race = race
 
-    await update.effective_message.reply_text("Qual'è il genere del personaggio?\nRispondi a questo messaggio")
+    await update.effective_message.reply_text(
+        "Qual'è il genere del personaggio?\nRispondi a questo messaggio o premi /stop per terminare")
 
     return GENDER_SELECTION
 
@@ -140,7 +181,8 @@ async def character_gender_handler(update: Update, context: ContextTypes.DEFAULT
     character = context.user_data[CHARACTERS_CREATOR_KEY][TEMP_CHARACTER_KEY]
     character.gender = gender
 
-    await update.effective_message.reply_text("Qual'è la classe del personaggio?\nRispondi a questo messaggio")
+    await update.effective_message.reply_text(
+        "Qual'è la classe del personaggio?\nRispondi a questo messaggio o premi /stop per terminare")
 
     return CLASS_SELECTION
 
