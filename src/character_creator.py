@@ -39,7 +39,6 @@ AFFERMATIVE_CHARACTER_DELETION_CALLBACK_DATA = 'yes_delete_character'
 NEGATIVE_CHARACTER_DELETION_CALLBACK_DATA = 'no_delete_character'
 
 
-
 def create_main_menu_message(character: Character) -> Tuple[str, InlineKeyboardMarkup]:
     message_str = (f"Benvenuto nella gestione personaggio! v.{CHARACTER_CREATOR_VERSION}\n"
                    f"<b>Nome personaggio:</b> {character.name} L. {character.level}\n"
@@ -67,13 +66,14 @@ def create_main_menu_message(character: Character) -> Tuple[str, InlineKeyboardM
 
 async def character_creator_stop_nested(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     await update.effective_message.reply_text("Ok! Usa i comandi:\n"
-                                    "/wiki per consultare la wiki\n"
-                                    "/character per usare il gestore di personaggi")
+                                              "/wiki per consultare la wiki\n"
+                                              "/character per usare il gestore di personaggi")
 
     context.user_data[CHARACTERS_CREATOR_KEY].pop(CURRENT_CHARACTER_KEY, None)
     context.user_data[CHARACTERS_CREATOR_KEY].pop(TEMP_CHARACTER_KEY, None)
 
     return STOPPING
+
 
 async def character_creator_start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     if update.callback_query:
@@ -213,9 +213,12 @@ async def character_bag_query_handler(update: Update, context: ContextTypes.DEFA
     query = update.callback_query
     await query.answer()
 
-    await update.effective_message.reply_text("Funzione non ancora implementata")
+    character: Character = context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_CHARACTER_KEY]
+    message_str = (f"<b>Oggetti nella borsa</b>\n\n"
+                   f"{'\n'.join(f'{item.name} x{item.quantity}' for item in character.bag) if character.bag else 
+                   "Lo zaino è ancora vuoto"}")
 
-    character = context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_CHARACTER_KEY]
+
     msg, reply_markup = create_main_menu_message(character)
 
     await update.effective_message.reply_text(msg, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
