@@ -13,7 +13,7 @@ CHARACTER_CREATOR_VERSION = "0.0.1"
 
 # states definition
 (CHARACTER_CREATION, CHARACTER_SELECTION, NAME_SELECTION, RACE_SELECTION, GENDER_SELECTION,
- CLASS_SELECTION, FUNCTION_SELECTION) = map(int, range(14, 21))
+ CLASS_SELECTION, FUNCTION_SELECTION, CHARACTER_DELETION) = map(int, range(14, 22))
 
 STOPPING = 99
 
@@ -34,6 +34,10 @@ ABILITIES_CALLBACK_DATA = 'abilities'
 FEATURE_POINTS_CALLBACK_DATA = 'feature_points'
 SUBCLASS_CALLBACK_DATA = 'subclass'
 MULTICLASSING_CALLBACK_DATA = 'multiclass'
+DELETE_CHARACTER_CALLBACK_DATA = 'delete_character'
+AFFERMATIVE_CHARACTER_DELETION_CALLBACK_DATA = 'yes_delete_character'
+NEGATIVE_CHARACTER_DELETION_CALLBACK_DATA = 'no_delete_character'
+
 
 
 def create_main_menu_message(character: Character) -> Tuple[str, InlineKeyboardMarkup]:
@@ -55,13 +59,14 @@ def create_main_menu_message(character: Character) -> Tuple[str, InlineKeyboardM
         [InlineKeyboardButton('Punti caratteristica', callback_data=FEATURE_POINTS_CALLBACK_DATA)],
         [InlineKeyboardButton('Aggiungi sotto-classe', callback_data=SUBCLASS_CALLBACK_DATA)],
         [InlineKeyboardButton('Aggiungi multiclasse', callback_data=MULTICLASSING_CALLBACK_DATA)],
+        [InlineKeyboardButton('Elimina personaggio', callback_data=DELETE_CHARACTER_CALLBACK_DATA)]
     ]
 
     return message_str, InlineKeyboardMarkup(keyboard)
 
 
 async def character_creator_stop_nested(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    await update.message.reply_text("Ok! Usa i comandi:\n"
+    await update.effective_message.reply_text("Ok! Usa i comandi:\n"
                                     "/wiki per consultare la wiki\n"
                                     "/character per usare il gestore di personaggi")
 
@@ -266,7 +271,7 @@ async def character_subclass_query_handler(update: Update, context: ContextTypes
 
     await update.effective_message.reply_text("Funzione non ancora implementata")
 
-    character = context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_CHARACTER_KEY]
+    character: Character = context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_CHARACTER_KEY]
     msg, reply_markup = create_main_menu_message(character)
 
     await update.effective_message.reply_text(msg, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
@@ -286,3 +291,41 @@ async def character_multiclassing_query_handler(update: Update, context: Context
     await update.effective_message.reply_text(msg, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
 
     return FUNCTION_SELECTION
+
+
+async def character_deleting_query_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    query = update.callback_query
+    await query.answer()
+
+    character: Character = context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_CHARACTER_KEY]
+
+    keyboard = [
+        [
+            InlineKeyboardButton('Si', callback_data=AFFERMATIVE_CHARACTER_DELETION_CALLBACK_DATA),
+            InlineKeyboardButton('No', callback_data=NEGATIVE_CHARACTER_DELETION_CALLBACK_DATA)
+        ]
+    ]
+
+    await update.effective_message.reply_text("Sei sicuro di voler chancellare il personaggio?\n\n"
+                                              f"{character.name} - classe {character.class_} di L. {character.level}",
+                                              reply_markup=InlineKeyboardMarkup(keyboard))
+
+    return CHARACTER_DELETION
+
+
+async def character_deleting_answer_query_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    query = update.callback_query
+    await query.answer()
+
+    # Deleting current character selection
+    current_character: Character = context.user_data[CHARACTERS_CREATOR_KEY].pop(CURRENT_CHARACTER_KEY, None)
+
+    characters: List[Character] = context.user_data[CHARACTERS_CREATOR_KEY][CHARACTERS_KEY]
+
+    for character in characters:
+        if character.name == current_character.name:
+            characters.remove(character)
+
+    await update.effective_message.reply_text("Personaggio eliminato con successo")
+
+    return await character_creator_stop_nested(update, context)

@@ -19,7 +19,10 @@ from telegram.warnings import PTBUserWarning
 from character_creator import character_creator_start_handler, character_creation_handler, \
     character_spells_query_handler, character_abilities_query_handler, character_feature_point_query_handler, \
     character_name_handler, character_race_handler, character_gender_handler, character_class_handler, \
-    character_subclass_query_handler, character_multiclassing_query_handler, character_creator_stop_nested
+    character_subclass_query_handler, character_multiclassing_query_handler, character_creator_stop_nested, \
+    BAG_CALLBACK_DATA, SPELLS_CALLBACK_DATA, ABILITIES_CALLBACK_DATA, FEATURE_POINTS_CALLBACK_DATA, \
+    SUBCLASS_CALLBACK_DATA, MULTICLASSING_CALLBACK_DATA, character_deleting_query_handler, \
+    DELETE_CHARACTER_CALLBACK_DATA, CHARACTER_DELETION, character_deleting_answer_query_handler
 from class_submenus import class_submenus_query_handler, class_spells_menu_buttons_query_handler, \
     class_search_spells_text_handler, class_reading_spells_menu_buttons_query_handler, \
     class_spell_visualization_buttons_query_handler, class_resources_submenu_text_handler
@@ -77,14 +80,6 @@ INLINE_PAGES = 'inline_pages'
 ABILITY_SCORE_CALLBACK = 'ability_score'
 CLASS_SPELLS_PAGES = 'class_spells'
 CLASS_SPELLS_PAGE = 'class_spells_page'
-
-# character creator callback keys
-BAG_CALLBACK_DATA = 'bag'
-SPELLS_CALLBACK_DATA = 'spells'
-ABILITIES_CALLBACK_DATA = 'abilities'
-FEATURE_POINTS_CALLBACK_DATA = 'feature_points'
-SUBCLASS_CALLBACK_DATA = 'subclass'
-MULTICLASSING_CALLBACK_DATA = 'multiclass'
 
 # Categories
 CLASSES = 'classes'
@@ -325,11 +320,16 @@ def main() -> None:
                 CallbackQueryHandler(character_subclass_query_handler,
                                      pattern=fr"^{SUBCLASS_CALLBACK_DATA}$"),
                 CallbackQueryHandler(character_multiclassing_query_handler,
-                                     pattern=fr"^{MULTICLASSING_CALLBACK_DATA}$")
+                                     pattern=fr"^{MULTICLASSING_CALLBACK_DATA}$"),
+                CallbackQueryHandler(character_deleting_query_handler,
+                                     pattern=fr"^{DELETE_CHARACTER_CALLBACK_DATA}$")
             ],
             CHARACTER_SELECTION: [
                 CallbackQueryHandler(character_selection_query_handler),
                 CommandHandler('newCharacter', character_creation_handler)
+            ],
+            CHARACTER_DELETION: [
+                CallbackQueryHandler(character_deleting_answer_query_handler)
             ]
         },
         fallbacks=[CommandHandler("stop", character_creator_stop_nested)],
