@@ -31,6 +31,10 @@ class Character:
         self.carry_capacity = self.feature_points.strength * 15
         self.encumbrance = sum([item.weight for item in self.bag])
 
+    def __reload_stats(self):
+        self.carry_capacity = self.feature_points.strength * 15
+        self.encumbrance = sum([item.weight for item in self.bag])
+
     def level_up(self):
         """Increase character's level by 1."""
         self.level += 1
@@ -57,10 +61,10 @@ class Character:
                 self.encumbrance += item.weight * quantity
                 return
 
-    def decrement_item_quantity(self, item: Item, quantity: int = 1):
+    def decrement_item_quantity(self, item: str, quantity: int = 1):
         """Remove a specific quantity of an item from the character's bag by name."""
         for existing_item in self.bag:
-            if existing_item == item:
+            if existing_item.name == item:
                 if existing_item.quantity > quantity:
                     # Reduce the quantity and update encumbrance
                     existing_item.quantity -= quantity
@@ -156,6 +160,10 @@ class Character:
     def list_spell_slots(self):
         """Lists all spell slots and their statuses."""
         return [str(slot) for slot in self.spell_slots.values()]
+
+    def change_feature_points(self, feature_points: Dict[str, int]):
+        self.feature_points.points = feature_points
+        self.__reload_stats()
 
     def __str__(self):
         return (f"Character(name={self.name}, race={self.race}, gender={self.gender}, "

@@ -1,5 +1,5 @@
 import logging
-from typing import List, Tuple
+from typing import List, Tuple, Dict
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.constants import ParseMode, ChatType
@@ -15,7 +15,7 @@ CHARACTER_CREATOR_VERSION = "0.0.1"
 # states definition
 (CHARACTER_CREATION, CHARACTER_SELECTION, NAME_SELECTION, RACE_SELECTION, GENDER_SELECTION,
  CLASS_SELECTION, HIT_POINTS_SELECTION, FUNCTION_SELECTION, BAG_MANAGEMENT, CHARACTER_DELETION, BAG_ITEM_INSERTION,
- BAG_ITEM_EDIT) = map(int, range(14, 26))
+ BAG_ITEM_EDIT, FEATURE_POINTS_EDIT) = map(int, range(14, 27))
 
 STOPPING = 99
 
@@ -50,11 +50,11 @@ def create_main_menu_message(character: Character) -> Tuple[str, InlineKeyboardM
                    f"<b>Razza:</b> {character.race}\n"
                    f"<b>Genere:</b> {character.gender}\n"
                    f"<b>Classe:</b> {character.class_}\n\n"
-                   f"<b>Punti ferita:</b> {character.hit_points} PF"
+                   f"<b>Punti ferita:</b> {character.hit_points} PF\n"
                    f"<b>Slot incantesimo</b>\n{"\n".join([f"{slot.slots_remaining()} di livello {level}" for level, slot in character.spell_slots.items()]) if character.spell_slots else "Non hai registrato ancora nessuno Slot incantesimo\n"}")
 
     message_str += (f"<b>Punti caratteristica</b>\n{str(character.feature_points)}\n\n"
-                    f"<b>Peso trasportato:</b> {character.encumbrance}")
+                    f"<b>Peso trasportato:</b> {character.encumbrance} Lb")
 
     keyboard = [
         [
@@ -71,10 +71,81 @@ def create_main_menu_message(character: Character) -> Tuple[str, InlineKeyboardM
     return message_str, InlineKeyboardMarkup(keyboard)
 
 
+def create_feature_points_messages(feature_points: Dict[str, int]) -> Dict[str, Tuple[str, InlineKeyboardMarkup]]:
+    return {
+        'strength': (
+            f"Forza {feature_points['strength']}",
+            InlineKeyboardMarkup([
+                [
+                    InlineKeyboardButton("-", callback_data="strength|-"),
+                    InlineKeyboardButton("+", callback_data="strength|+")
+                ]
+            ])
+        ),
+        'dexterity': (
+            f"Destrezza {feature_points['dexterity']}",
+            InlineKeyboardMarkup([
+                [
+                    InlineKeyboardButton("-", callback_data="dexterity|-"),
+                    InlineKeyboardButton("+", callback_data="dexterity|+")
+                ]
+            ])
+        ),
+        'constitution': (
+            f"Costituzione {feature_points['constitution']}",
+            InlineKeyboardMarkup([
+                [
+                    InlineKeyboardButton("-", callback_data="constitution|-"),
+                    InlineKeyboardButton("+", callback_data="constitution|+")
+                ]
+            ])
+        ),
+        'intelligence': (
+            f"Intelligenza {feature_points['intelligence']}",
+            InlineKeyboardMarkup([
+                [
+                    InlineKeyboardButton("-", callback_data="intelligence|-"),
+                    InlineKeyboardButton("+", callback_data="intelligence|+")
+                ]
+            ])
+        ),
+        'wisdom': (
+            f"Saggezza {feature_points['wisdom']}",
+            InlineKeyboardMarkup([
+                [
+                    InlineKeyboardButton("-", callback_data="wisdom|-"),
+                    InlineKeyboardButton("+", callback_data="wisdom|+")
+                ]
+            ])
+        ),
+        'charisma': (
+            f"Carisma {feature_points['charisma']}",
+            InlineKeyboardMarkup([
+                [
+                    InlineKeyboardButton("-", callback_data="charisma|-"),
+                    InlineKeyboardButton("+", callback_data="charisma|+")
+                ]
+            ])
+        )
+    }
+
+
+async def character_creator_stop(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    character = context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_CHARACTER_KEY]
+    msg, reply_markup = create_main_menu_message(character)
+
+    await update.effective_message.reply_text(msg, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
+
+    context.user_data[CHARACTERS_CREATOR_KEY].pop(TEMP_CHARACTER_KEY, None)
+    context.user_data[CHARACTERS_CREATOR_KEY].pop(CURRENT_ITEM_KEY, None)
+
+    return FUNCTION_SELECTION
+
+
 async def character_creator_stop_nested(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    await update.effective_message.reply_text("Ok! Usa i comandi:\n"
-                                              "/wiki per consultare la wiki\n"
-                                              "/character per usare il gestore di personaggi")
+    await update.message.reply_text("Ok! Usa i comandi:\n"
+                                    "/wiki per consultare la wiki\n"
+                                    "/character per usare il gestore di personaggi")
 
     context.user_data[CHARACTERS_CREATOR_KEY].pop(CURRENT_CHARACTER_KEY, None)
     context.user_data[CHARACTERS_CREATOR_KEY].pop(TEMP_CHARACTER_KEY, None)
@@ -306,7 +377,9 @@ async def character_bag_item_insert(update: Update, context: ContextTypes.DEFAUL
     # Check if there is enough space, considering item weight
     if item_weight > character.available_space():
         await update.effective_message.reply_text("🔴 Ehy! Hai la borsa piena... eh vendi qualcosa! 🔴")
-        return BAG_ITEM_INSERTION
+        msg, reply_markup = create_main_menu_message(character)
+        await update.effective_message.reply_text(msg, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
+        return FUNCTION_SELECTION
 
     # Create the item and add it to the character's bag
     item = Item(item_name, item_description, item_quantity, item_weight)
@@ -383,8 +456,15 @@ async def character_bag_item_delete_one_handler(update: Update, context: Context
                    f"<b>Descrizione:</b> <code>{item.description}</code>\n"
                    f"<b>Quantità:</b> <code>{item.quantity}</code>\n\n"
                    f"Premi /stop per terminare\n\n")
+    keyboard = [
+        [
+            InlineKeyboardButton("-", callback_data=f"{BAG_ITEM_EDIT_CALLBACK_DATA}|-"),
+            InlineKeyboardButton("+", callback_data=f"{BAG_ITEM_EDIT_CALLBACK_DATA}|+")
+        ],
+        [InlineKeyboardButton("Rimuovi tutti", callback_data=f"{BAG_ITEM_EDIT_CALLBACK_DATA}|all")]
+    ]
 
-    await query.edit_message_text(message_str, parse_mode=ParseMode.HTML)
+    await query.edit_message_text(message_str, parse_mode=ParseMode.HTML, reply_markup=InlineKeyboardMarkup(keyboard))
 
 
 async def character_bag_item_add_one_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -400,8 +480,15 @@ async def character_bag_item_add_one_handler(update: Update, context: ContextTyp
                    f"<b>Descrizione:</b> <code>{item.description}</code>\n"
                    f"<b>Quantità:</b> <code>{item.quantity}</code>\n\n"
                    f"Premi /stop per terminare\n\n")
+    keyboard = [
+        [
+            InlineKeyboardButton("-", callback_data=f"{BAG_ITEM_EDIT_CALLBACK_DATA}|-"),
+            InlineKeyboardButton("+", callback_data=f"{BAG_ITEM_EDIT_CALLBACK_DATA}|+")
+        ],
+        [InlineKeyboardButton("Rimuovi tutti", callback_data=f"{BAG_ITEM_EDIT_CALLBACK_DATA}|all")]
+    ]
 
-    await query.edit_message_text(message_str, parse_mode=ParseMode.HTML)
+    await query.edit_message_text(message_str, parse_mode=ParseMode.HTML, reply_markup=InlineKeyboardMarkup(keyboard))
 
 
 async def character_bag_item_delete_all_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -456,14 +543,50 @@ async def character_feature_point_query_handler(update: Update, context: Context
     query = update.callback_query
     await query.answer()
 
-    await update.effective_message.reply_text("Funzione non ancora implementata")
+    character: Character = context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_CHARACTER_KEY]
 
-    character = context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_CHARACTER_KEY]
-    msg, reply_markup = create_main_menu_message(character)
+    message_str = (f"<b>Gestione punti caratteristica</b>\n\n"
+                   f"Inserisci i punti caratteristica come meglio desideri.\n"
+                   f"Usa /stop per terminare")
+    await update.effective_message.reply_text(message_str, parse_mode=ParseMode.HTML)
 
-    await update.effective_message.reply_text(msg, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
+    feature_points = character.feature_points.points
 
-    return FUNCTION_SELECTION
+    messagges = create_feature_points_messages(feature_points)
+    for feature_point, message_data in messagges.items():
+        await update.effective_message.reply_text(message_data[0], reply_markup=message_data[1],
+                                                  parse_mode=ParseMode.HTML)
+
+    return FEATURE_POINTS_EDIT
+
+
+async def character_feature_points_edit_query_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    query = update.callback_query
+
+    feature, action = query.data.split("|", maxsplit=1)
+
+    character: Character = context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_CHARACTER_KEY]
+    feature_points = character.feature_points.points
+
+    # Update the feature point based on the action
+    if action == "+":
+        feature_points[feature] += 1
+    elif action == "-" and feature_points[feature] > 0:
+        feature_points[feature] -= 1
+    else:
+        await query.answer("Non puoi andare sotto lo zero")
+        return FEATURE_POINTS_EDIT
+
+    character.change_feature_points(feature_points)
+
+    # Update the message with the new feature points
+    messagges: Dict[str, Tuple[str, InlineKeyboardMarkup]] = create_feature_points_messages(feature_points)
+
+    text, keyboard = messagges[feature]
+    await query.edit_message_text(text, reply_markup=keyboard, parse_mode=ParseMode.HTML)
+    await query.answer()
+
+    return FEATURE_POINTS_EDIT
 
 
 async def character_subclass_query_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:

@@ -26,7 +26,9 @@ from character_creator import character_creator_start_handler, character_creatio
     character_bag_new_object_query_handler, BAG_ITEM_INSERTION, character_bag_item_insert, character_hit_points_handler, \
     BAG_ITEM_INSERTION_CALLBACK_DATA, BAG_ITEM_EDIT, character_bag_edit_object_query_handler, \
     character_bag_item_delete_one_handler, character_bag_item_add_one_handler, character_bag_item_delete_all_handler, \
-    BAG_ITEM_EDIT_CALLBACK_DATA
+    BAG_ITEM_EDIT_CALLBACK_DATA, FEATURE_POINTS_EDIT, character_feature_points_edit_query_handler, CHARACTER_CREATION, \
+    NAME_SELECTION, RACE_SELECTION, GENDER_SELECTION, CLASS_SELECTION, FUNCTION_SELECTION, CHARACTER_SELECTION, \
+    character_creator_stop, character_bag_item_edit_handler
 from class_submenus import class_submenus_query_handler, class_spells_menu_buttons_query_handler, \
     class_search_spells_text_handler, class_reading_spells_menu_buttons_query_handler, \
     class_spell_visualization_buttons_query_handler, class_resources_submenu_text_handler
@@ -65,10 +67,6 @@ EQUIPMENT_CATEGORIES_SUBMENU, EQUIPMENT_VISUALIZATION = map(int, range(10, 12))
 
 # state definitions for features conversation
 FEATURES_SUBMENU, FEATURE_VISUALIZATION = map(int, range(12, 14))
-
-# states definition for character creator submenu
-(CHARACTER_CREATION, CHARACTER_SELECTION, NAME_SELECTION, RACE_SELECTION, GENDER_SELECTION,
- CLASS_SELECTION, FUNCTION_SELECTION) = map(int, range(14, 21))
 
 STOPPING = 99
 
@@ -328,7 +326,8 @@ def main() -> None:
                 CallbackQueryHandler(character_multiclassing_query_handler,
                                      pattern=fr"^{MULTICLASSING_CALLBACK_DATA}$"),
                 CallbackQueryHandler(character_deleting_query_handler,
-                                     pattern=fr"^{DELETE_CHARACTER_CALLBACK_DATA}$")
+                                     pattern=fr"^{DELETE_CHARACTER_CALLBACK_DATA}$"),
+                CommandHandler('stop', character_creator_stop_nested)
             ],
             CHARACTER_SELECTION: [
                 CallbackQueryHandler(character_selection_query_handler),
@@ -346,16 +345,19 @@ def main() -> None:
                 MessageHandler(filters.TEXT & ~filters.COMMAND, character_bag_item_insert)
             ],
             BAG_ITEM_EDIT: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, character_bag_item_insert),
+                MessageHandler(filters.TEXT & ~filters.COMMAND, character_bag_item_edit_handler),
                 CallbackQueryHandler(character_bag_item_delete_one_handler,
                                      pattern=fr"^{BAG_ITEM_EDIT_CALLBACK_DATA}\|-"),
                 CallbackQueryHandler(character_bag_item_add_one_handler,
                                      pattern=fr"^{BAG_ITEM_EDIT_CALLBACK_DATA}\|\+"),
                 CallbackQueryHandler(character_bag_item_delete_all_handler,
                                      pattern=fr"^{BAG_ITEM_EDIT_CALLBACK_DATA}\|all")
+            ],
+            FEATURE_POINTS_EDIT: [
+                CallbackQueryHandler(character_feature_points_edit_query_handler)
             ]
         },
-        fallbacks=[CommandHandler("stop", character_creator_stop_nested)],
+        fallbacks=[CommandHandler("stop", character_creator_stop)],
         map_to_parent={
             STOPPING: ConversationHandler.END,
             ConversationHandler.END: ConversationHandler.END

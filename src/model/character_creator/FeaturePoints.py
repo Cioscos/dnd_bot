@@ -61,6 +61,15 @@ class FeaturePoints:
             'charisma': self.charisma
         }
 
+    @points.setter
+    def points(self, new_points: Dict[str, int]):
+        """Set the feature points based on a dictionary."""
+        for key, value in new_points.items():
+            if hasattr(self, key):
+                setattr(self, key, value)
+            else:
+                raise ValueError(f"Invalid attribute: {key}")
+
     def __str__(self) -> str:
         return (f"Forza {self.strength} ({self.strength_modifier})\n"
                 f"Destrezza {self.dexterity} ({self.dexterity_modifier})\n"
