@@ -6,6 +6,7 @@ from telegram.constants import ParseMode, ChatType
 from telegram.ext import ContextTypes, ConversationHandler
 
 from src.model.character_creator.Character import Character
+from src.model.character_creator.Item import Item
 
 logger = logging.getLogger(__name__)
 
@@ -13,7 +14,8 @@ CHARACTER_CREATOR_VERSION = "0.0.1"
 
 # states definition
 (CHARACTER_CREATION, CHARACTER_SELECTION, NAME_SELECTION, RACE_SELECTION, GENDER_SELECTION,
- CLASS_SELECTION, FUNCTION_SELECTION, CHARACTER_DELETION) = map(int, range(14, 22))
+ CLASS_SELECTION, HIT_POINTS_SELECTION, FUNCTION_SELECTION, BAG_MANAGEMENT, CHARACTER_DELETION, BAG_ITEM_INSERTION,
+ BAG_ITEM_EDIT) = map(int, range(14, 26))
 
 STOPPING = 99
 
@@ -26,6 +28,7 @@ CHARACTERS_CREATOR_KEY = 'characters_creator'
 CHARACTERS_KEY = 'characters'
 TEMP_CHARACTER_KEY = 'temp_character'
 CURRENT_CHARACTER_KEY = 'current_character'
+CURRENT_ITEM_KEY = 'current_item'
 
 # Main menu callback keys
 BAG_CALLBACK_DATA = 'bag'
@@ -37,6 +40,8 @@ MULTICLASSING_CALLBACK_DATA = 'multiclass'
 DELETE_CHARACTER_CALLBACK_DATA = 'delete_character'
 AFFERMATIVE_CHARACTER_DELETION_CALLBACK_DATA = 'yes_delete_character'
 NEGATIVE_CHARACTER_DELETION_CALLBACK_DATA = 'no_delete_character'
+BAG_ITEM_INSERTION_CALLBACK_DATA = "bag_insert_item"
+BAG_ITEM_EDIT_CALLBACK_DATA = "bag_edit_item"
 
 
 def create_main_menu_message(character: Character) -> Tuple[str, InlineKeyboardMarkup]:
@@ -45,9 +50,11 @@ def create_main_menu_message(character: Character) -> Tuple[str, InlineKeyboardM
                    f"<b>Razza:</b> {character.race}\n"
                    f"<b>Genere:</b> {character.gender}\n"
                    f"<b>Classe:</b> {character.class_}\n\n"
+                   f"<b>Punti ferita:</b> {character.hit_points} PF"
                    f"<b>Slot incantesimo</b>\n{"\n".join([f"{slot.slots_remaining()} di livello {level}" for level, slot in character.spell_slots.items()]) if character.spell_slots else "Non hai registrato ancora nessuno Slot incantesimo\n"}")
 
-    message_str += f"<b>Punti caratteristica</b>\n{str(character.feature_points)}"
+    message_str += (f"<b>Punti caratteristica</b>\n{str(character.feature_points)}\n\n"
+                    f"<b>Peso trasportato:</b> {character.encumbrance}")
 
     keyboard = [
         [
@@ -71,6 +78,7 @@ async def character_creator_stop_nested(update: Update, context: ContextTypes.DE
 
     context.user_data[CHARACTERS_CREATOR_KEY].pop(CURRENT_CHARACTER_KEY, None)
     context.user_data[CHARACTERS_CREATOR_KEY].pop(TEMP_CHARACTER_KEY, None)
+    context.user_data[CHARACTERS_CREATOR_KEY].pop(CURRENT_ITEM_KEY, None)
 
     return STOPPING
 
@@ -198,6 +206,18 @@ async def character_class_handler(update: Update, context: ContextTypes.DEFAULT_
     character = context.user_data[CHARACTERS_CREATOR_KEY][TEMP_CHARACTER_KEY]
     character.class_ = class_
 
+    await update.effective_message.reply_text(
+        "Quanti punti vita ha il tuo personaggio?\nRispondi a questo messaggio o premi /stop per terminare")
+
+    return HIT_POINTS_SELECTION
+
+
+async def character_hit_points_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    hit_points = update.effective_message.text
+
+    character = context.user_data[CHARACTERS_CREATOR_KEY][TEMP_CHARACTER_KEY]
+    character.hit_points = hit_points
+
     context.user_data[CHARACTERS_CREATOR_KEY][CHARACTERS_KEY] = []
     context.user_data[CHARACTERS_CREATOR_KEY][CHARACTERS_KEY].append(character)
     del context.user_data[CHARACTERS_CREATOR_KEY][TEMP_CHARACTER_KEY]
@@ -215,12 +235,190 @@ async def character_bag_query_handler(update: Update, context: ContextTypes.DEFA
 
     character: Character = context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_CHARACTER_KEY]
     message_str = (f"<b>Oggetti nella borsa</b>\n\n"
-                   f"{'\n'.join(f'{item.name} x{item.quantity}' for item in character.bag) if character.bag else 
+                   f"{'\n'.join(f'<code>{item.name}</code> x{item.quantity}' for item in character.bag) if character.bag else 
                    "Lo zaino è ancora vuoto"}")
 
+    keyboard = [[InlineKeyboardButton('Inserisci nuovo oggetto', callback_data=BAG_ITEM_INSERTION_CALLBACK_DATA)]]
+
+    if character.bag:
+        keyboard.append([InlineKeyboardButton('Modifica oggetto', callback_data=BAG_ITEM_EDIT)])
+
+    await update.effective_message.reply_text(
+        message_str,
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode=ParseMode.HTML
+    )
+
+    return BAG_MANAGEMENT
+
+
+async def character_bag_new_object_query_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    query = update.callback_query
+    await query.answer()
+
+    message_str = (f"Rispondi con il nome dell'oggetto e la quantità!\n"
+                   f"Premi /stop per terminare\n\n"
+                   f"<b>Esempio:</b> <code>Pozione di guarigione superiore#2#Mi cura 8d4 + 8 di vita#1</code>\n"
+                   f"Il peso è opzionale!")
+
+    await update.effective_message.reply_text(message_str, parse_mode=ParseMode.HTML)
+
+    return BAG_ITEM_INSERTION
+
+
+async def character_bag_item_insert(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    item_info = update.effective_message.text
+
+    # Split the input, allowing up to 3 splits
+    components = item_info.split('#', maxsplit=3)
+
+    # Ensure there are either 3 or 4 components
+    if len(components) < 3 or len(components) > 4:
+        await update.effective_message.reply_text(
+            "🔴 Formato errato! Assicurati di usare:\n"
+            "nome#quantità#descrizione#(peso) 🔴"
+        )
+        return BAG_ITEM_INSERTION
+
+    item_name, item_quantity, item_description = components[:3]
+    item_weight = components[3] if len(components) == 4 else None
+
+    # Validate item_quantity
+    if not item_quantity.isdigit():
+        await update.effective_message.reply_text(
+            "🔴 La quantità deve essere un numero! 🔴"
+        )
+        return BAG_ITEM_INSERTION
+
+    # Validate item_weight if provided
+    if item_weight and not item_weight.isdigit():
+        await update.effective_message.reply_text(
+            "🔴 Il peso deve essere un numero se fornito! 🔴"
+        )
+        return BAG_ITEM_INSERTION
+
+    # Convert quantity and weight to integers
+    item_quantity = int(item_quantity)
+    item_weight = int(item_weight) if item_weight else 0
+
+    character: Character = context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_CHARACTER_KEY]
+
+    # Check if there is enough space, considering item weight
+    if item_weight > character.available_space():
+        await update.effective_message.reply_text("🔴 Ehy! Hai la borsa piena... eh vendi qualcosa! 🔴")
+        return BAG_ITEM_INSERTION
+
+    # Create the item and add it to the character's bag
+    item = Item(item_name, item_description, item_quantity, item_weight)
+    character.add_item(item)
+
+    # Notify the user of success and available space
+    available_space = character.available_space()
+    success_message = (
+        "Oggetto inserito con successo! ✅\n\n"
+        f"{f'Puoi ancora trasportare {available_space} lb' if available_space > 0 else 'Psss... ora hai lo zaino pieno!'}"
+    )
+    await update.effective_message.reply_text(success_message)
+
+    # Update the main menu
+    msg, reply_markup = create_main_menu_message(character)
+    await update.effective_message.reply_text(msg, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
+
+    return FUNCTION_SELECTION
+
+
+async def character_bag_edit_object_query_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    query = update.callback_query
+    await query.answer()
+
+    message_str = (f"Rispondi con il nome dell'oggetto!\n"
+                   f"Premi /stop per terminare\n\n"
+                   f"<b>Esempio:</b> <code>Pozione di guarigione superiore</code>\n")
+
+    await update.effective_message.reply_text(message_str, parse_mode=ParseMode.HTML)
+
+    return BAG_ITEM_EDIT
+
+
+async def character_bag_item_edit_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    item_name = update.effective_message.text
+
+    character: Character = context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_CHARACTER_KEY]
+    item: Item = next((item for item in character.bag if item_name == item.name), None)
+
+    if not item:
+        await update.effective_message.reply_text("🔴 Oggetto non trovato! Prova di nuovo o premi /stop 🔴")
+        return BAG_ITEM_EDIT
+
+    message_str = (f"<b>Nome:</b> <code>{item.name}</code>\n"
+                   f"<b>Descrizione:</b> <code>{item.description}</code>\n"
+                   f"<b>Quantità:</b> <code>{item.quantity}</code>\n\n"
+                   f"Premi /stop per terminare\n\n")
+
+    context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_ITEM_KEY] = item.name
+
+    keyboard = [
+        [
+            InlineKeyboardButton("-", callback_data=f"{BAG_ITEM_EDIT_CALLBACK_DATA}|-"),
+            InlineKeyboardButton("+", callback_data=f"{BAG_ITEM_EDIT_CALLBACK_DATA}|+")
+        ],
+        [InlineKeyboardButton("Rimuovi tutti", callback_data=f"{BAG_ITEM_EDIT_CALLBACK_DATA}|all")]
+    ]
+
+    await update.effective_message.reply_text(message_str, parse_mode=ParseMode.HTML,
+                                              reply_markup=InlineKeyboardMarkup(keyboard))
+    return BAG_ITEM_EDIT
+
+
+async def character_bag_item_delete_one_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    query = update.callback_query
+    await query.answer()
+
+    item_name = context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_ITEM_KEY]
+    character: Character = context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_CHARACTER_KEY]
+    character.decrement_item_quantity(item_name)
+    item: Item = next((item for item in character.bag if item_name == item.name), None)
+
+    message_str = (f"<b>Nome:</b> <code>{item.name}</code>\n"
+                   f"<b>Descrizione:</b> <code>{item.description}</code>\n"
+                   f"<b>Quantità:</b> <code>{item.quantity}</code>\n\n"
+                   f"Premi /stop per terminare\n\n")
+
+    await query.edit_message_text(message_str, parse_mode=ParseMode.HTML)
+
+
+async def character_bag_item_add_one_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    query = update.callback_query
+    await query.answer()
+
+    item_name = context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_ITEM_KEY]
+    character: Character = context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_CHARACTER_KEY]
+    character.increment_item_quantity(item_name)
+    item: Item = next((item for item in character.bag if item_name == item.name), None)
+
+    message_str = (f"<b>Nome:</b> <code>{item.name}</code>\n"
+                   f"<b>Descrizione:</b> <code>{item.description}</code>\n"
+                   f"<b>Quantità:</b> <code>{item.quantity}</code>\n\n"
+                   f"Premi /stop per terminare\n\n")
+
+    await query.edit_message_text(message_str, parse_mode=ParseMode.HTML)
+
+
+async def character_bag_item_delete_all_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    query = update.callback_query
+    await query.answer()
+
+    item_name = context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_ITEM_KEY]
+    character: Character = context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_CHARACTER_KEY]
+    item: Item = next((item for item in character.bag if item_name == item.name), None)
+    character.remove_item(item)
+    context.user_data[CHARACTERS_CREATOR_KEY].pop(CURRENT_ITEM_KEY, None)
+
+    message_str = f"Oggetto rimosso con successo! ✅"
+
+    await update.effective_message.reply_text(message_str, parse_mode=ParseMode.HTML)
 
     msg, reply_markup = create_main_menu_message(character)
-
     await update.effective_message.reply_text(msg, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
 
     return FUNCTION_SELECTION

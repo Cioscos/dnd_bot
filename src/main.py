@@ -22,14 +22,19 @@ from character_creator import character_creator_start_handler, character_creatio
     character_subclass_query_handler, character_multiclassing_query_handler, character_creator_stop_nested, \
     BAG_CALLBACK_DATA, SPELLS_CALLBACK_DATA, ABILITIES_CALLBACK_DATA, FEATURE_POINTS_CALLBACK_DATA, \
     SUBCLASS_CALLBACK_DATA, MULTICLASSING_CALLBACK_DATA, character_deleting_query_handler, \
-    DELETE_CHARACTER_CALLBACK_DATA, CHARACTER_DELETION, character_deleting_answer_query_handler
+    DELETE_CHARACTER_CALLBACK_DATA, CHARACTER_DELETION, character_deleting_answer_query_handler, \
+    character_bag_new_object_query_handler, BAG_ITEM_INSERTION, character_bag_item_insert, character_hit_points_handler, \
+    BAG_ITEM_INSERTION_CALLBACK_DATA, BAG_ITEM_EDIT, character_bag_edit_object_query_handler, \
+    character_bag_item_delete_one_handler, character_bag_item_add_one_handler, character_bag_item_delete_all_handler, \
+    BAG_ITEM_EDIT_CALLBACK_DATA
 from class_submenus import class_submenus_query_handler, class_spells_menu_buttons_query_handler, \
     class_search_spells_text_handler, class_reading_spells_menu_buttons_query_handler, \
     class_spell_visualization_buttons_query_handler, class_resources_submenu_text_handler
 from environment_variables_mg import keyring_initialize, keyring_get
 from equipment_categories_submenus import equipment_categories_first_menu_query_handler, \
     equipment_visualization_query_handler
-from src.character_creator import character_bag_query_handler, character_selection_query_handler
+from src.character_creator import character_bag_query_handler, character_selection_query_handler, BAG_MANAGEMENT, \
+    HIT_POINTS_SELECTION
 from wiki import wiki_main_menu_handler, main_menu_buttons_query_handler, details_menu_buttons_query_handler
 
 # Setup logging
@@ -311,6 +316,7 @@ def main() -> None:
             RACE_SELECTION: [MessageHandler(filters.TEXT & ~filters.COMMAND, character_race_handler)],
             GENDER_SELECTION: [MessageHandler(filters.TEXT & ~filters.COMMAND, character_gender_handler)],
             CLASS_SELECTION: [MessageHandler(filters.TEXT & ~filters.COMMAND, character_class_handler)],
+            HIT_POINTS_SELECTION: [MessageHandler(filters.TEXT & ~filters.COMMAND, character_hit_points_handler)],
             FUNCTION_SELECTION: [
                 CallbackQueryHandler(character_bag_query_handler, pattern=fr"^{BAG_CALLBACK_DATA}$"),
                 CallbackQueryHandler(character_spells_query_handler, pattern=fr"^{SPELLS_CALLBACK_DATA}$"),
@@ -330,6 +336,23 @@ def main() -> None:
             ],
             CHARACTER_DELETION: [
                 CallbackQueryHandler(character_deleting_answer_query_handler)
+            ],
+            BAG_MANAGEMENT: [
+                CallbackQueryHandler(character_bag_new_object_query_handler,
+                                     pattern=fr"^{BAG_ITEM_INSERTION_CALLBACK_DATA}$"),
+                CallbackQueryHandler(character_bag_edit_object_query_handler, pattern=fr"^{BAG_ITEM_EDIT}$")
+            ],
+            BAG_ITEM_INSERTION: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, character_bag_item_insert)
+            ],
+            BAG_ITEM_EDIT: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, character_bag_item_insert),
+                CallbackQueryHandler(character_bag_item_delete_one_handler,
+                                     pattern=fr"^{BAG_ITEM_EDIT_CALLBACK_DATA}\|-"),
+                CallbackQueryHandler(character_bag_item_add_one_handler,
+                                     pattern=fr"^{BAG_ITEM_EDIT_CALLBACK_DATA}\|\+"),
+                CallbackQueryHandler(character_bag_item_delete_all_handler,
+                                     pattern=fr"^{BAG_ITEM_EDIT_CALLBACK_DATA}\|all")
             ]
         },
         fallbacks=[CommandHandler("stop", character_creator_stop_nested)],

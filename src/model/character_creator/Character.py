@@ -18,27 +18,75 @@ class Character:
     subClass: Optional[str] = field(default=None)
     multi_class: MultiClass = field(default_factory=MultiClass)
     level: int = 1
+    hit_points: int = 1
     feature_points: FeaturePoints = field(default_factory=FeaturePoints)
     spell_slots: Dict[int, SpellSlot] = field(default_factory=dict)
     bag: List[Item] = field(default_factory=list)
     spells: List[Spell] = field(default_factory=list)
     abilities: List[Ability] = field(default_factory=list)
+    carry_capacity: int = 0
+    encumbrance: int = 0
+
+    def __post_init__(self):
+        self.carry_capacity = self.feature_points.strength * 15
+        self.encumbrance = sum([item.weight for item in self.bag])
 
     def level_up(self):
         """Increase character's level by 1."""
         self.level += 1
 
     def add_item(self, item: Item):
-        """Add an item to the character's bag."""
-        self.bag.append(item)
+        """Add an item to the character's bag and update the encumbrance."""
+        # Check if the item already exists in the bag
+        for existing_item in self.bag:
+            if existing_item == item:
+                # Item exists, update the quantity and encumbrance
+                existing_item.quantity += item.quantity
+                self.encumbrance += item.weight * item.quantity
+                return
 
-    def remove_item(self, item_name: str):
-        """Remove an item from the character's bag by name."""
-        self.bag = [item for item in self.bag if item.name != item_name]
+        # If the item doesn't exist, add it to the bag
+        self.bag.append(item)
+        self.encumbrance += item.weight * item.quantity
+
+    def increment_item_quantity(self, item_name: str, quantity: int = 1):
+        """Increment the quantity of an existing item in the character's bag by a certain amount."""
+        for item in self.bag:
+            if item.name == item_name:
+                item.quantity += quantity
+                self.encumbrance += item.weight * quantity
+                return
+
+    def decrement_item_quantity(self, item: Item, quantity: int = 1):
+        """Remove a specific quantity of an item from the character's bag by name."""
+        for existing_item in self.bag:
+            if existing_item == item:
+                if existing_item.quantity > quantity:
+                    # Reduce the quantity and update encumbrance
+                    existing_item.quantity -= quantity
+                    self.encumbrance -= existing_item.weight * quantity
+                else:
+                    # Remove the item completely and update encumbrance
+                    self.bag.remove(existing_item)
+                    self.encumbrance -= existing_item.weight * existing_item.quantity
+                break
+
+    def remove_item(self, item: Item):
+        """Remove a specific item from the character's bag."""
+        for existing_item in self.bag:
+            if existing_item == item:
+                # Update encumbrance based on the item's total weight and remove it from the bag
+                self.encumbrance -= existing_item.weight * existing_item.quantity
+                self.bag.remove(existing_item)
+                break
 
     def list_items(self):
         """List all items in the character's bag."""
         return [str(item) for item in self.bag]
+
+    def available_space(self):
+        """Return how much weight is still supportable from the character"""
+        return self.carry_capacity - self.encumbrance
 
     def learn_spell(self, spell: Spell):
         """Adds a spell to the character's spellbook."""

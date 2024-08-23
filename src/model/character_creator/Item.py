@@ -7,6 +7,7 @@ class Item:
     name: str
     description: Optional[str] = field(default=None)
     quantity: int = 0
+    weight: int = 0
 
     def __post_init__(self):
         # Validation for name and description
@@ -29,9 +30,7 @@ class Item:
     def __eq__(self, other):
         if not isinstance(other, Item):
             return NotImplemented
-        return (self.name == other.name and
-                self.description == other.description and
-                self.quantity == other.quantity)
+        return self.name == other.name
 
     def increase_quantity(self, amount: int):
         """Increase the quantity by the given amount."""
