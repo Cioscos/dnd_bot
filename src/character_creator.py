@@ -143,7 +143,7 @@ async def character_creator_stop(update: Update, context: ContextTypes.DEFAULT_T
 
 
 async def character_creator_stop_nested(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    await update.message.reply_text("Ok! Usa i comandi:\n"
+    await update.effective_message.reply_text("Ok! Usa i comandi:\n"
                                     "/wiki per consultare la wiki\n"
                                     "/character per usare il gestore di personaggi")
 
@@ -640,16 +640,23 @@ async def character_deleting_query_handler(update: Update, context: ContextTypes
 async def character_deleting_answer_query_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     query = update.callback_query
     await query.answer()
+    data = query.data
 
-    # Deleting current character selection
-    current_character: Character = context.user_data[CHARACTERS_CREATOR_KEY].pop(CURRENT_CHARACTER_KEY, None)
+    if data == AFFERMATIVE_CHARACTER_DELETION_CALLBACK_DATA:
 
-    characters: List[Character] = context.user_data[CHARACTERS_CREATOR_KEY][CHARACTERS_KEY]
+        # Deleting current character selection
+        current_character: Character = context.user_data[CHARACTERS_CREATOR_KEY].pop(CURRENT_CHARACTER_KEY, None)
 
-    for character in characters:
-        if character.name == current_character.name:
-            characters.remove(character)
+        characters: List[Character] = context.user_data[CHARACTERS_CREATOR_KEY][CHARACTERS_KEY]
 
-    await update.effective_message.reply_text("Personaggio eliminato con successo")
+        for character in characters:
+            if character.name == current_character.name:
+                characters.remove(character)
 
-    return await character_creator_stop_nested(update, context)
+        await update.effective_message.reply_text("Personaggio eliminato con successo ✅")
+
+    elif data == NEGATIVE_CHARACTER_DELETION_CALLBACK_DATA:
+
+        await update.effective_message.reply_text("Eliminazione personaggio annullata")
+
+    return await character_creator_stop(update, context)
