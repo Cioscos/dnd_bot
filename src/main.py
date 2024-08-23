@@ -28,7 +28,9 @@ from character_creator import character_creator_start_handler, character_creatio
     character_bag_item_delete_one_handler, character_bag_item_add_one_handler, character_bag_item_delete_all_handler, \
     BAG_ITEM_EDIT_CALLBACK_DATA, FEATURE_POINTS_EDIT, character_feature_points_edit_query_handler, CHARACTER_CREATION, \
     NAME_SELECTION, RACE_SELECTION, GENDER_SELECTION, CLASS_SELECTION, FUNCTION_SELECTION, CHARACTER_SELECTION, \
-    character_creator_stop, character_bag_item_edit_handler
+    character_creator_stop, character_bag_item_edit_handler, ABILITIES_MENU, character_abilities_menu_query_handler, \
+    character_ability_visualization_query_handler, ABILITY_ACTIONS, character_ability_edit_handler, \
+    character_ability_delete_query_handler, character_ability_learn_handler, character_ablity_new_query_handler
 from class_submenus import class_submenus_query_handler, class_spells_menu_buttons_query_handler, \
     class_search_spells_text_handler, class_reading_spells_menu_buttons_query_handler, \
     class_spell_visualization_buttons_query_handler, class_resources_submenu_text_handler
@@ -36,7 +38,7 @@ from environment_variables_mg import keyring_initialize, keyring_get
 from equipment_categories_submenus import equipment_categories_first_menu_query_handler, \
     equipment_visualization_query_handler
 from src.character_creator import character_bag_query_handler, character_selection_query_handler, BAG_MANAGEMENT, \
-    HIT_POINTS_SELECTION
+    HIT_POINTS_SELECTION, ABILITY_VISUALIZATION, ABILITY_LEARN
 from wiki import wiki_main_menu_handler, main_menu_buttons_query_handler, details_menu_buttons_query_handler
 
 # Setup logging
@@ -355,6 +357,21 @@ def main() -> None:
             ],
             FEATURE_POINTS_EDIT: [
                 CallbackQueryHandler(character_feature_points_edit_query_handler)
+            ],
+            ABILITIES_MENU: [
+                CallbackQueryHandler(character_abilities_menu_query_handler)
+            ],
+            ABILITY_VISUALIZATION: [
+                CallbackQueryHandler(character_ability_visualization_query_handler)
+            ],
+            ABILITY_ACTIONS: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, character_ability_edit_handler),
+                CallbackQueryHandler(character_ability_delete_query_handler,
+                                     pattern=r'^[yn]$')
+            ],
+            ABILITY_LEARN: [
+                CallbackQueryHandler(character_ablity_new_query_handler),
+                MessageHandler(filters.TEXT & ~filters.COMMAND, character_ability_learn_handler)
             ]
         },
         fallbacks=[CommandHandler("stop", character_creator_stop)],
