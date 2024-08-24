@@ -30,7 +30,8 @@ from character_creator import character_creator_start_handler, character_creatio
     NAME_SELECTION, RACE_SELECTION, GENDER_SELECTION, CLASS_SELECTION, FUNCTION_SELECTION, CHARACTER_SELECTION, \
     character_creator_stop, character_bag_item_edit_handler, ABILITIES_MENU, character_abilities_menu_query_handler, \
     character_ability_visualization_query_handler, ABILITY_ACTIONS, character_ability_edit_handler, \
-    character_ability_delete_query_handler, character_ability_learn_handler, character_ablity_new_query_handler
+    character_ability_delete_query_handler, character_ability_learn_handler, character_ablity_new_query_handler, \
+    character_change_level_query_handler
 from class_submenus import class_submenus_query_handler, class_spells_menu_buttons_query_handler, \
     class_search_spells_text_handler, class_reading_spells_menu_buttons_query_handler, \
     class_spell_visualization_buttons_query_handler, class_resources_submenu_text_handler
@@ -318,6 +319,7 @@ def main() -> None:
             CLASS_SELECTION: [MessageHandler(filters.TEXT & ~filters.COMMAND, character_class_handler)],
             HIT_POINTS_SELECTION: [MessageHandler(filters.TEXT & ~filters.COMMAND, character_hit_points_handler)],
             FUNCTION_SELECTION: [
+                CallbackQueryHandler(character_change_level_query_handler, pattern=r"^level_(up|down)$"),
                 CallbackQueryHandler(character_bag_query_handler, pattern=fr"^{BAG_CALLBACK_DATA}$"),
                 CallbackQueryHandler(character_spells_query_handler, pattern=fr"^{SPELLS_CALLBACK_DATA}$"),
                 CallbackQueryHandler(character_abilities_query_handler, pattern=fr"^{ABILITIES_CALLBACK_DATA}$"),

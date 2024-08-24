@@ -15,12 +15,23 @@ logger = logging.getLogger(__name__)
 CHARACTER_CREATOR_VERSION = "0.0.1"
 
 # states definition
-(CHARACTER_CREATION, CHARACTER_SELECTION, NAME_SELECTION, RACE_SELECTION, GENDER_SELECTION,
- CLASS_SELECTION, HIT_POINTS_SELECTION, FUNCTION_SELECTION, BAG_MANAGEMENT, CHARACTER_DELETION, BAG_ITEM_INSERTION,
- BAG_ITEM_EDIT, FEATURE_POINTS_EDIT, ABILITIES_MENU, ABILITY_VISUALIZATION, ABILITY_ACTIONS, ABILITY_LEARN) = map(int,
-                                                                                                                  range(
-                                                                                                                      14,
-                                                                                                                      31))
+(CHARACTER_CREATION,
+ CHARACTER_SELECTION,
+ NAME_SELECTION,
+ RACE_SELECTION,
+ GENDER_SELECTION,
+ CLASS_SELECTION,
+ HIT_POINTS_SELECTION,
+ FUNCTION_SELECTION,
+ BAG_MANAGEMENT,
+ CHARACTER_DELETION,
+ BAG_ITEM_INSERTION,
+ BAG_ITEM_EDIT,
+ FEATURE_POINTS_EDIT,
+ ABILITIES_MENU,
+ ABILITY_VISUALIZATION,
+ ABILITY_ACTIONS,
+ ABILITY_LEARN) = map(int, range(14, 31))
 
 STOPPING = 99
 
@@ -54,6 +65,8 @@ ABILITY_LEARN_CALLBACK_DATA = "ability_learn"
 ABILITY_EDIT_CALLBACK_DATA = "ability_edit_item"
 ABILITY_DELETE_CALLBACK_DATA = "ability_delete_item"
 ABILITY_BACK_MENU_CALLBACK_DATA = "ability_back_menu"
+LEVEL_UP_CALLBACK_DATA = "level_up"
+LEVEL_DOWN_CALLBACK_DATA = "level_down"
 
 
 def create_main_menu_message(character: Character) -> Tuple[str, InlineKeyboardMarkup]:
@@ -69,6 +82,10 @@ def create_main_menu_message(character: Character) -> Tuple[str, InlineKeyboardM
                     f"<b>Peso trasportato:</b> {character.encumbrance} Lb")
 
     keyboard = [
+        [
+            InlineKeyboardButton('Level down', callback_data=LEVEL_DOWN_CALLBACK_DATA),
+            InlineKeyboardButton('Level up', callback_data=LEVEL_UP_CALLBACK_DATA),
+        ],
         [
             InlineKeyboardButton('Borsa', callback_data=BAG_CALLBACK_DATA),
             InlineKeyboardButton('Spell', callback_data=SPELLS_CALLBACK_DATA)
@@ -582,7 +599,7 @@ async def character_abilities_menu_query_handler(update: Update, context: Contex
     if data == "prev_page":
 
         if context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_INLINE_PAGE_INDEX_KEY] == 0:
-            await query.answer("Sei alla prima pagina!")
+            await query.answer("Sei alla prima pagina!", show_alert=True)
         else:
             context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_INLINE_PAGE_INDEX_KEY] -= 1
 
@@ -620,7 +637,7 @@ async def character_abilities_menu_query_handler(update: Update, context: Contex
             context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_INLINE_PAGE_INDEX_KEY]
         ]
     except IndexError:
-        await query.answer("Non ci sono altre pagine!")
+        await query.answer("Non ci sono altre pagine!", show_alert=True)
         context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_INLINE_PAGE_INDEX_KEY] -= 1
         return ABILITIES_MENU
 
@@ -817,7 +834,7 @@ async def character_feature_points_edit_query_handler(update: Update, context: C
     elif action == "-" and feature_points[feature] > 0:
         feature_points[feature] -= 1
     else:
-        await query.answer("Non puoi andare sotto lo zero")
+        await query.answer("Non puoi andare sotto lo zero", show_alert=True)
         return FEATURE_POINTS_EDIT
 
     character.change_feature_points(feature_points)
@@ -830,6 +847,21 @@ async def character_feature_points_edit_query_handler(update: Update, context: C
     await query.answer()
 
     return FEATURE_POINTS_EDIT
+
+
+async def character_change_level_query_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    query = update.callback_query
+    data = query.data
+    character: Character = context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_CHARACTER_KEY]
+
+    if data == LEVEL_UP_CALLBACK_DATA:
+        character.level_up()
+    else:
+        character.level_down()
+
+    await query.answer(f"Ora sei di livello {character.level}!", show_alert=True)
+    msg, reply_markup = create_main_menu_message(character)
+    await query.edit_message_text(msg, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
 
 
 async def character_subclass_query_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
