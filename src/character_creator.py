@@ -681,7 +681,7 @@ async def character_ability_visualization_query_handler(update: Update, context:
     return ABILITY_ACTIONS
 
 
-async def character_ablity_new_query_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+async def character_ability_new_query_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     query = update.callback_query
     await query.answer()
 
@@ -860,20 +860,6 @@ async def character_change_level_query_handler(update: Update, context: ContextT
     await query.answer(f"Ora sei di livello {character.level}!", show_alert=True)
     msg, reply_markup = create_main_menu_message(character)
     await query.edit_message_text(msg, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
-
-
-async def character_subclass_query_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    query = update.callback_query
-    await query.answer()
-
-    await update.effective_message.reply_text("Funzione non ancora implementata")
-
-    character: Character = context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_CHARACTER_KEY]
-    msg, reply_markup = create_main_menu_message(character)
-
-    await update.effective_message.reply_text(msg, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
-
-    return FUNCTION_SELECTION
 
 
 async def character_multiclassing_query_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:

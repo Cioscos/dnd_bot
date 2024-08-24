@@ -19,9 +19,9 @@ from telegram.warnings import PTBUserWarning
 from character_creator import character_creator_start_handler, character_creation_handler, \
     character_spells_query_handler, character_abilities_query_handler, character_feature_point_query_handler, \
     character_name_handler, character_race_handler, character_gender_handler, character_class_handler, \
-    character_subclass_query_handler, character_multiclassing_query_handler, character_creator_stop_nested, \
+    character_multiclassing_query_handler, character_creator_stop_nested, \
     BAG_CALLBACK_DATA, SPELLS_CALLBACK_DATA, ABILITIES_CALLBACK_DATA, FEATURE_POINTS_CALLBACK_DATA, \
-    SUBCLASS_CALLBACK_DATA, MULTICLASSING_CALLBACK_DATA, character_deleting_query_handler, \
+    MULTICLASSING_CALLBACK_DATA, character_deleting_query_handler, \
     DELETE_CHARACTER_CALLBACK_DATA, CHARACTER_DELETION, character_deleting_answer_query_handler, \
     character_bag_new_object_query_handler, BAG_ITEM_INSERTION, character_bag_item_insert, character_hit_points_handler, \
     BAG_ITEM_INSERTION_CALLBACK_DATA, BAG_ITEM_EDIT, character_bag_edit_object_query_handler, \
@@ -30,7 +30,7 @@ from character_creator import character_creator_start_handler, character_creatio
     NAME_SELECTION, RACE_SELECTION, GENDER_SELECTION, CLASS_SELECTION, FUNCTION_SELECTION, CHARACTER_SELECTION, \
     character_creator_stop, character_bag_item_edit_handler, ABILITIES_MENU, character_abilities_menu_query_handler, \
     character_ability_visualization_query_handler, ABILITY_ACTIONS, character_ability_edit_handler, \
-    character_ability_delete_query_handler, character_ability_learn_handler, character_ablity_new_query_handler, \
+    character_ability_delete_query_handler, character_ability_learn_handler, character_ability_new_query_handler, \
     character_change_level_query_handler
 from class_submenus import class_submenus_query_handler, class_spells_menu_buttons_query_handler, \
     class_search_spells_text_handler, class_reading_spells_menu_buttons_query_handler, \
@@ -325,8 +325,6 @@ def main() -> None:
                 CallbackQueryHandler(character_abilities_query_handler, pattern=fr"^{ABILITIES_CALLBACK_DATA}$"),
                 CallbackQueryHandler(character_feature_point_query_handler,
                                      pattern=fr"^{FEATURE_POINTS_CALLBACK_DATA}$"),
-                CallbackQueryHandler(character_subclass_query_handler,
-                                     pattern=fr"^{SUBCLASS_CALLBACK_DATA}$"),
                 CallbackQueryHandler(character_multiclassing_query_handler,
                                      pattern=fr"^{MULTICLASSING_CALLBACK_DATA}$"),
                 CallbackQueryHandler(character_deleting_query_handler,
@@ -372,7 +370,7 @@ def main() -> None:
                                      pattern=r'^[yn]$')
             ],
             ABILITY_LEARN: [
-                CallbackQueryHandler(character_ablity_new_query_handler),
+                CallbackQueryHandler(character_ability_new_query_handler),
                 MessageHandler(filters.TEXT & ~filters.COMMAND, character_ability_learn_handler)
             ]
         },
