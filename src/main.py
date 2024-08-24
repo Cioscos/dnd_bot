@@ -33,7 +33,11 @@ from character_creator import character_creator_start_handler, character_creatio
     character_ability_delete_query_handler, character_ability_learn_handler, character_ability_new_query_handler, \
     character_change_level_query_handler, character_spells_menu_query_handler, \
     character_spell_visualization_query_handler, character_spell_new_query_handler, character_spell_learn_handler, \
-    character_spell_edit_handler, character_spell_delete_query_handler
+    character_spell_edit_handler, character_spell_delete_query_handler, character_multiclassing_add_class_query_handler, \
+    MULTICLASSING_ADD_CALLBACK_DATA, character_multiclassing_add_class_answer_handler, \
+    character_multiclassing_remove_class_query_handler, character_multiclassing_remove_class_answer_query_handler, \
+    character_level_change_class_choice_handler, LEVEL_UP_CALLBACK_DATA, LEVEL_DOWN_CALLBACK_DATA, \
+    SPELLS_SLOT_CALLBACK_DATA, character_multiclassing_reassign_levels_query_handler
 from class_submenus import class_submenus_query_handler, class_spells_menu_buttons_query_handler, \
     class_search_spells_text_handler, class_reading_spells_menu_buttons_query_handler, \
     class_spell_visualization_buttons_query_handler, class_resources_submenu_text_handler
@@ -42,7 +46,7 @@ from equipment_categories_submenus import equipment_categories_first_menu_query_
     equipment_visualization_query_handler
 from src.character_creator import character_bag_query_handler, character_selection_query_handler, BAG_MANAGEMENT, \
     HIT_POINTS_SELECTION, ABILITY_VISUALIZATION, ABILITY_LEARN, SPELLS_MENU, SPELL_VISUALIZATION, SPELL_ACTIONS, \
-    SPELL_LEARN
+    SPELL_LEARN, MULTICLASSING_ACTIONS, MULTICLASSING_REMOVE_CALLBACK_DATA
 from wiki import wiki_main_menu_handler, main_menu_buttons_query_handler, details_menu_buttons_query_handler
 
 # Setup logging
@@ -323,9 +327,13 @@ def main() -> None:
             HIT_POINTS_SELECTION: [MessageHandler(filters.TEXT & ~filters.COMMAND, character_hit_points_handler)],
             FUNCTION_SELECTION: [
                 CallbackQueryHandler(character_change_level_query_handler, pattern=r"^level_(up|down)$"),
+                CallbackQueryHandler(character_level_change_class_choice_handler,
+                                     pattern=fr"^{LEVEL_UP_CALLBACK_DATA}\|.*$|^{LEVEL_DOWN_CALLBACK_DATA}\|.*$"),
                 CallbackQueryHandler(character_bag_query_handler, pattern=fr"^{BAG_CALLBACK_DATA}$"),
                 CallbackQueryHandler(character_spells_query_handler, pattern=fr"^{SPELLS_CALLBACK_DATA}$"),
                 CallbackQueryHandler(character_abilities_query_handler, pattern=fr"^{ABILITIES_CALLBACK_DATA}$"),
+                CallbackQueryHandler(character_feature_point_query_handler,
+                                     pattern=fr"^{SPELLS_SLOT_CALLBACK_DATA}$"),
                 CallbackQueryHandler(character_feature_point_query_handler,
                                      pattern=fr"^{FEATURE_POINTS_CALLBACK_DATA}$"),
                 CallbackQueryHandler(character_multiclassing_query_handler,
@@ -390,6 +398,17 @@ def main() -> None:
             SPELL_LEARN: [
                 CallbackQueryHandler(character_spell_new_query_handler),
                 MessageHandler(filters.TEXT & ~filters.COMMAND, character_spell_learn_handler)
+            ],
+            MULTICLASSING_ACTIONS: [
+                CallbackQueryHandler(character_multiclassing_add_class_query_handler,
+                                     pattern=fr"^{MULTICLASSING_ADD_CALLBACK_DATA}$"),
+                MessageHandler(filters.TEXT & ~filters.COMMAND, character_multiclassing_add_class_answer_handler),
+                CallbackQueryHandler(character_multiclassing_remove_class_query_handler,
+                                     pattern=fr"^{MULTICLASSING_REMOVE_CALLBACK_DATA}$"),
+                CallbackQueryHandler(character_multiclassing_remove_class_answer_query_handler,
+                                     pattern=r"^remove\|.+$"),
+                CallbackQueryHandler(character_multiclassing_reassign_levels_query_handler,
+                                     pattern=r"^assign_levels\|.+\|\d+$")
             ]
         },
         fallbacks=[CommandHandler("stop", character_creator_stop)],

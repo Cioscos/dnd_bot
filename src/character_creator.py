@@ -1,13 +1,14 @@
 import logging
 from typing import List, Tuple, Dict
 
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, CallbackQuery
 from telegram.constants import ParseMode, ChatType
 from telegram.ext import ContextTypes, ConversationHandler
 
 from src.model.character_creator.Ability import Ability
 from src.model.character_creator.Character import Character
 from src.model.character_creator.Item import Item
+from src.model.character_creator.MultiClass import MultiClass
 from src.model.character_creator.Spell import Spell, SpellLevel
 from src.util import chunk_list, generate_abilities_list_keyboard, generate_spells_list_keyboard
 
@@ -36,7 +37,8 @@ CHARACTER_CREATOR_VERSION = "0.0.1"
  SPELLS_MENU,
  SPELL_VISUALIZATION,
  SPELL_ACTIONS,
- SPELL_LEARN) = map(int, range(14, 35))
+ SPELL_LEARN,
+ MULTICLASSING_ACTIONS) = map(int, range(14, 36))
 
 STOPPING = 99
 
@@ -60,6 +62,7 @@ BAG_CALLBACK_DATA = 'bag'
 SPELLS_CALLBACK_DATA = 'spells'
 ABILITIES_CALLBACK_DATA = 'abilities'
 FEATURE_POINTS_CALLBACK_DATA = 'feature_points'
+SPELLS_SLOT_CALLBACK_DATA = 'spells_slot'
 MULTICLASSING_CALLBACK_DATA = 'multiclass'
 DELETE_CHARACTER_CALLBACK_DATA = 'delete_character'
 AFFERMATIVE_CHARACTER_DELETION_CALLBACK_DATA = 'yes_delete_character'
@@ -76,14 +79,16 @@ SPELL_DELETE_CALLBACK_DATA = "spell_delete"
 SPELL_BACK_MENU_CALLBACK_DATA = "spell_back_menu"
 LEVEL_UP_CALLBACK_DATA = "level_up"
 LEVEL_DOWN_CALLBACK_DATA = "level_down"
+MULTICLASSING_ADD_CALLBACK_DATA = "add_multiclass"
+MULTICLASSING_REMOVE_CALLBACK_DATA = "remove_multiclass"
 
 
 def create_main_menu_message(character: Character) -> Tuple[str, InlineKeyboardMarkup]:
     message_str = (f"Benvenuto nella gestione personaggio! v.{CHARACTER_CREATOR_VERSION}\n"
-                   f"<b>Nome personaggio:</b> {character.name} L. {character.level}\n"
+                   f"<b>Nome personaggio:</b> {character.name} L. {character.total_levels()}\n"
                    f"<b>Razza:</b> {character.race}\n"
                    f"<b>Genere:</b> {character.gender}\n"
-                   f"<b>Classe:</b> {character.class_}\n\n"
+                   f"<b>Classe:</b> {', '.join(f"{class_name} (Level {level})" for class_name, level in character.multi_class.classes.items())}\n\n"
                    f"<b>Punti ferita:</b> {character.hit_points} PF\n"
                    f"<b>Slot incantesimo</b>\n{"\n".join([f"{slot.slots_remaining()} di livello {level}" for level, slot in character.spell_slots.items()]) if character.spell_slots else "Non hai registrato ancora nessuno Slot incantesimo\n"}")
 
@@ -100,8 +105,9 @@ def create_main_menu_message(character: Character) -> Tuple[str, InlineKeyboardM
             InlineKeyboardButton('Abilità', callback_data=ABILITIES_CALLBACK_DATA),
             InlineKeyboardButton('Spell', callback_data=SPELLS_CALLBACK_DATA)
         ],
+        [InlineKeyboardButton('Gestisci slot incantesimo', callback_data=SPELLS_SLOT_CALLBACK_DATA)],
         [InlineKeyboardButton('Punti caratteristica', callback_data=FEATURE_POINTS_CALLBACK_DATA)],
-        [InlineKeyboardButton('Aggiungi multiclasse', callback_data=MULTICLASSING_CALLBACK_DATA)],
+        [InlineKeyboardButton('Gestisci multiclasse', callback_data=MULTICLASSING_CALLBACK_DATA)],
         [InlineKeyboardButton('Elimina personaggio', callback_data=DELETE_CHARACTER_CALLBACK_DATA)]
     ]
 
@@ -311,8 +317,8 @@ async def character_gender_handler(update: Update, context: ContextTypes.DEFAULT
 async def character_class_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     class_ = update.effective_message.text
 
-    character = context.user_data[CHARACTERS_CREATOR_KEY][TEMP_CHARACTER_KEY]
-    character.class_ = class_
+    character: Character = context.user_data[CHARACTERS_CREATOR_KEY][TEMP_CHARACTER_KEY]
+    character.multi_class.add_class(class_)
 
     await update.effective_message.reply_text(
         "Quanti punti vita ha il tuo personaggio?\nRispondi a questo messaggio o premi /stop per terminare")
@@ -1093,26 +1099,197 @@ async def character_change_level_query_handler(update: Update, context: ContextT
     query = update.callback_query
     data = query.data
     character: Character = context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_CHARACTER_KEY]
+    multi_class = character.multi_class
 
-    if data == LEVEL_UP_CALLBACK_DATA:
-        character.level_up()
+    if len(multi_class.classes) > 1:
+        await query.answer()
+        # If the character has more than one class, prompt the user to choose which class to level up/down
+        buttons = [
+            [InlineKeyboardButton(f"{class_name} (Livello {multi_class.get_class_level(class_name)})",
+                                  callback_data=f"{data}|{class_name}")]
+            for class_name in multi_class.classes.keys()
+        ]
+        keyboard = InlineKeyboardMarkup(buttons)
+        await query.edit_message_text("Scegli quale classe livellare in positivo o negativo:", reply_markup=keyboard)
     else:
-        character.level_down()
+        # If only one class, level up/down automatically
+        class_name = next(iter(multi_class.classes))  # Get the only class name
+        await apply_level_change(multi_class, class_name, data, query)
+        msg, reply_markup = create_main_menu_message(character)
+        await query.edit_message_text(msg, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
 
-    await query.answer(f"Ora sei di livello {character.level}!", show_alert=True)
+    return FUNCTION_SELECTION
+
+
+async def character_level_change_class_choice_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    query = update.callback_query
+    await query.answer()
+    data = query.data
+
+    action, class_name = data.split("|", maxsplit=1)
+
+    character: Character = context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_CHARACTER_KEY]
+    multi_class = character.multi_class
+
+    # Apply the level change using the chosen class and action
+    await apply_level_change(multi_class, class_name, action, query)
     msg, reply_markup = create_main_menu_message(character)
     await query.edit_message_text(msg, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
+
+    return FUNCTION_SELECTION
+
+
+async def apply_level_change(multi_class: MultiClass, class_name: str, data: str, query: CallbackQuery) -> None:
+    """Apply the level change to the selected class and update the user."""
+    try:
+        if data == LEVEL_UP_CALLBACK_DATA:
+            multi_class.level_up(class_name)
+        else:
+            multi_class.level_down(class_name)
+
+        await query.answer(f"{class_name} è ora di livello {multi_class.get_class_level(class_name)}!", show_alert=True)
+    except ValueError as e:
+        await query.answer(str(e), show_alert=True)
 
 
 async def character_multiclassing_query_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     query = update.callback_query
     await query.answer()
 
-    await update.effective_message.reply_text("Funzione non ancora implementata")
+    character: Character = context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_CHARACTER_KEY]
+    message_str = "<b>Gestione multi-classe</b>\n\n"
+    keyboard = [
+        [InlineKeyboardButton("Aggiungi classe", callback_data=MULTICLASSING_ADD_CALLBACK_DATA)]
+    ]
 
-    character = context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_CHARACTER_KEY]
+    if len(character.multi_class.classes) == 1:
+
+        message_str += f"{character.name} non è un personaggio multi-classe"
+
+    else:
+
+        message_str += f"<code>{character.multi_class.list_classes()}</code>"
+        keyboard.append(
+            [InlineKeyboardButton("Rimuovi multi-classe", callback_data=MULTICLASSING_REMOVE_CALLBACK_DATA)])
+
+    await update.effective_message.reply_text(message_str, reply_markup=InlineKeyboardMarkup(keyboard),
+                                              parse_mode=ParseMode.HTML)
+
+    return MULTICLASSING_ACTIONS
+
+
+async def character_multiclassing_add_class_query_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    query = update.callback_query
+    await query.answer()
+
+    await update.effective_message.reply_text("Mandami il nome della classe da aggiungere e il livello separati "
+                                              "da un #\n\n"
+                                              "Esempio: <code>Guerriero#3</code>", parse_mode=ParseMode.HTML)
+
+    return MULTICLASSING_ACTIONS
+
+
+async def character_multiclassing_add_class_answer_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    multi_class_info = update.effective_message.text
+    class_name, class_level = multi_class_info.split("#", maxsplit=1)
+
+    if not class_name or class_name.isdigit() or not class_level or class_level.isalpha():
+        await update.effective_message.reply_text("🔴 Hai inviato il messaggio in un formato sbagliato!\n\n"
+                                                  "Invialo come classe#livello")
+
+    character: Character = context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_CHARACTER_KEY]
+
+    try:
+        character.add_class(class_name, int(class_level))
+    except ValueError as e:
+        await update.effective_message.reply_text(str(e), parse_mode=ParseMode.HTML)
+        return MULTICLASSING_ACTIONS
+
+    await update.effective_message.reply_text("Classe inserita con successo! ✅\n\n"
+                                              f"Complimenti adesso appartieni a {character.total_classes()} classi")
+
     msg, reply_markup = create_main_menu_message(character)
+    await update.effective_message.reply_text(msg, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
 
+    return FUNCTION_SELECTION
+
+
+async def character_multiclassing_remove_class_query_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    query = update.callback_query
+    await query.answer()
+
+    character: Character = context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_CHARACTER_KEY]
+    keyboard = []
+
+    for class_name in character.multi_class.classes:
+        keyboard.append([InlineKeyboardButton(class_name, callback_data=f"remove|{class_name}")])
+
+    await update.effective_message.reply_text("Che classe vuoi rimuovere?",
+                                              reply_markup=InlineKeyboardMarkup(keyboard))
+
+    return MULTICLASSING_ACTIONS
+
+
+async def character_multiclassing_remove_class_answer_query_handler(update: Update,
+                                                                    context: ContextTypes.DEFAULT_TYPE) -> int:
+    query = update.callback_query
+    await query.answer()
+    data = query.data
+    _, class_name = data.split("|", maxsplit=1)
+
+    character: Character = context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_CHARACTER_KEY]
+    multi_class = character.multi_class
+
+    # Get the levels of the class to be removed
+    removed_class_level = multi_class.get_class_level(class_name)
+
+    # Remove the class from the multiclass
+    multi_class.remove_class(class_name)
+
+    # Check how many classes are left
+    remaining_classes = list(multi_class.classes.keys())
+
+    if len(remaining_classes) == 1:
+        # If only one class is left, automatically assign the removed levels to it
+        remaining_class_name = remaining_classes[0]
+        multi_class.add_class(remaining_class_name, removed_class_level)
+
+        # Send a confirmation message to the user
+        await query.edit_message_text(f"La classe {class_name} è stata rimossa.\n"
+                                      f"I {removed_class_level} livelli rimossi sono stati aggiunti alla classe {remaining_class_name}.")
+    else:
+        # If more than one class remains, ask the user to select where to allocate the removed levels
+        buttons = [
+            [InlineKeyboardButton(f"{class_name} (Livello {multi_class.get_class_level(class_name)})",
+                                  callback_data=f"assign_levels|{class_name}|{removed_class_level}")]
+            for class_name in remaining_classes
+        ]
+        keyboard = InlineKeyboardMarkup(buttons)
+
+        # Send a message asking the user to select the class to assign the removed levels to
+        await query.edit_message_text(f"La classe {class_name} è stata rimossa.\n"
+                                      f"Seleziona una classe a cui assegnare i rimanenti {removed_class_level} livelli:",
+                                      reply_markup=keyboard)
+
+    return MULTICLASSING_ACTIONS
+
+
+async def character_multiclassing_reassign_levels_query_handler(update: Update,
+                                                                context: ContextTypes.DEFAULT_TYPE) -> int:
+    query = update.callback_query
+    await query.answer()
+    data = query.data
+    _, class_name, removed_class_level = data.split("|", maxsplit=2)
+
+    character: Character = context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_CHARACTER_KEY]
+
+    try:
+        character.add_class(class_name, int(removed_class_level))
+    except ValueError as e:
+        await update.effective_message.reply_text(str(e), parse_mode=ParseMode.HTML)
+        return MULTICLASSING_ACTIONS
+
+    msg, reply_markup = create_main_menu_message(character)
     await update.effective_message.reply_text(msg, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
 
     return FUNCTION_SELECTION
@@ -1161,3 +1338,16 @@ async def character_deleting_answer_query_handler(update: Update, context: Conte
         await update.effective_message.reply_text("Eliminazione personaggio annullata")
 
     return await character_creator_stop(update, context)
+
+
+async def character_spells_slots_query_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    query = update.callback_query
+    await query.answer()
+
+    await update.effective_message.reply_text("Funzione ancora non implementata")
+
+    character: Character = context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_CHARACTER_KEY]
+    msg, reply_markup = create_main_menu_message(character)
+    await update.effective_message.reply_text(msg, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
+
+    return FUNCTION_SELECTION

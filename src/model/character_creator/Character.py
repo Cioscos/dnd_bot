@@ -14,9 +14,7 @@ class Character:
     name: Optional[str] = field(default=None)
     race: Optional[str] = field(default=None)
     gender: Optional[str] = field(default=None)
-    class_: Optional[str] = field(default=None)
     multi_class: MultiClass = field(default_factory=MultiClass)
-    level: int = 1
     hit_points: int = 1
     feature_points: FeaturePoints = field(default_factory=FeaturePoints)
     spell_slots: Dict[int, SpellSlot] = field(default_factory=dict)
@@ -33,14 +31,6 @@ class Character:
     def __reload_stats(self):
         self.carry_capacity = self.feature_points.strength * 15
         self.encumbrance = sum([item.weight for item in self.bag])
-
-    def level_up(self):
-        """Increase character's level by 1."""
-        self.level += 1
-
-    def level_down(self):
-        """Decrease character's level by 1."""
-        self.level -= 1
 
     def add_item(self, item: Item):
         """Add an item to the character's bag and update the encumbrance."""
@@ -159,6 +149,10 @@ class Character:
     def total_levels(self) -> int:
         """Returns the total number of levels across all classes."""
         return self.multi_class.total_levels()
+
+    def total_classes(self) -> int:
+        """Returns the total number of classes across all classes."""
+        return len(self.multi_class.classes)
 
     def list_spell_slots(self):
         """Lists all spell slots and their statuses."""
