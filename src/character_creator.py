@@ -97,9 +97,9 @@ def create_main_menu_message(character: Character) -> Tuple[str, InlineKeyboardM
         ],
         [
             InlineKeyboardButton('Borsa', callback_data=BAG_CALLBACK_DATA),
+            InlineKeyboardButton('Abilità', callback_data=ABILITIES_CALLBACK_DATA),
             InlineKeyboardButton('Spell', callback_data=SPELLS_CALLBACK_DATA)
         ],
-        [InlineKeyboardButton('Abilità', callback_data=ABILITIES_CALLBACK_DATA)],
         [InlineKeyboardButton('Punti caratteristica', callback_data=FEATURE_POINTS_CALLBACK_DATA)],
         [InlineKeyboardButton('Aggiungi multiclasse', callback_data=MULTICLASSING_CALLBACK_DATA)],
         [InlineKeyboardButton('Elimina personaggio', callback_data=DELETE_CHARACTER_CALLBACK_DATA)]
