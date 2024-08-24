@@ -39,6 +39,10 @@ class Character:
         """Increase character's level by 1."""
         self.level += 1
 
+    def level_down(self):
+        """Decrease character's level by 1."""
+        self.level -= 1
+
     def add_item(self, item: Item):
         """Add an item to the character's bag and update the encumbrance."""
         # Check if the item already exists in the bag
