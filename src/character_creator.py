@@ -56,6 +56,10 @@ CURRENT_INLINE_PAGE_INDEX_KEY = 'current_page_index'
 INLINE_PAGES_KEY = 'inline_pages'
 CURRENT_ABILITY_KEY = 'current_ability'
 CURRENT_SPELL_KEY = 'current_spell'
+# Keys to store the data allowing a rollback in the case user use /stop command before ending the multiclass deleting
+PENDING_REASSIGNMENT = 'pending_reassignment'
+REMOVED_CLASS_LEVEL = 'removed_class_level'
+REMAINING_CLASSES = 'remaining_classes'
 
 # Main menu callback keys
 BAG_CALLBACK_DATA = 'bag'
@@ -174,6 +178,28 @@ def create_feature_points_messages(feature_points: Dict[str, int]) -> Dict[str, 
 
 
 async def character_creator_stop(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    # Rollback for multiclass management
+    if PENDING_REASSIGNMENT in context.user_data[CHARACTERS_CREATOR_KEY]:
+        # Get the pending reassignment information
+        pending_reassignment = context.user_data[CHARACTERS_CREATOR_KEY][PENDING_REASSIGNMENT]
+        removed_class_level = pending_reassignment[REMOVED_CLASS_LEVEL]
+        remaining_classes = pending_reassignment[REMAINING_CLASSES]
+
+        if len(remaining_classes) == 1:
+            # Automatically reassign levels if only one class is left
+            remaining_class_name = remaining_classes[0]
+            character: Character = context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_CHARACTER_KEY]
+            multi_class = character.multi_class
+
+            multi_class.add_class(remaining_class_name, removed_class_level)
+
+            await update.message.reply_text(f"Il comando /stop è stato ricevuto.\n"
+                                            f"I {removed_class_level} livelli rimossi sono stati aggiunti automaticamente alla classe {remaining_class_name}.")
+        else:
+            # Ask the user to finish reassigning the levels before stopping
+            await update.message.reply_text("Devi assegnare i livelli rimanenti prima di poter usare il comando /stop.")
+            return MULTICLASSING_ACTIONS
+
     character = context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_CHARACTER_KEY]
     msg, reply_markup = create_main_menu_message(character)
 
@@ -1257,7 +1283,19 @@ async def character_multiclassing_remove_class_answer_query_handler(update: Upda
         # Send a confirmation message to the user
         await query.edit_message_text(f"La classe {class_name} è stata rimossa.\n"
                                       f"I {removed_class_level} livelli rimossi sono stati aggiunti alla classe {remaining_class_name}.")
+
+        msg, reply_markup = create_main_menu_message(character)
+        await update.effective_message.reply_text(msg, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
+
+        return FUNCTION_SELECTION
+
     else:
+        # Store pending reassignment information in user_data
+        context.user_data[CHARACTERS_CREATOR_KEY][PENDING_REASSIGNMENT] = {
+            REMOVED_CLASS_LEVEL: removed_class_level,
+            REMAINING_CLASSES: remaining_classes
+        }
+
         # If more than one class remains, ask the user to select where to allocate the removed levels
         buttons = [
             [InlineKeyboardButton(f"{class_name} (Livello {multi_class.get_class_level(class_name)})",
@@ -1271,7 +1309,7 @@ async def character_multiclassing_remove_class_answer_query_handler(update: Upda
                                       f"Seleziona una classe a cui assegnare i rimanenti {removed_class_level} livelli:",
                                       reply_markup=keyboard)
 
-    return MULTICLASSING_ACTIONS
+        return MULTICLASSING_ACTIONS
 
 
 async def character_multiclassing_reassign_levels_query_handler(update: Update,
@@ -1288,6 +1326,9 @@ async def character_multiclassing_reassign_levels_query_handler(update: Update,
     except ValueError as e:
         await update.effective_message.reply_text(str(e), parse_mode=ParseMode.HTML)
         return MULTICLASSING_ACTIONS
+
+    # Clear pending reassignment since it has been handled
+    context.user_data[CHARACTERS_CREATOR_KEY].pop(PENDING_REASSIGNMENT, None)
 
     msg, reply_markup = create_main_menu_message(character)
     await update.effective_message.reply_text(msg, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
@@ -1309,7 +1350,7 @@ async def character_deleting_query_handler(update: Update, context: ContextTypes
     ]
 
     await update.effective_message.reply_text("Sei sicuro di voler chancellare il personaggio?\n\n"
-                                              f"{character.name} - classe {character.class_} di L. {character.level}",
+                                              f"{character.name} - classe {', '.join(f"{class_name} (Level {level})" for class_name, level in character.multi_class.classes.items())} di L. {character.total_levels()}",
                                               reply_markup=InlineKeyboardMarkup(keyboard))
 
     return CHARACTER_DELETION
