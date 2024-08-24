@@ -5,8 +5,8 @@ from src.model.character_creator.Ability import Ability
 from src.model.character_creator.FeaturePoints import FeaturePoints
 from src.model.character_creator.Item import Item
 from src.model.character_creator.MultiClass import MultiClass
+from src.model.character_creator.Spell import Spell
 from src.model.character_creator.SpellSlot import SpellSlot
-from src.model.models import Spell
 
 
 @dataclass
