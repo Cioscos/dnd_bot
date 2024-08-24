@@ -54,7 +54,6 @@ BAG_CALLBACK_DATA = 'bag'
 SPELLS_CALLBACK_DATA = 'spells'
 ABILITIES_CALLBACK_DATA = 'abilities'
 FEATURE_POINTS_CALLBACK_DATA = 'feature_points'
-SUBCLASS_CALLBACK_DATA = 'subclass'
 MULTICLASSING_CALLBACK_DATA = 'multiclass'
 DELETE_CHARACTER_CALLBACK_DATA = 'delete_character'
 AFFERMATIVE_CHARACTER_DELETION_CALLBACK_DATA = 'yes_delete_character'
@@ -92,7 +91,6 @@ def create_main_menu_message(character: Character) -> Tuple[str, InlineKeyboardM
         ],
         [InlineKeyboardButton('Abilità', callback_data=ABILITIES_CALLBACK_DATA)],
         [InlineKeyboardButton('Punti caratteristica', callback_data=FEATURE_POINTS_CALLBACK_DATA)],
-        [InlineKeyboardButton('Aggiungi sotto-classe', callback_data=SUBCLASS_CALLBACK_DATA)],
         [InlineKeyboardButton('Aggiungi multiclasse', callback_data=MULTICLASSING_CALLBACK_DATA)],
         [InlineKeyboardButton('Elimina personaggio', callback_data=DELETE_CHARACTER_CALLBACK_DATA)]
     ]

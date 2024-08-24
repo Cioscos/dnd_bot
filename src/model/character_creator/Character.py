@@ -15,7 +15,6 @@ class Character:
     race: Optional[str] = field(default=None)
     gender: Optional[str] = field(default=None)
     class_: Optional[str] = field(default=None)
-    subClass: Optional[str] = field(default=None)
     multi_class: MultiClass = field(default_factory=MultiClass)
     level: int = 1
     hit_points: int = 1
