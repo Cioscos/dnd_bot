@@ -42,7 +42,11 @@ CHARACTER_CREATOR_VERSION = "0.0.1"
  MULTICLASSING_ACTIONS,
  SPELLS_SLOTS_MANAGEMENT,
  SPELL_SLOT_ADDING,
- SPELL_SLOT_REMOVING) = map(int, range(14, 39))
+ SPELL_SLOT_REMOVING,
+ DAMAGE_REGISTRATION,
+ HEALING_REGISTRATION,
+ HIT_POINTS_REGISTRATION,
+ LONG_REST) = map(int, range(14, 43))
 
 STOPPING = 99
 
@@ -91,6 +95,7 @@ LEVEL_UP_CALLBACK_DATA = "level_up"
 LEVEL_DOWN_CALLBACK_DATA = "level_down"
 DAMAGE_CALLBACK_DATA = "damage"
 HEALING_CALLBACK_DATA = "healing"
+HIT_POINTS_CALLBACK_DATA = "hit_points"
 MULTICLASSING_ADD_CALLBACK_DATA = "add_multiclass"
 MULTICLASSING_REMOVE_CALLBACK_DATA = "remove_multiclass"
 SPELL_SLOTS_AUTO_CALLBACK_DATA = "spells_slot_auto"
@@ -101,6 +106,9 @@ SPELLS_SLOTS_REMOVE_CALLBACK_DATA = "spells_slot_remove"
 SPELLS_SLOTS_INSERT_CALLBACK_DATA = "spells_slot_insert"
 SPELL_SLOT_SELECTED_CALLBACK_DATA = "spell_slot_selected"
 SPELL_SLOT_LEVEL_SELECTED_CALLBACK_DATA = "spell_slot_level"
+LONG_REST_WARNING_CALLBACK_DATA = "long_rest_warning"
+LONG_REST_CALLBACK_DATA = "long_rest"
+
 
 
 def create_main_menu_message(character: Character) -> Tuple[str, InlineKeyboardMarkup]:
@@ -109,7 +117,7 @@ def create_main_menu_message(character: Character) -> Tuple[str, InlineKeyboardM
                    f"<b>Razza:</b> {character.race}\n"
                    f"<b>Genere:</b> {character.gender}\n"
                    f"<b>Classe:</b> {', '.join(f"{class_name} (Level {level})" for class_name, level in character.multi_class.classes.items())}\n\n"
-                   f"<b>Punti ferita:</b> {character.hit_points} PF\n"
+                   f"<b>Punti ferita:</b> {character.current_hit_points}/{character.hit_points} PF\n"
                    f"<b>Slot incantesimo</b>\n{"\n".join([f"{slot.slots_remaining()} di livello {level}" for level, slot in character.spell_slots.items()]) if character.spell_slots else "Non hai registrato ancora nessuno Slot incantesimo\n"}")
 
     message_str += (f"\n<b>Punti caratteristica</b>\n{str(character.feature_points)}\n\n"
@@ -125,6 +133,9 @@ def create_main_menu_message(character: Character) -> Tuple[str, InlineKeyboardM
             InlineKeyboardButton('Curati', callback_data=HEALING_CALLBACK_DATA)
         ],
         [
+            InlineKeyboardButton('Punti ferita', callback_data=HIT_POINTS_CALLBACK_DATA)
+        ],
+        [
             InlineKeyboardButton('Borsa', callback_data=BAG_CALLBACK_DATA),
             InlineKeyboardButton('Abilità', callback_data=ABILITIES_CALLBACK_DATA),
             InlineKeyboardButton('Spell', callback_data=SPELLS_CALLBACK_DATA)
@@ -132,6 +143,7 @@ def create_main_menu_message(character: Character) -> Tuple[str, InlineKeyboardM
         [InlineKeyboardButton('Gestisci slot incantesimo', callback_data=SPELLS_SLOT_CALLBACK_DATA)],
         [InlineKeyboardButton('Punti caratteristica', callback_data=FEATURE_POINTS_CALLBACK_DATA)],
         [InlineKeyboardButton('Gestisci multiclasse', callback_data=MULTICLASSING_CALLBACK_DATA)],
+        [InlineKeyboardButton('Riposo lungo', callback_data=LONG_REST_WARNING_CALLBACK_DATA)],
         [InlineKeyboardButton('Elimina personaggio', callback_data=DELETE_CHARACTER_CALLBACK_DATA)]
     ]
 
@@ -416,7 +428,7 @@ async def character_hit_points_handler(update: Update, context: ContextTypes.DEF
     hit_points = update.effective_message.text
 
     character = context.user_data[CHARACTERS_CREATOR_KEY][TEMP_CHARACTER_KEY]
-    character.hit_points = hit_points
+    character.hit_points = character.current_hit_points = hit_points
 
     context.user_data[CHARACTERS_CREATOR_KEY][CHARACTERS_KEY] = []
     context.user_data[CHARACTERS_CREATOR_KEY][CHARACTERS_KEY].append(character)
@@ -1615,3 +1627,107 @@ async def character_spells_slot_change_mode_query_handler(update: Update, contex
     await update.callback_query.edit_message_text(message_str, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
 
     return SPELLS_SLOTS_MANAGEMENT
+
+
+async def character_damage_query_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    query = update.callback_query
+    await query.answer()
+
+    await update.effective_message.reply_text("Quanti danni hai subito?")
+
+    return DAMAGE_REGISTRATION
+
+
+async def character_damage_registration_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    damage = update.effective_message.text
+
+    character: Character = context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_CHARACTER_KEY]
+    character.current_hit_points -= int(damage)
+
+    await update.effective_message.reply_text(f"{damage} danni subiti!")
+
+    msg, reply_markup = create_main_menu_message(character)
+    await update.effective_message.reply_text(msg, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
+
+    return FUNCTION_SELECTION
+
+
+async def character_healing_query_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    query = update.callback_query
+    await query.answer()
+
+    await update.effective_message.reply_text("Di quanto ti vuoi curare?")
+
+    return HEALING_REGISTRATION
+
+
+async def character_healing_registration_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    healing = update.effective_message.text
+
+    character: Character = context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_CHARACTER_KEY]
+    character.current_hit_points += int(healing)
+
+    await update.effective_message.reply_text(f"Sei stato curato di {healing} PF!")
+
+    msg, reply_markup = create_main_menu_message(character)
+    await update.effective_message.reply_text(msg, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
+
+    return FUNCTION_SELECTION
+
+
+async def character_hit_points_query_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    query = update.callback_query
+    await query.answer()
+
+    character: Character = context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_CHARACTER_KEY]
+
+    await update.effective_message.reply_text(f"Quanti sono ora i punti ferita di {character.name}?\n\n"
+                                              f"N.B. I punti ferita attuali saranno ripristinati al massimo!")
+
+    return HIT_POINTS_REGISTRATION
+
+
+async def character_hit_points_registration_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    hit_points = update.effective_message.text
+
+    character: Character = context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_CHARACTER_KEY]
+    character.hit_points = character.current_hit_points = int(hit_points)
+
+    await update.effective_message.reply_text(f"Punti ferita aumentati a {hit_points}!")
+
+    msg, reply_markup = create_main_menu_message(character)
+    await update.effective_message.reply_text(msg, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
+
+    return FUNCTION_SELECTION
+
+
+async def character_long_rest_warning_query_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    query = update.callback_query
+    await query.answer()
+
+    message_str = (f"<b>Stai per effettuare un riposo lungo!</b>\n\n"
+                   f"Questo comporta:\n"
+                   f"- Ripristino dei punti ferita\n"
+                   f"- Ripristino slot incantesimo\n\n"
+                   f"Vuoi procedere? Usa /stop per annullare")
+    keyboard = [[InlineKeyboardButton("Riposa", callback_data=LONG_REST_CALLBACK_DATA)]]
+
+    await update.callback_query.edit_message_text(message_str, reply_markup=InlineKeyboardMarkup(keyboard),
+                                                  parse_mode=ParseMode.HTML)
+
+    return LONG_REST
+
+
+async def character_long_rest_query_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    query = update.callback_query
+
+    character: Character = context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_CHARACTER_KEY]
+    character.current_hit_points = character.hit_points
+    character.restore_all_spell_slots()
+
+    await query.answer("Riposo lungo effettuato!", show_alert=True)
+
+    msg, reply_markup = create_main_menu_message(character)
+    await update.callback_query.edit_message_text(msg, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
+
+    return FUNCTION_SELECTION

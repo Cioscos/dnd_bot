@@ -16,6 +16,7 @@ class Character:
     gender: Optional[str] = field(default=None)
     multi_class: MultiClass = field(default_factory=MultiClass)
     hit_points: int = 1
+    current_hit_points: int = 1
     feature_points: FeaturePoints = field(default_factory=FeaturePoints)
     spell_slots: Dict[int, SpellSlot] = field(default_factory=dict)
     MAX_SPELL_SLOT_LEVEL = 9
