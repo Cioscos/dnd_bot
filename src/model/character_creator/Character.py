@@ -18,6 +18,7 @@ class Character:
     hit_points: int = 1
     feature_points: FeaturePoints = field(default_factory=FeaturePoints)
     spell_slots: Dict[int, SpellSlot] = field(default_factory=dict)
+    MAX_SPELL_SLOT_LEVEL = 9
     bag: List[Item] = field(default_factory=list)
     spells: List[Spell] = field(default_factory=list)
     abilities: List[Ability] = field(default_factory=list)

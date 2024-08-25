@@ -10,6 +10,7 @@ from src.model.character_creator.Character import Character
 from src.model.character_creator.Item import Item
 from src.model.character_creator.MultiClass import MultiClass
 from src.model.character_creator.Spell import Spell, SpellLevel
+from src.model.character_creator.SpellSlot import SpellSlot
 from src.util import chunk_list, generate_abilities_list_keyboard, generate_spells_list_keyboard
 
 logger = logging.getLogger(__name__)
@@ -38,7 +39,9 @@ CHARACTER_CREATOR_VERSION = "0.0.1"
  SPELL_VISUALIZATION,
  SPELL_ACTIONS,
  SPELL_LEARN,
- MULTICLASSING_ACTIONS) = map(int, range(14, 36))
+ MULTICLASSING_ACTIONS,
+ SPELLS_SLOTS_MANAGEMENT,
+ SPELL_SLOT_ADDING) = map(int, range(14, 38))
 
 STOPPING = 99
 
@@ -60,6 +63,8 @@ CURRENT_SPELL_KEY = 'current_spell'
 PENDING_REASSIGNMENT = 'pending_reassignment'
 REMOVED_CLASS_LEVEL = 'removed_class_level'
 REMAINING_CLASSES = 'remaining_classes'
+# spell slots
+SPELL_SLOTS = 'spell_slots'
 
 # Main menu callback keys
 BAG_CALLBACK_DATA = 'bag'
@@ -85,6 +90,14 @@ LEVEL_UP_CALLBACK_DATA = "level_up"
 LEVEL_DOWN_CALLBACK_DATA = "level_down"
 MULTICLASSING_ADD_CALLBACK_DATA = "add_multiclass"
 MULTICLASSING_REMOVE_CALLBACK_DATA = "remove_multiclass"
+SPELL_SLOTS_AUTO_CALLBACK_DATA = "spells_slot_auto"
+SPELL_SLOTS_MANUAL_CALLBACK_DATA = "spells_slot_manual"
+SPELLS_SLOTS_CHANGE_CALLBACK_DATA = "spells_slot_change"
+SPELLS_SLOTS_RESET_CALLBACK_DATA = "spells_slot_reset"
+SPELLS_SLOTS_REMOVE_CALLBACK_DATA = "spells_slot_remove"
+SPELLS_SLOTS_INSERT_CALLBACK_DATA = "spells_slot_insert"
+SPELL_SLOT_SELECTED_CALLBACK_DATA = "spell_slot_selected"
+SPELL_SLOT_LEVEL_SELECTED_CALLBACK_DATA = "spell_slot_level"
 
 
 def create_main_menu_message(character: Character) -> Tuple[str, InlineKeyboardMarkup]:
@@ -96,7 +109,7 @@ def create_main_menu_message(character: Character) -> Tuple[str, InlineKeyboardM
                    f"<b>Punti ferita:</b> {character.hit_points} PF\n"
                    f"<b>Slot incantesimo</b>\n{"\n".join([f"{slot.slots_remaining()} di livello {level}" for level, slot in character.spell_slots.items()]) if character.spell_slots else "Non hai registrato ancora nessuno Slot incantesimo\n"}")
 
-    message_str += (f"<b>Punti caratteristica</b>\n{str(character.feature_points)}\n\n"
+    message_str += (f"\n<b>Punti caratteristica</b>\n{str(character.feature_points)}\n\n"
                     f"<b>Peso trasportato:</b> {character.encumbrance} Lb")
 
     keyboard = [
@@ -1385,9 +1398,109 @@ async def character_spells_slots_query_handler(update: Update, context: ContextT
     query = update.callback_query
     await query.answer()
 
-    await update.effective_message.reply_text("Funzione ancora non implementata")
+    if context.user_data[CHARACTERS_CREATOR_KEY].get(SPELL_SLOTS, None) is None:
+
+        keyboard = [
+            [
+                InlineKeyboardButton("Automatica", callback_data=SPELL_SLOTS_AUTO_CALLBACK_DATA),
+                InlineKeyboardButton("Manuale", callback_data=SPELL_SLOTS_MANUAL_CALLBACK_DATA),
+            ]
+        ]
+        await update.callback_query.edit_message_text(
+            "Che tipo di gestione vuoi scegliere per gli slot incantesimo?\n\n"
+            "<b>Automatica:</b> scegli collegare il tuo personaggio ad una predefinita\n"
+            "in questo modo quando sale di livello gli slot si modificano "
+            "automaticamente.\n"
+            "<b>N.B.</b>Questa gestione non considera il multi classing\n\n"
+            "<b>Manuale:</b> Decidi tu quanti slot incantesimo avere e come gestirli",
+            reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
+
+    else:
+
+        character: Character = context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_CHARACTER_KEY]
+        message_str = f"Seleziona i pulsanti nella prima linea per utilizzare uno slot del livello corrispondente.\n\n"
+        keyboard = []
+        if not character.spell_slots:
+
+            message_str += "Non hai ancora nessuno slot incantesimo"
+
+        else:
+
+            spell_slots_buttons = []
+            for level in range(len(character.spell_slots)):
+                spell_slots_buttons.append(
+                    InlineKeyboardButton(str(level), callback_data=f"{SPELL_SLOT_SELECTED_CALLBACK_DATA}|{level}"))
+            keyboard.append(spell_slots_buttons)
+
+        keyboard.append(
+            [
+                InlineKeyboardButton("Inserisci nuovo slot", callback_data=SPELLS_SLOTS_INSERT_CALLBACK_DATA),
+                InlineKeyboardButton("Rimuovi slot", callback_data=SPELLS_SLOTS_REMOVE_CALLBACK_DATA),
+            ]
+        )
+        keyboard.append(
+            [
+                InlineKeyboardButton("Resetta utilizzi slot", callback_data=SPELLS_SLOTS_RESET_CALLBACK_DATA)
+            ]
+        )
+        keyboard.append(
+            [
+                InlineKeyboardButton("Cambia modalità", callback_data=SPELLS_SLOTS_CHANGE_CALLBACK_DATA)
+            ]
+        )
+
+        await update.callback_query.edit_message_text(message_str, reply_markup=InlineKeyboardMarkup(keyboard),
+                                                      parse_mode=ParseMode.HTML)
+
+    return SPELLS_SLOTS_MANAGEMENT
+
+
+async def character_spells_slots_mode_answer_query_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    query = update.callback_query
+    await query.answer()
+    data = query.data
+
+    context.user_data[CHARACTERS_CREATOR_KEY][SPELL_SLOTS] = data
+
+    await update.effective_message.reply_text("Modalità di gestione slot incantesimo impostata correttamente! ✅")
 
     character: Character = context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_CHARACTER_KEY]
+    msg, reply_markup = create_main_menu_message(character)
+    await update.effective_message.reply_text(msg, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
+
+    return FUNCTION_SELECTION
+
+
+async def character_spells_slots_add_query_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    query = update.callback_query
+    await query.answer()
+
+    message_str = ("Inserisci quanti slot inserire e di che livello in questo modo:\n\n"
+                   "<code>numero slot#livello</code>\n\n"
+                   "<b>Esempio:</b> 4#1 (4 slot di livello 1)")
+
+    await update.callback_query.edit_message_text(message_str, parse_mode=ParseMode.HTML)
+
+    return SPELL_SLOT_ADDING
+
+
+async def character_spell_slot_add_answer_query_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    data = update.effective_message.text
+    slot_number, slot_level = data.split("#", maxsplit=1)
+
+    if not slot_number or not slot_level or slot_number.isalpha() or slot_level.isalpha():
+        await update.effective_message.reply_text("🔴 Formato sbagliato prova di nuovo!\n\n"
+                                                  f"Corretto: 5#5 Usato: {data}")
+        return SPELL_SLOT_ADDING
+
+    character: Character = context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_CHARACTER_KEY]
+
+    if slot_level not in character.spell_slots:
+        spell_slot = SpellSlot(int(slot_level), int(slot_number))
+        character.add_spell_slot(spell_slot)
+
+    await update.effective_message.reply_text(f"{slot_number} slot di livello {slot_level} aggiunti!")
+
     msg, reply_markup = create_main_menu_message(character)
     await update.effective_message.reply_text(msg, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
 
