@@ -10,13 +10,13 @@ class SpellSlot:
     def use_slot(self):
         """Uses one spell slot if available."""
         if self.used_slots >= self.total_slots:
-            raise ValueError(f"No available spell slots at level {self.level}.")
+            raise ValueError(f"Non ci sono slot di livello {self.level} disponibili!")
         self.used_slots += 1
 
     def restore_slot(self):
         """Restores one used spell slot."""
         if self.used_slots <= 0:
-            raise ValueError(f"All spell slots at level {self.level} are already available.")
+            raise ValueError(f"Tutti gli slot incantesimo di livello {self.level} sono già disponibili!")
         self.used_slots -= 1
 
     def restore_all_slots(self):

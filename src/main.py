@@ -40,7 +40,12 @@ from character_creator import character_creator_start_handler, character_creatio
     SPELLS_SLOT_CALLBACK_DATA, character_multiclassing_reassign_levels_query_handler, SPELLS_SLOTS_MANAGEMENT, \
     character_spells_slots_mode_answer_query_handler, character_spells_slots_add_query_handler, \
     SPELLS_SLOTS_INSERT_CALLBACK_DATA, character_spell_slot_add_answer_query_handler, \
-    character_spells_slots_query_handler
+    character_spells_slots_query_handler, SPELLS_SLOTS_REMOVE_CALLBACK_DATA, \
+    character_spells_slots_remove_query_handler, character_spell_slot_remove_answer_query_handler, \
+    character_spells_slot_use_slot_query_handler, SPELL_SLOT_SELECTED_CALLBACK_DATA, \
+    character_spells_slot_use_reset_query_handler, SPELLS_SLOTS_RESET_CALLBACK_DATA, \
+    character_spells_slot_change_mode_query_handler, SPELLS_SLOTS_CHANGE_CALLBACK_DATA, DAMAGE_CALLBACK_DATA, \
+    HEALING_CALLBACK_DATA
 from class_submenus import class_submenus_query_handler, class_spells_menu_buttons_query_handler, \
     class_search_spells_text_handler, class_reading_spells_menu_buttons_query_handler, \
     class_spell_visualization_buttons_query_handler, class_resources_submenu_text_handler
@@ -49,7 +54,7 @@ from equipment_categories_submenus import equipment_categories_first_menu_query_
     equipment_visualization_query_handler
 from src.character_creator import character_bag_query_handler, character_selection_query_handler, BAG_MANAGEMENT, \
     HIT_POINTS_SELECTION, ABILITY_VISUALIZATION, ABILITY_LEARN, SPELLS_MENU, SPELL_VISUALIZATION, SPELL_ACTIONS, \
-    SPELL_LEARN, MULTICLASSING_ACTIONS, MULTICLASSING_REMOVE_CALLBACK_DATA, SPELL_SLOT_ADDING
+    SPELL_LEARN, MULTICLASSING_ACTIONS, MULTICLASSING_REMOVE_CALLBACK_DATA, SPELL_SLOT_ADDING, SPELL_SLOT_REMOVING
 from wiki import wiki_main_menu_handler, main_menu_buttons_query_handler, details_menu_buttons_query_handler
 
 # Setup logging
@@ -343,6 +348,10 @@ def main() -> None:
                                      pattern=fr"^{MULTICLASSING_CALLBACK_DATA}$"),
                 CallbackQueryHandler(character_deleting_query_handler,
                                      pattern=fr"^{DELETE_CHARACTER_CALLBACK_DATA}$"),
+                CallbackQueryHandler(character_deleting_query_handler,
+                                     pattern=fr"^{DAMAGE_CALLBACK_DATA}$"),
+                CallbackQueryHandler(character_deleting_query_handler,
+                                     pattern=fr"^{HEALING_CALLBACK_DATA}$"),
                 CommandHandler('stop', character_creator_stop_nested)
             ],
             CHARACTER_SELECTION: [
@@ -417,10 +426,21 @@ def main() -> None:
                 CallbackQueryHandler(character_spells_slots_mode_answer_query_handler,
                                      pattern=r"^spells_slot_(auto|manual)$"),
                 CallbackQueryHandler(character_spells_slots_add_query_handler,
-                                     pattern=fr"^{SPELLS_SLOTS_INSERT_CALLBACK_DATA}$")
+                                     pattern=fr"^{SPELLS_SLOTS_INSERT_CALLBACK_DATA}$"),
+                CallbackQueryHandler(character_spells_slots_remove_query_handler,
+                                     pattern=fr"^{SPELLS_SLOTS_REMOVE_CALLBACK_DATA}$"),
+                CallbackQueryHandler(character_spells_slot_use_slot_query_handler,
+                                     pattern=fr"^{SPELL_SLOT_SELECTED_CALLBACK_DATA}\|\d+$"),
+                CallbackQueryHandler(character_spells_slot_use_reset_query_handler,
+                                     pattern=fr"^{SPELLS_SLOTS_RESET_CALLBACK_DATA}$"),
+                CallbackQueryHandler(character_spells_slot_change_mode_query_handler,
+                                     pattern=fr"^{SPELLS_SLOTS_CHANGE_CALLBACK_DATA}$")
             ],
             SPELL_SLOT_ADDING: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, character_spell_slot_add_answer_query_handler)
+            ],
+            SPELL_SLOT_REMOVING: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, character_spell_slot_remove_answer_query_handler)
             ]
         },
         fallbacks=[CommandHandler("stop", character_creator_stop)],
