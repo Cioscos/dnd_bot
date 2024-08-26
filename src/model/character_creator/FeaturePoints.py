@@ -71,12 +71,12 @@ class FeaturePoints:
                 raise ValueError(f"Invalid attribute: {key}")
 
     def __str__(self) -> str:
-        return (f"Forza {self.strength} ({self.strength_modifier})\n"
-                f"Destrezza {self.dexterity} ({self.dexterity_modifier})\n"
-                f"Costituzione {self.constitution} ({self.constitution_modifier})\n"
-                f"Intelligenza {self.intelligence} ({self.intelligence_modifier})\n"
-                f"Saggezza {self.wisdom} ({self.wisdom_modifier})\n"
-                f"Carisma {self.charisma} ({self.charisma_modifier})")
+        return (f"Forza {self.strength} ({"+" if self.strength_modifier >= 0 else ""}{self.strength_modifier})\n"
+                f"Destrezza {self.dexterity} ({"+" if self.dexterity_modifier >= 0 else ""}{self.dexterity_modifier})\n"
+                f"Costituzione {self.constitution} ({"+" if self.dexterity_modifier >= 0 else ""}{self.dexterity_modifier})\n"
+                f"Intelligenza {self.intelligence} ({"+" if self.intelligence_modifier >= 0 else ""}{self.intelligence_modifier})\n"
+                f"Saggezza {self.wisdom} ({"+" if self.wisdom_modifier >= 0 else ""}{self.wisdom_modifier})\n"
+                f"Carisma {self.charisma} ({"+" if self.charisma_modifier >= 0 else ""}{self.charisma_modifier})")
 
     def __eq__(self, other) -> bool:
         if not isinstance(other, FeaturePoints):
