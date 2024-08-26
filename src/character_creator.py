@@ -15,7 +15,7 @@ from src.util import chunk_list, generate_abilities_list_keyboard, generate_spel
 
 logger = logging.getLogger(__name__)
 
-CHARACTER_CREATOR_VERSION = "0.0.1"
+CHARACTER_CREATOR_VERSION = "1.0.0"
 
 # states definition
 (CHARACTER_CREATION,
@@ -118,7 +118,7 @@ def create_main_menu_message(character: Character) -> Tuple[str, InlineKeyboardM
                    f"<b>Genere:</b> {character.gender}\n"
                    f"<b>Classe:</b> {', '.join(f"{class_name} (Level {level})" for class_name, level in character.multi_class.classes.items())}\n\n"
                    f"<b>Punti ferita:</b> {character.current_hit_points}/{character.hit_points} PF\n"
-                   f"<b>Slot incantesimo</b>\n{"\n".join([f"{slot.slots_remaining()} di livello {level}" for level, slot in character.spell_slots.items()]) if character.spell_slots else "Non hai registrato ancora nessuno Slot incantesimo\n"}")
+                   f"<b>Slot incantesimo</b>\n{"\n".join([f"{slot.slots_remaining()} di livello {level}/{slot.total_slots}" for level, slot in character.spell_slots.items()]) if character.spell_slots else "Non hai registrato ancora nessuno Slot incantesimo\n"}")
 
     message_str += (f"\n<b>Punti caratteristica</b>\n{str(character.feature_points)}\n\n"
                     f"<b>Peso trasportato:</b> {character.encumbrance} Lb")
@@ -279,6 +279,7 @@ async def character_creator_stop(update: Update, context: ContextTypes.DEFAULT_T
 
     context.user_data[CHARACTERS_CREATOR_KEY].pop(TEMP_CHARACTER_KEY, None)
     context.user_data[CHARACTERS_CREATOR_KEY].pop(CURRENT_ITEM_KEY, None)
+    context.user_data[CHARACTERS_CREATOR_KEY].pop(PENDING_REASSIGNMENT, None)
 
     return FUNCTION_SELECTION
 
@@ -395,7 +396,8 @@ async def character_race_handler(update: Update, context: ContextTypes.DEFAULT_T
     character.race = race
 
     await update.effective_message.reply_text(
-        "Qual'è il genere del personaggio?\nRispondi a questo messaggio o premi /stop per terminare")
+        "Qual'è il genere del personaggio?\nRispondi a questo messaggio o premi /stop per terminare\n\n"
+        "Esempio: Maschio")
 
     return GENDER_SELECTION
 
