@@ -195,7 +195,7 @@ async def post_init_callback(application: Application) -> None:
     for chat_id in application.bot_data.get(BOT_DATA_CHAT_IDS, []):
         try:
             await application.bot.send_message(chat_id,
-                                               "🟢 Il Bot è ripartito dopo un riavvio 🟢")
+                                               "🟢 Il Bot è ripartito dopo un riavvio! Probabilmente ora è meglio di prima 🟢")
         except (BadRequest, TelegramError) as e:
             logger.error(f"CHAT_ID: {chat_id} Telegram error stopping the bot: {e}")
 
@@ -204,7 +204,7 @@ async def post_stop_callback(application: Application) -> None:
     for chat_id in application.bot_data.get(BOT_DATA_CHAT_IDS, []):
         try:
             await application.bot.send_message(chat_id,
-                                               "🔴 Il bot si è spento... qualcuno è a lavoro o è scattato il contatore! 🔴")
+                                               "🔴 Il bot si è spento... qualcuno è a lavoro! 🔴")
         except (BadRequest, TelegramError) as e:
             logger.error(f"CHAT_ID: {chat_id} Telegram error stopping the bot: {e}")
 
