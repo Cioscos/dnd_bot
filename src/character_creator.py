@@ -1493,16 +1493,23 @@ async def character_spells_slots_query_handler(update: Update, context: ContextT
 
 async def character_spells_slots_mode_answer_query_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     query = update.callback_query
-    await query.answer()
     data = query.data
 
-    context.user_data[CHARACTERS_CREATOR_KEY][SPELL_SLOTS] = data
+    # Temporary check
+    # Automatic management is still something not managed
+    if data == SPELL_SLOTS_AUTO_CALLBACK_DATA:
 
-    await update.effective_message.reply_text("Modalità di gestione slot incantesimo impostata correttamente! ✅")
+        await query.answer("Modalità automatica ancora non gestita!")
 
-    character: Character = context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_CHARACTER_KEY]
-    msg, reply_markup = create_main_menu_message(character)
-    await update.effective_message.reply_text(msg, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
+    else:
+
+        context.user_data[CHARACTERS_CREATOR_KEY][SPELL_SLOTS] = data
+
+        await update.effective_message.reply_text("Modalità di gestione slot incantesimo impostata correttamente! ✅")
+
+        character: Character = context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_CHARACTER_KEY]
+        msg, reply_markup = create_main_menu_message(character)
+        await update.effective_message.reply_text(msg, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
 
     return FUNCTION_SELECTION
 
