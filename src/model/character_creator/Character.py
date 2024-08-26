@@ -166,14 +166,14 @@ class Character:
 
     def __str__(self):
         return (f"Character(name={self.name}, race={self.race}, gender={self.gender}, "
-                f"class_={self.class_}, level={self.level}, multi_class={self.multi_class}, "
+                f"multi_class={self.multi_class}, "
                 f"feature_points={self.feature_points}, items={len(self.bag)}, "
                 f"spells={len(self.spells)}, abilities={len(self.abilities)}, "
                 f"spell_slots={len(self.spell_slots)})")
 
     def __repr__(self):
         return (f"Character(name={self.name!r}, race={self.race!r}, gender={self.gender!r}, "
-                f"class_={self.class_!r}, level={self.level!r}, multi_class={self.multi_class!r}, "
+                f"multi_class={self.multi_class!r}, "
                 f"feature_points={self.feature_points!r}, items={self.bag!r}, "
                 f"spells={self.spells!r}, abilities={self.abilities!r}, "
                 f"spell_slots={self.spell_slots!r})")
