@@ -272,16 +272,23 @@ async def character_creator_stop(update: Update, context: ContextTypes.DEFAULT_T
             await update.message.reply_text("Devi assegnare i livelli rimanenti prima di poter usare il comando /stop.")
             return MULTICLASSING_ACTIONS
 
-    character = context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_CHARACTER_KEY]
-    msg, reply_markup = create_main_menu_message(character)
+    character = context.user_data[CHARACTERS_CREATOR_KEY].get(CURRENT_CHARACTER_KEY, None)
+    if character is not None:
 
-    await update.effective_message.reply_text(msg, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
+        msg, reply_markup = create_main_menu_message(character)
 
-    context.user_data[CHARACTERS_CREATOR_KEY].pop(TEMP_CHARACTER_KEY, None)
-    context.user_data[CHARACTERS_CREATOR_KEY].pop(CURRENT_ITEM_KEY, None)
-    context.user_data[CHARACTERS_CREATOR_KEY].pop(PENDING_REASSIGNMENT, None)
+        await update.effective_message.reply_text(msg, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
 
-    return FUNCTION_SELECTION
+        context.user_data[CHARACTERS_CREATOR_KEY].pop(TEMP_CHARACTER_KEY, None)
+        context.user_data[CHARACTERS_CREATOR_KEY].pop(CURRENT_ITEM_KEY, None)
+        context.user_data[CHARACTERS_CREATOR_KEY].pop(PENDING_REASSIGNMENT, None)
+
+        return FUNCTION_SELECTION
+
+    else:
+
+        return await character_creator_stop_nested(update, context)
+
 
 
 async def character_creator_stop_nested(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
