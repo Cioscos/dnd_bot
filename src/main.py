@@ -251,6 +251,11 @@ async def stop_nested(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
     return STOPPING
 
 
+async def handle_old_callback_queries(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer("This conversation is over or you didn't start it! Wait until it ends!", show_alert=True)
+
+
 def main() -> None:
     # Initialize the keyring
     if not keyring_initialize():
@@ -487,6 +492,9 @@ def main() -> None:
         persistent=True
     )
     application.add_handler(main_handler)
+
+    # Manage buttons pressing in old conversations
+    application.add_handler(CallbackQueryHandler(handle_old_callback_queries))
 
     # Start the bot polling
     application.run_polling(allowed_updates=Update.ALL_TYPES)
