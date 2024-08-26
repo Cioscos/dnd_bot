@@ -16,13 +16,49 @@ from telegram.ext import (
 )
 from telegram.warnings import PTBUserWarning
 
-from character_creator import character_creator_start_handler
+from character_creator import character_creator_start_handler, character_creation_handler, \
+    character_spells_query_handler, character_abilities_query_handler, character_feature_point_query_handler, \
+    character_name_handler, character_race_handler, character_gender_handler, character_class_handler, \
+    character_multiclassing_query_handler, character_creator_stop_nested, \
+    BAG_CALLBACK_DATA, SPELLS_CALLBACK_DATA, ABILITIES_CALLBACK_DATA, FEATURE_POINTS_CALLBACK_DATA, \
+    MULTICLASSING_CALLBACK_DATA, character_deleting_query_handler, \
+    DELETE_CHARACTER_CALLBACK_DATA, CHARACTER_DELETION, character_deleting_answer_query_handler, \
+    character_bag_new_object_query_handler, BAG_ITEM_INSERTION, character_bag_item_insert, character_hit_points_handler, \
+    BAG_ITEM_INSERTION_CALLBACK_DATA, BAG_ITEM_EDIT, character_bag_edit_object_query_handler, \
+    character_bag_item_delete_one_handler, character_bag_item_add_one_handler, character_bag_item_delete_all_handler, \
+    BAG_ITEM_EDIT_CALLBACK_DATA, FEATURE_POINTS_EDIT, character_feature_points_edit_query_handler, CHARACTER_CREATION, \
+    NAME_SELECTION, RACE_SELECTION, GENDER_SELECTION, CLASS_SELECTION, FUNCTION_SELECTION, CHARACTER_SELECTION, \
+    character_creator_stop, character_bag_item_edit_handler, ABILITIES_MENU, character_abilities_menu_query_handler, \
+    character_ability_visualization_query_handler, ABILITY_ACTIONS, character_ability_edit_handler, \
+    character_ability_delete_query_handler, character_ability_learn_handler, character_ability_new_query_handler, \
+    character_change_level_query_handler, character_spells_menu_query_handler, \
+    character_spell_visualization_query_handler, character_spell_new_query_handler, character_spell_learn_handler, \
+    character_spell_edit_handler, character_spell_delete_query_handler, character_multiclassing_add_class_query_handler, \
+    MULTICLASSING_ADD_CALLBACK_DATA, character_multiclassing_add_class_answer_handler, \
+    character_multiclassing_remove_class_query_handler, character_multiclassing_remove_class_answer_query_handler, \
+    character_level_change_class_choice_handler, LEVEL_UP_CALLBACK_DATA, LEVEL_DOWN_CALLBACK_DATA, \
+    SPELLS_SLOT_CALLBACK_DATA, character_multiclassing_reassign_levels_query_handler, SPELLS_SLOTS_MANAGEMENT, \
+    character_spells_slots_mode_answer_query_handler, character_spells_slots_add_query_handler, \
+    SPELLS_SLOTS_INSERT_CALLBACK_DATA, character_spell_slot_add_answer_query_handler, \
+    character_spells_slots_query_handler, SPELLS_SLOTS_REMOVE_CALLBACK_DATA, \
+    character_spells_slots_remove_query_handler, character_spell_slot_remove_answer_query_handler, \
+    character_spells_slot_use_slot_query_handler, SPELL_SLOT_SELECTED_CALLBACK_DATA, \
+    character_spells_slot_use_reset_query_handler, SPELLS_SLOTS_RESET_CALLBACK_DATA, \
+    character_spells_slot_change_mode_query_handler, SPELLS_SLOTS_CHANGE_CALLBACK_DATA, DAMAGE_CALLBACK_DATA, \
+    HEALING_CALLBACK_DATA, character_damage_query_handler, character_healing_query_handler, \
+    character_healing_registration_handler, character_hit_points_query_handler, HIT_POINTS_CALLBACK_DATA, \
+    character_hit_points_registration_handler, character_damage_registration_handler, LONG_REST_WARNING_CALLBACK_DATA, \
+    character_long_rest_warning_query_handler, LONG_REST_CALLBACK_DATA, character_long_rest_query_handler
 from class_submenus import class_submenus_query_handler, class_spells_menu_buttons_query_handler, \
     class_search_spells_text_handler, class_reading_spells_menu_buttons_query_handler, \
     class_spell_visualization_buttons_query_handler, class_resources_submenu_text_handler
 from environment_variables_mg import keyring_initialize, keyring_get
 from equipment_categories_submenus import equipment_categories_first_menu_query_handler, \
     equipment_visualization_query_handler
+from src.character_creator import character_bag_query_handler, character_selection_query_handler, BAG_MANAGEMENT, \
+    HIT_POINTS_SELECTION, ABILITY_VISUALIZATION, ABILITY_LEARN, SPELLS_MENU, SPELL_VISUALIZATION, SPELL_ACTIONS, \
+    SPELL_LEARN, MULTICLASSING_ACTIONS, MULTICLASSING_REMOVE_CALLBACK_DATA, SPELL_SLOT_ADDING, SPELL_SLOT_REMOVING, \
+    DAMAGE_REGISTRATION, HEALING_REGISTRATION, HIT_POINTS_REGISTRATION, LONG_REST
 from wiki import wiki_main_menu_handler, main_menu_buttons_query_handler, details_menu_buttons_query_handler
 
 # Setup logging
@@ -42,17 +78,17 @@ logging.getLogger("httpx").setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
 
 # State definitions for top-level conv handler
-START_MENU, WIKI_MENU, CHARACTERS_CREATOR_MENU, ITEM_DETAILS_MENU = map(chr, range(4))
+START_MENU, WIKI_MENU, CHARACTERS_CREATOR_MENU, ITEM_DETAILS_MENU = map(int, range(4))
 
 # State definitions for class sub conversation
 CLASS_SUBMENU, CLASS_SPELLS_SUBMENU, CLASS_RESOURCES_SUBMENU, CLASS_MANUAL_SPELLS_SEARCHING, CLASS_READING_SPELLS_SEARCHING, CLASS_SPELL_VISUALIZATION = map(
-    chr, range(4, 10))
+    int, range(4, 10))
 
 # state definitions for equipment-categories conversation
-EQUIPMENT_CATEGORIES_SUBMENU, EQUIPMENT_VISUALIZATION = map(chr, range(10, 12))
+EQUIPMENT_CATEGORIES_SUBMENU, EQUIPMENT_VISUALIZATION = map(int, range(10, 12))
 
 # state definitions for features conversation
-FEATURES_SUBMENU, FEATURE_VISUALIZATION = map(chr, range(12, 14))
+FEATURES_SUBMENU, FEATURE_VISUALIZATION = map(int, range(12, 14))
 
 STOPPING = 99
 
@@ -162,9 +198,6 @@ async def post_init_callback(application: Application) -> None:
                                                "🟢 Il Bot è ripartito dopo un riavvio 🟢")
         except (BadRequest, TelegramError) as e:
             logger.error(f"CHAT_ID: {chat_id} Telegram error stopping the bot: {e}")
-
-    if CHARACTERS_CREATOR not in application.bot_data:
-        application.bot_data[CHARACTERS_CREATOR] = {}
 
 
 async def post_stop_callback(application: Application) -> None:
@@ -297,8 +330,141 @@ def main() -> None:
             CallbackQueryHandler(character_creator_start_handler, pattern=r"^character_manager$"),
             CommandHandler('character', character_creator_start_handler)
         ],
-        states={},
-        fallbacks=[CommandHandler("stop", stop_nested)],
+        states={
+            CHARACTER_CREATION: [CommandHandler('newCharacter', character_creation_handler)],
+            NAME_SELECTION: [MessageHandler(filters.TEXT & ~filters.COMMAND, character_name_handler)],
+            RACE_SELECTION: [MessageHandler(filters.TEXT & ~filters.COMMAND, character_race_handler)],
+            GENDER_SELECTION: [MessageHandler(filters.TEXT & ~filters.COMMAND, character_gender_handler)],
+            CLASS_SELECTION: [MessageHandler(filters.TEXT & ~filters.COMMAND, character_class_handler)],
+            HIT_POINTS_SELECTION: [MessageHandler(filters.TEXT & ~filters.COMMAND, character_hit_points_handler)],
+            FUNCTION_SELECTION: [
+                CallbackQueryHandler(character_change_level_query_handler, pattern=r"^level_(up|down)$"),
+                CallbackQueryHandler(character_level_change_class_choice_handler,
+                                     pattern=fr"^{LEVEL_UP_CALLBACK_DATA}\|.*$|^{LEVEL_DOWN_CALLBACK_DATA}\|.*$"),
+                CallbackQueryHandler(character_bag_query_handler, pattern=fr"^{BAG_CALLBACK_DATA}$"),
+                CallbackQueryHandler(character_spells_query_handler, pattern=fr"^{SPELLS_CALLBACK_DATA}$"),
+                CallbackQueryHandler(character_abilities_query_handler, pattern=fr"^{ABILITIES_CALLBACK_DATA}$"),
+                CallbackQueryHandler(character_spells_slots_query_handler,
+                                     pattern=fr"^{SPELLS_SLOT_CALLBACK_DATA}$"),
+                CallbackQueryHandler(character_feature_point_query_handler,
+                                     pattern=fr"^{FEATURE_POINTS_CALLBACK_DATA}$"),
+                CallbackQueryHandler(character_multiclassing_query_handler,
+                                     pattern=fr"^{MULTICLASSING_CALLBACK_DATA}$"),
+                CallbackQueryHandler(character_deleting_query_handler,
+                                     pattern=fr"^{DELETE_CHARACTER_CALLBACK_DATA}$"),
+                CallbackQueryHandler(character_damage_query_handler,
+                                     pattern=fr"^{DAMAGE_CALLBACK_DATA}$"),
+                CallbackQueryHandler(character_healing_query_handler,
+                                     pattern=fr"^{HEALING_CALLBACK_DATA}$"),
+                CallbackQueryHandler(character_hit_points_query_handler,
+                                     pattern=fr"^{HIT_POINTS_CALLBACK_DATA}$"),
+                CallbackQueryHandler(character_long_rest_warning_query_handler,
+                                     pattern=fr"^{LONG_REST_WARNING_CALLBACK_DATA}$"),
+                CommandHandler('stop', character_creator_stop_nested)
+            ],
+            DAMAGE_REGISTRATION: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, character_damage_registration_handler)
+            ],
+            HEALING_REGISTRATION: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, character_healing_registration_handler)
+            ],
+            HIT_POINTS_REGISTRATION: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, character_hit_points_registration_handler)
+            ],
+            LONG_REST: [
+                CallbackQueryHandler(character_long_rest_query_handler,
+                                     pattern=fr"^{LONG_REST_CALLBACK_DATA}$")
+            ],
+            CHARACTER_SELECTION: [
+                CallbackQueryHandler(character_selection_query_handler),
+                CommandHandler('newCharacter', character_creation_handler)
+            ],
+            CHARACTER_DELETION: [
+                CallbackQueryHandler(character_deleting_answer_query_handler)
+            ],
+            BAG_MANAGEMENT: [
+                CallbackQueryHandler(character_bag_new_object_query_handler,
+                                     pattern=fr"^{BAG_ITEM_INSERTION_CALLBACK_DATA}$"),
+                CallbackQueryHandler(character_bag_edit_object_query_handler, pattern=fr"^{BAG_ITEM_EDIT}$")
+            ],
+            BAG_ITEM_INSERTION: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, character_bag_item_insert)
+            ],
+            BAG_ITEM_EDIT: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, character_bag_item_edit_handler),
+                CallbackQueryHandler(character_bag_item_delete_one_handler,
+                                     pattern=fr"^{BAG_ITEM_EDIT_CALLBACK_DATA}\|-"),
+                CallbackQueryHandler(character_bag_item_add_one_handler,
+                                     pattern=fr"^{BAG_ITEM_EDIT_CALLBACK_DATA}\|\+"),
+                CallbackQueryHandler(character_bag_item_delete_all_handler,
+                                     pattern=fr"^{BAG_ITEM_EDIT_CALLBACK_DATA}\|all")
+            ],
+            FEATURE_POINTS_EDIT: [
+                CallbackQueryHandler(character_feature_points_edit_query_handler)
+            ],
+            ABILITIES_MENU: [
+                CallbackQueryHandler(character_abilities_menu_query_handler)
+            ],
+            ABILITY_VISUALIZATION: [
+                CallbackQueryHandler(character_ability_visualization_query_handler)
+            ],
+            ABILITY_ACTIONS: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, character_ability_edit_handler),
+                CallbackQueryHandler(character_ability_delete_query_handler,
+                                     pattern=r'^[yn]$')
+            ],
+            ABILITY_LEARN: [
+                CallbackQueryHandler(character_ability_new_query_handler),
+                MessageHandler(filters.TEXT & ~filters.COMMAND, character_ability_learn_handler)
+            ],
+            SPELLS_MENU: [
+                CallbackQueryHandler(character_spells_menu_query_handler)
+            ],
+            SPELL_VISUALIZATION: [
+                CallbackQueryHandler(character_spell_visualization_query_handler)
+            ],
+            SPELL_ACTIONS: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, character_spell_edit_handler),
+                CallbackQueryHandler(character_spell_delete_query_handler,
+                                     pattern=r'^[yn]$')
+            ],
+            SPELL_LEARN: [
+                CallbackQueryHandler(character_spell_new_query_handler),
+                MessageHandler(filters.TEXT & ~filters.COMMAND, character_spell_learn_handler)
+            ],
+            MULTICLASSING_ACTIONS: [
+                CallbackQueryHandler(character_multiclassing_add_class_query_handler,
+                                     pattern=fr"^{MULTICLASSING_ADD_CALLBACK_DATA}$"),
+                MessageHandler(filters.TEXT & ~filters.COMMAND, character_multiclassing_add_class_answer_handler),
+                CallbackQueryHandler(character_multiclassing_remove_class_query_handler,
+                                     pattern=fr"^{MULTICLASSING_REMOVE_CALLBACK_DATA}$"),
+                CallbackQueryHandler(character_multiclassing_remove_class_answer_query_handler,
+                                     pattern=r"^remove\|.+$"),
+                CallbackQueryHandler(character_multiclassing_reassign_levels_query_handler,
+                                     pattern=r"^assign_levels\|.+\|\d+$")
+            ],
+            SPELLS_SLOTS_MANAGEMENT: [
+                CallbackQueryHandler(character_spells_slots_mode_answer_query_handler,
+                                     pattern=r"^spells_slot_(auto|manual)$"),
+                CallbackQueryHandler(character_spells_slots_add_query_handler,
+                                     pattern=fr"^{SPELLS_SLOTS_INSERT_CALLBACK_DATA}$"),
+                CallbackQueryHandler(character_spells_slots_remove_query_handler,
+                                     pattern=fr"^{SPELLS_SLOTS_REMOVE_CALLBACK_DATA}$"),
+                CallbackQueryHandler(character_spells_slot_use_slot_query_handler,
+                                     pattern=fr"^{SPELL_SLOT_SELECTED_CALLBACK_DATA}\|\d+$"),
+                CallbackQueryHandler(character_spells_slot_use_reset_query_handler,
+                                     pattern=fr"^{SPELLS_SLOTS_RESET_CALLBACK_DATA}$"),
+                CallbackQueryHandler(character_spells_slot_change_mode_query_handler,
+                                     pattern=fr"^{SPELLS_SLOTS_CHANGE_CALLBACK_DATA}$")
+            ],
+            SPELL_SLOT_ADDING: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, character_spell_slot_add_answer_query_handler)
+            ],
+            SPELL_SLOT_REMOVING: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, character_spell_slot_remove_answer_query_handler)
+            ]
+        },
+        fallbacks=[CommandHandler("stop", character_creator_stop)],
         map_to_parent={
             STOPPING: ConversationHandler.END,
             ConversationHandler.END: ConversationHandler.END

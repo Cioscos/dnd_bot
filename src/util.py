@@ -9,6 +9,8 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.constants import ParseMode
 
 from model.APIResource import APIResource
+from src.model.character_creator.Ability import Ability
+from src.model.character_creator.Spell import Spell
 
 graphql_requests_logger.setLevel(logging.WARNING)
 ABILITY_SCORE_CALLBACK = 'ability_score'
@@ -137,10 +139,10 @@ async def split_text_into_chunks(text: str, update: Update, reply_markup: Inline
 def generate_resource_list_keyboard(resources: List[APIResource],
                                     draw_navigation_buttons: bool = True) -> InlineKeyboardMarkup:
     """
-    Generates an inline keyboard markup for the provided list of accounts.
+    Generates an inline keyboard markup for the provided list of resources.
 
     Args:
-        resources (List[Account]): List of Account objects.
+        resources (List[APIResource]): List of APIResource objects.
         draw_navigation_buttons (bool): Choose to draw or not the navigation buttons
 
     Returns:
@@ -150,6 +152,76 @@ def generate_resource_list_keyboard(resources: List[APIResource],
     row = []
     for resource in resources:
         button = InlineKeyboardButton(resource.name, callback_data=f"{resource.url}")
+        row.append(button)
+
+        if len(row) == 2:
+            keyboard.append(row)
+            row = []
+
+    # Append any remaining buttons if the total is an odd number
+    if row:
+        keyboard.append(row)
+
+    if draw_navigation_buttons:
+        # Add navigation buttons
+        navigation_buttons = [InlineKeyboardButton("⬅️ Precedente", callback_data="prev_page"),
+                              InlineKeyboardButton("Successiva ➡️", callback_data="next_page")]
+        keyboard.append(navigation_buttons)
+
+    return InlineKeyboardMarkup(keyboard)
+
+
+def generate_abilities_list_keyboard(abilities: List[Ability],
+                                     draw_navigation_buttons: bool = True) -> InlineKeyboardMarkup:
+    """
+    Generates an inline keyboard markup for the provided list of abilities.
+
+    Args:
+        abilities (List[Ability]): List of ability objects.
+        draw_navigation_buttons (bool): Choose to draw or not the navigation buttons
+
+    Returns:
+        InlineKeyboardMarkup: The generated inline keyboard markup.
+    """
+    keyboard = []
+    row = []
+    for ability in abilities:
+        button = InlineKeyboardButton(ability.name, callback_data=f"{ability.name}")
+        row.append(button)
+
+        if len(row) == 2:
+            keyboard.append(row)
+            row = []
+
+    # Append any remaining buttons if the total is an odd number
+    if row:
+        keyboard.append(row)
+
+    if draw_navigation_buttons:
+        # Add navigation buttons
+        navigation_buttons = [InlineKeyboardButton("⬅️ Precedente", callback_data="prev_page"),
+                              InlineKeyboardButton("Successiva ➡️", callback_data="next_page")]
+        keyboard.append(navigation_buttons)
+
+    return InlineKeyboardMarkup(keyboard)
+
+
+def generate_spells_list_keyboard(spells: List[Spell],
+                                  draw_navigation_buttons: bool = True) -> InlineKeyboardMarkup:
+    """
+    Generates an inline keyboard markup for the provided list of spells.
+
+    Args:
+        spells (List[Spell]): List of ability objects.
+        draw_navigation_buttons (bool): Choose to draw or not the navigation buttons
+
+    Returns:
+        InlineKeyboardMarkup: The generated inline keyboard markup.
+    """
+    keyboard = []
+    row = []
+    for spell in spells:
+        button = InlineKeyboardButton(spell.name, callback_data=f"{spell.name}")
         row.append(button)
 
         if len(row) == 2:

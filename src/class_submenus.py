@@ -13,7 +13,7 @@ from util import chunk_list, generate_resource_list_keyboard
 
 # State definitions for class sub conversation
 CLASS_SUBMENU, CLASS_SPELLS_SUBMENU, CLASS_RESOURCES_SUBMENU, CLASS_MANUAL_SPELLS_SEARCHING, CLASS_READING_SPELLS_SEARCHING, CLASS_SPELL_VISUALIZATION = map(
-    chr, range(4, 10))
+    int, range(4, 10))
 
 STOPPING = 99
 
