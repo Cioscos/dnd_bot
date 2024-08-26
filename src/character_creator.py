@@ -6,7 +6,7 @@ from telegram.constants import ParseMode, ChatType
 from telegram.ext import ContextTypes, ConversationHandler
 
 from src.model.character_creator.Ability import Ability
-from src.model.character_creator.Character import Character
+from src.model.character_creator.Character import Character, SpellsSlotMode
 from src.model.character_creator.Item import Item
 from src.model.character_creator.MultiClass import MultiClass
 from src.model.character_creator.Spell import Spell, SpellLevel
@@ -1466,7 +1466,9 @@ async def character_spells_slots_query_handler(update: Update, context: ContextT
     query = update.callback_query
     await query.answer()
 
-    if context.user_data[CHARACTERS_CREATOR_KEY].get(SPELL_SLOTS, None) is None:
+    character: Character = context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_CHARACTER_KEY]
+
+    if character.spell_slots_mode is None:
 
         keyboard = [
             [
@@ -1494,24 +1496,26 @@ async def character_spells_slots_query_handler(update: Update, context: ContextT
 async def character_spells_slots_mode_answer_query_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     query = update.callback_query
     data = query.data
+    character: Character = context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_CHARACTER_KEY]
 
     # Temporary check
     # Automatic management is still something not managed
     if data == SPELL_SLOTS_AUTO_CALLBACK_DATA:
 
-        await query.answer("Modalità automatica ancora non gestita!")
+        await query.answer("Modalità automatica ancora non gestita!", show_alert=True)
+        return SPELLS_SLOTS_MANAGEMENT
 
     else:
 
-        context.user_data[CHARACTERS_CREATOR_KEY][SPELL_SLOTS] = data
+        await query.answer()
+        character.spell_slots_mode = SpellsSlotMode.MANUAL
 
         await update.effective_message.reply_text("Modalità di gestione slot incantesimo impostata correttamente! ✅")
 
-        character: Character = context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_CHARACTER_KEY]
         msg, reply_markup = create_main_menu_message(character)
         await update.effective_message.reply_text(msg, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
 
-    return FUNCTION_SELECTION
+        return FUNCTION_SELECTION
 
 
 async def character_spells_slots_add_query_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -1546,10 +1550,10 @@ async def character_spell_slot_add_answer_query_handler(update: Update, context:
 
     await update.effective_message.reply_text(f"{slot_number} slot di livello {slot_level} aggiunti!")
 
-    msg, reply_markup = create_main_menu_message(character)
-    await update.effective_message.reply_text(msg, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
+    message_str, reply_markup = create_spells_slot_menu(context)
+    await update.effective_message.reply_text(message_str, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
 
-    return FUNCTION_SELECTION
+    return SPELLS_SLOTS_MANAGEMENT
 
 
 async def character_spells_slots_remove_query_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -1597,10 +1601,10 @@ async def character_spell_slot_remove_answer_query_handler(update: Update, conte
         spell_slot_to_edit.total_slots -= int(slot_number)
         await update.effective_message.reply_text(f"{slot_number} slot di livello {slot_level} rimossi!")
 
-    msg, reply_markup = create_main_menu_message(character)
-    await update.effective_message.reply_text(msg, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
+    message_str, reply_markup = create_spells_slot_menu(context)
+    await update.effective_message.reply_text(message_str, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
 
-    return FUNCTION_SELECTION
+    return SPELLS_SLOTS_MANAGEMENT
 
 
 async def character_spells_slot_use_slot_query_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -1637,10 +1641,7 @@ async def character_spells_slot_use_reset_query_handler(update: Update, context:
 
 async def character_spells_slot_change_mode_query_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     query = update.callback_query
-    await query.answer("Funzione ancora non gestita!")
-
-    message_str, reply_markup = create_spells_slot_menu(context)
-    await update.callback_query.edit_message_text(message_str, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
+    await query.answer("Funzione ancora non gestita!", show_alert=True)
 
     return SPELLS_SLOTS_MANAGEMENT
 

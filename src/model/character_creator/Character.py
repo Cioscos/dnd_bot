@@ -1,4 +1,5 @@
 from dataclasses import field, dataclass
+from enum import Enum
 from typing import List, Optional, Dict
 
 from src.model.character_creator.Ability import Ability
@@ -7,6 +8,11 @@ from src.model.character_creator.Item import Item
 from src.model.character_creator.MultiClass import MultiClass
 from src.model.character_creator.Spell import Spell
 from src.model.character_creator.SpellSlot import SpellSlot
+
+
+class SpellsSlotMode(Enum):
+    AUTOMATIC = 'automatic'
+    MANUAL = 'manual'
 
 
 @dataclass
@@ -18,6 +24,7 @@ class Character:
     hit_points: int = 1
     current_hit_points: int = 1
     feature_points: FeaturePoints = field(default_factory=FeaturePoints)
+    spell_slots_mode: SpellsSlotMode = field(default=None)
     spell_slots: Dict[int, SpellSlot] = field(default_factory=dict)
     MAX_SPELL_SLOT_LEVEL = 9
     bag: List[Item] = field(default_factory=list)
@@ -169,7 +176,7 @@ class Character:
                 f"multi_class={self.multi_class}, "
                 f"feature_points={self.feature_points}, items={len(self.bag)}, "
                 f"spells={len(self.spells)}, abilities={len(self.abilities)}, "
-                f"spell_slots={len(self.spell_slots)})")
+                f"spell_slots={len(self.spell_slots)}), spell_slots_mode={self.spell_slots_mode}")
 
     def __repr__(self):
         return (f"Character(name={self.name!r}, race={self.race!r}, gender={self.gender!r}, "
