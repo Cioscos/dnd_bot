@@ -21,8 +21,8 @@ class Character:
     race: Optional[str] = field(default=None)
     gender: Optional[str] = field(default=None)
     multi_class: MultiClass = field(default_factory=MultiClass)
-    hit_points: int = 1
-    current_hit_points: int = 1
+    hit_points: int = field(default_factory=int)
+    current_hit_points: int = field(default_factory=int)
     feature_points: FeaturePoints = field(default_factory=FeaturePoints)
     spell_slots_mode: SpellsSlotMode = field(default=None)
     spell_slots: Dict[int, SpellSlot] = field(default_factory=dict)
@@ -30,8 +30,8 @@ class Character:
     bag: List[Item] = field(default_factory=list)
     spells: List[Spell] = field(default_factory=list)
     abilities: List[Ability] = field(default_factory=list)
-    carry_capacity: int = 0
-    encumbrance: int = 0
+    carry_capacity: int = field(default_factory=int)
+    encumbrance: int = field(default_factory=int)
 
     def __post_init__(self):
         self.carry_capacity = self.feature_points.strength * 15
