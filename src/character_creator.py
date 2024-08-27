@@ -290,7 +290,6 @@ async def character_creator_stop(update: Update, context: ContextTypes.DEFAULT_T
         return await character_creator_stop_nested(update, context)
 
 
-
 async def character_creator_stop_nested(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     await update.effective_message.reply_text("Ok! Usa i comandi:\n"
                                               "/wiki per consultare la wiki\n"
@@ -437,7 +436,7 @@ async def character_hit_points_handler(update: Update, context: ContextTypes.DEF
     hit_points = update.effective_message.text
 
     character = context.user_data[CHARACTERS_CREATOR_KEY][TEMP_CHARACTER_KEY]
-    character.hit_points = character.current_hit_points = hit_points
+    character.hit_points = character.current_hit_points = int(hit_points)
 
     context.user_data[CHARACTERS_CREATOR_KEY][CHARACTERS_KEY] = []
     context.user_data[CHARACTERS_CREATOR_KEY][CHARACTERS_KEY].append(character)
@@ -1658,6 +1657,10 @@ async def character_damage_query_handler(update: Update, context: ContextTypes.D
 async def character_damage_registration_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     damage = update.effective_message.text
 
+    if not damage or damage.isalpha():
+        await update.effective_message.reply_text("Inserisci un numero non una parola!")
+        return DAMAGE_REGISTRATION
+
     character: Character = context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_CHARACTER_KEY]
     character.current_hit_points -= int(damage)
 
@@ -1680,6 +1683,10 @@ async def character_healing_query_handler(update: Update, context: ContextTypes.
 
 async def character_healing_registration_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     healing = update.effective_message.text
+
+    if not healing or healing.isalpha():
+        await update.effective_message.reply_text("Inserisci un numero non una parola!")
+        return HEALING_REGISTRATION
 
     character: Character = context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_CHARACTER_KEY]
     character.current_hit_points += int(healing)
