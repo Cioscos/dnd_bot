@@ -73,6 +73,7 @@ REMAINING_CLASSES = 'remaining_classes'
 # spell slots
 SPELL_SLOTS = 'spell_slots'
 DICE = 'dice'
+DICE_MESSAGES = 'dice_messages'
 
 # Main menu callback keys
 BAG_CALLBACK_DATA = 'bag'
@@ -1799,7 +1800,7 @@ async def character_long_rest_query_handler(update: Update, context: ContextType
 def create_dice_messages(selected_dice: Dict[str, int]) -> Dict[str, Tuple[str, InlineKeyboardMarkup]]:
     messages = {}
     for die, die_number in selected_dice.items():
-        messages[die]: (
+        messages[die] = (
             f"{die_number} {die.upper()}",
             InlineKeyboardMarkup([
                 [
@@ -1812,27 +1813,45 @@ def create_dice_messages(selected_dice: Dict[str, int]) -> Dict[str, Tuple[str, 
     return messages
 
 
-async def dice_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    if update.callback_query:
-        query = update.callback_query
-        await query.answer()
-
+async def send_dice_menu(update: Update, context: ContextTypes.DEFAULT_TYPE, is_edit: bool = True):
     character: Character = context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_CHARACTER_KEY]
-
-    message_str = (f"Gestione tiri di dado!"
-                   f"<code>{character.get_rolls_history() if character.get_rolls_history() != '' else 'Cronologia lanci vuota!\n\n'}</code>"
+    roll_history = character.get_rolls_history()
+    message_str = (f"<b>Gestione tiri di dado</b>\n\n"
+                   f"<code>{roll_history if roll_history != '' else 'Cronologia lanci vuota!\n\n'}</code>"
                    "Seleziona quanti dadi vuoi tirare:\n\n"
                    "Premi /stop per annullare\n"
                    "Premi /roll per tirare i dadi selezionati\n"
-                   "Premi /cancellaRoll")
-    await update.effective_message.edit_text(message_str)
+                   "Premi /cancellaRoll per cancellare la cronologia dei dadi lanciati")
+
+    if is_edit:
+        text_message = await update.effective_message.edit_text(message_str, parse_mode=ParseMode.HTML)
+    else:
+        text_message = await update.effective_message.reply_text(message_str, parse_mode=ParseMode.HTML)
+
+    # create a list to save the messages references to edit them in other functions
+    messages_to_save = [text_message]
+    context.user_data[CHARACTERS_CREATOR_KEY][DICE_MESSAGES] = messages_to_save
 
     starting_dice = STARTING_DICE.copy()
     messagges = create_dice_messages(starting_dice)
     context.user_data[CHARACTERS_CREATOR_KEY][DICE] = starting_dice
 
     for message in messagges.values():
-        await update.effective_message.reply_text(message[0], reply_markup=message[1])
+        messages_to_save.append(await update.effective_message.reply_text(message[0], reply_markup=message[1]))
+
+
+async def delete_dice_menu(context: ContextTypes.DEFAULT_TYPE):
+    message_to_delete = context.user_data[CHARACTERS_CREATOR_KEY][DICE_MESSAGES]
+    for message in message_to_delete:
+        await message.delete()
+
+
+async def dice_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    if update.callback_query:
+        query = update.callback_query
+        await query.answer()
+
+    await send_dice_menu(update, context, is_edit=True)
 
     return DICE_EDIT
 
@@ -1884,10 +1903,10 @@ async def dice_roll_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     character.rolls_history.extend(total_rolls)
     context.user_data[CHARACTERS_CREATOR_KEY].pop(DICE, None)
 
-    msg, reply_markup = create_main_menu_message(character)
-    await update.callback_query.edit_message_text(msg, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
+    await delete_dice_menu(context)
+    await send_dice_menu(update, context, is_edit=False)
 
-    return FUNCTION_SELECTION
+    return DICE_EDIT
 
 
 async def clear_rolls_history_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -1895,4 +1914,8 @@ async def clear_rolls_history_handler(update: Update, context: ContextTypes.DEFA
     character.delete_rolls_history()
 
     await update.effective_message.reply_text("Cronologia dadi cancellata!")
+
+    await delete_dice_menu(context)
+    await send_dice_menu(update, context, is_edit=False)
+
     return DICE_EDIT
