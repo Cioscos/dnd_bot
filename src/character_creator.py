@@ -1658,7 +1658,7 @@ async def character_damage_registration_handler(update: Update, context: Context
     damage = update.effective_message.text
 
     if not damage or damage.isalpha():
-        await update.effective_message.reply_text("Inserisci un numero non una parola!")
+        await update.effective_message.reply_text("🔴 Inserisci un numero non una parola!")
         return DAMAGE_REGISTRATION
 
     character: Character = context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_CHARACTER_KEY]
@@ -1685,7 +1685,7 @@ async def character_healing_registration_handler(update: Update, context: Contex
     healing = update.effective_message.text
 
     if not healing or healing.isalpha():
-        await update.effective_message.reply_text("Inserisci un numero non una parola!")
+        await update.effective_message.reply_text("🔴 Inserisci un numero non una parola!")
         return HEALING_REGISTRATION
 
     character: Character = context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_CHARACTER_KEY]
@@ -1713,6 +1713,10 @@ async def character_hit_points_query_handler(update: Update, context: ContextTyp
 
 async def character_hit_points_registration_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     hit_points = update.effective_message.text
+
+    if not hit_points or hit_points.isalpha():
+        await update.effective_message.reply_text("🔴 Inserisci un numero non una parola!")
+        return HIT_POINTS_REGISTRATION
 
     character: Character = context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_CHARACTER_KEY]
     character.hit_points = character.current_hit_points = int(hit_points)
