@@ -1662,6 +1662,10 @@ async def character_damage_registration_handler(update: Update, context: Context
         return DAMAGE_REGISTRATION
 
     character: Character = context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_CHARACTER_KEY]
+
+    # check to fix the retro-compatibility problem with the bug
+    if isinstance(character.current_hit_points, str):
+        character.current_hit_points = int(character.current_hit_points)
     character.current_hit_points -= int(damage)
 
     await update.effective_message.reply_text(f"{damage} danni subiti!")
@@ -1689,6 +1693,9 @@ async def character_healing_registration_handler(update: Update, context: Contex
         return HEALING_REGISTRATION
 
     character: Character = context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_CHARACTER_KEY]
+    # check to fix the retro-compatibility problem with the bug
+    if isinstance(character.current_hit_points, str):
+        character.current_hit_points = int(character.current_hit_points)
     character.current_hit_points += int(healing)
 
     await update.effective_message.reply_text(f"Sei stato curato di {healing} PF!")
@@ -1719,6 +1726,11 @@ async def character_hit_points_registration_handler(update: Update, context: Con
         return HIT_POINTS_REGISTRATION
 
     character: Character = context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_CHARACTER_KEY]
+    # check to fix the retro-compatibility problem with the bug
+    if isinstance(character.current_hit_points, str):
+        character.current_hit_points = int(character.current_hit_points)
+    if isinstance(character.hit_points, str):
+        character.hit_points = int(character.hit_points)
     character.hit_points = character.current_hit_points = int(hit_points)
 
     await update.effective_message.reply_text(f"Punti ferita aumentati a {hit_points}!")
