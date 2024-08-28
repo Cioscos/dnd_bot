@@ -1,6 +1,6 @@
 from dataclasses import field, dataclass
 from enum import Enum
-from typing import List, Optional, Dict
+from typing import List, Optional, Dict, Tuple
 
 from src.model.character_creator.Ability import Ability
 from src.model.character_creator.FeaturePoints import FeaturePoints
@@ -17,6 +17,8 @@ class SpellsSlotMode(Enum):
 
 @dataclass
 class Character:
+    VERSION = 2
+
     name: Optional[str] = field(default=None)
     race: Optional[str] = field(default=None)
     gender: Optional[str] = field(default=None)
@@ -32,14 +34,44 @@ class Character:
     abilities: List[Ability] = field(default_factory=list)
     carry_capacity: int = field(default_factory=int)
     encumbrance: int = field(default_factory=int)
+    rolls_history: Optional[List[Tuple[str, list[int]]]] = field(default_factory=list)
+
+    _version: int = field(default_factory=int)
 
     def __post_init__(self):
-        self.carry_capacity = self.feature_points.strength * 15
-        self.encumbrance = sum([item.weight for item in self.bag])
+        # If the object does not have the version, migration is necessary
+        if not hasattr(self, '_version'):
+            self._version = 1
+        self.__reload_stats()
+        if self._version < Character.VERSION:
+            self.__migrate()
 
     def __reload_stats(self):
         self.carry_capacity = self.feature_points.strength * 15
         self.encumbrance = sum([item.weight for item in self.bag])
+
+    def __migrate(self):
+        """Migrates the data to the current version of the class."""
+        if self._version < 2:
+            # Migrazione per la versione 2: aggiungo il campo rolls_history
+            if not hasattr(self, 'rolls_history'):
+                self.rolls_history = []
+            # Update version's object
+            self._version = 2
+        # FUTURE MIGRATIONS
+
+    def __setstate__(self, state):
+        """Method called during deserialisation"""
+        # Updates the status of the object
+        self.__dict__.update(state)
+
+        # If the deserialised object does not have a version, we set the default version
+        if not hasattr(self, '_version'):
+            self._version = 1
+
+        # Migrate if necessary
+        if self._version < Character.VERSION:
+            self.__migrate()
 
     def add_item(self, item: Item):
         """Add an item to the character's bag and update the encumbrance."""
@@ -167,6 +199,18 @@ class Character:
         """Lists all spell slots and their statuses."""
         return [str(slot) for slot in self.spell_slots.values()]
 
+    def get_rolls_history(self):
+        """Return a formatted string of the rolls history"""
+        return_str = ''
+        for die_name, die_rolls in self.rolls_history:
+            return_str += f"{len(die_rolls)}{die_name}: [{', '.join([str(roll) for roll in die_rolls])}] = {sum(die_rolls)}\n"
+
+        return return_str
+
+    def delete_rolls_history(self):
+        """Deletes the rolls history"""
+        self.rolls_history.clear()
+
     def change_feature_points(self, feature_points: Dict[str, int]):
         self.feature_points.points = feature_points
         self.__reload_stats()
@@ -176,7 +220,8 @@ class Character:
                 f"multi_class={self.multi_class}, "
                 f"feature_points={self.feature_points}, items={len(self.bag)}, "
                 f"spells={len(self.spells)}, abilities={len(self.abilities)}, "
-                f"spell_slots={len(self.spell_slots)}), spell_slots_mode={self.spell_slots_mode}")
+                f"spell_slots={len(self.spell_slots)}), spell_slots_mode={self.spell_slots_mode}, "
+                f"rolls={self.rolls_history}")
 
     def __repr__(self):
         return (f"Character(name={self.name!r}, race={self.race!r}, gender={self.gender!r}, "
