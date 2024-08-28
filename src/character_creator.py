@@ -1800,14 +1800,19 @@ async def character_long_rest_query_handler(update: Update, context: ContextType
 def create_dice_messages(selected_dice: Dict[str, int]) -> Dict[str, Tuple[str, InlineKeyboardMarkup]]:
     messages = {}
     for die, die_number in selected_dice.items():
+        buttons = []
+
+        # Add the '-' button only if die_number is greater than 0
+        if die_number > 0:
+            buttons.append(InlineKeyboardButton("-", callback_data=f"{die}|-"))
+
+        # Add the '+' button
+        buttons.append(InlineKeyboardButton("+", callback_data=f"{die}|+"))
+
+        # Create the message with the inline keyboard
         messages[die] = (
             f"{die_number} {die.upper()}",
-            InlineKeyboardMarkup([
-                [
-                    InlineKeyboardButton("-", callback_data=f"{die}|-"),
-                    InlineKeyboardButton("+", callback_data=f"{die}|+")
-                ]
-            ])
+            InlineKeyboardMarkup([buttons])
         )
 
     return messages
