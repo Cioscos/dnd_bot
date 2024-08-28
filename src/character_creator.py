@@ -1,4 +1,5 @@
 import logging
+import random
 from typing import List, Tuple, Dict
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, CallbackQuery
@@ -46,7 +47,8 @@ CHARACTER_CREATOR_VERSION = "1.0.0"
  DAMAGE_REGISTRATION,
  HEALING_REGISTRATION,
  HIT_POINTS_REGISTRATION,
- LONG_REST) = map(int, range(14, 43))
+ LONG_REST,
+ DICE_EDIT) = map(int, range(14, 44))
 
 STOPPING = 99
 
@@ -70,6 +72,7 @@ REMOVED_CLASS_LEVEL = 'removed_class_level'
 REMAINING_CLASSES = 'remaining_classes'
 # spell slots
 SPELL_SLOTS = 'spell_slots'
+DICE = 'dice'
 
 # Main menu callback keys
 BAG_CALLBACK_DATA = 'bag'
@@ -108,7 +111,26 @@ SPELL_SLOT_SELECTED_CALLBACK_DATA = "spell_slot_selected"
 SPELL_SLOT_LEVEL_SELECTED_CALLBACK_DATA = "spell_slot_level"
 LONG_REST_WARNING_CALLBACK_DATA = "long_rest_warning"
 LONG_REST_CALLBACK_DATA = "long_rest"
+ROLL_DICE_CALLBACK_DATA = "roll_dice"
 
+STARTING_DICE = {
+    'd4': 0,
+    'd6': 0,
+    'd8': 0,
+    'd100': 0,
+    'd10': 0,
+    'd12': 0,
+    'd20': 0
+}
+ROLLS_MAP = {
+    'd4': 4,
+    'd6': 6,
+    'd8': 8,
+    'd100': 100,
+    'd10': 10,
+    'd12': 12,
+    'd20': 20
+}
 
 
 def create_main_menu_message(character: Character) -> Tuple[str, InlineKeyboardMarkup]:
@@ -144,6 +166,7 @@ def create_main_menu_message(character: Character) -> Tuple[str, InlineKeyboardM
         [InlineKeyboardButton('Punti caratteristica', callback_data=FEATURE_POINTS_CALLBACK_DATA)],
         [InlineKeyboardButton('Gestisci multiclasse', callback_data=MULTICLASSING_CALLBACK_DATA)],
         [InlineKeyboardButton('Riposo lungo', callback_data=LONG_REST_WARNING_CALLBACK_DATA)],
+        [InlineKeyboardButton('Lancia Dado', callback_data=ROLL_DICE_CALLBACK_DATA)],
         [InlineKeyboardButton('Elimina personaggio', callback_data=DELETE_CHARACTER_CALLBACK_DATA)]
     ]
 
@@ -1771,3 +1794,105 @@ async def character_long_rest_query_handler(update: Update, context: ContextType
     await update.callback_query.edit_message_text(msg, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
 
     return FUNCTION_SELECTION
+
+
+def create_dice_messages(selected_dice: Dict[str, int]) -> Dict[str, Tuple[str, InlineKeyboardMarkup]]:
+    messages = {}
+    for die, die_number in selected_dice.items():
+        messages[die]: (
+            f"{die_number} {die.upper()}",
+            InlineKeyboardMarkup([
+                [
+                    InlineKeyboardButton("-", callback_data=f"{die}|-"),
+                    InlineKeyboardButton("+", callback_data=f"{die}|+")
+                ]
+            ])
+        )
+
+    return messages
+
+
+async def dice_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    if update.callback_query:
+        query = update.callback_query
+        await query.answer()
+
+    character: Character = context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_CHARACTER_KEY]
+
+    message_str = (f"Gestione tiri di dado!"
+                   f"<code>{character.get_rolls_history() if character.get_rolls_history() != '' else 'Cronologia lanci vuota!\n\n'}</code>"
+                   "Seleziona quanti dadi vuoi tirare:\n\n"
+                   "Premi /stop per annullare\n"
+                   "Premi /roll per tirare i dadi selezionati\n"
+                   "Premi /cancellaRoll")
+    await update.effective_message.edit_text(message_str)
+
+    starting_dice = STARTING_DICE.copy()
+    messagges = create_dice_messages(starting_dice)
+    context.user_data[CHARACTERS_CREATOR_KEY][DICE] = starting_dice
+
+    for message in messagges.values():
+        await update.effective_message.reply_text(message[0], reply_markup=message[1])
+
+    return DICE_EDIT
+
+
+async def dice_edit_query_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    query = update.callback_query
+    await query.answer()
+    die, action = query.data.split('|', maxsplit=1)
+    temp_dice = context.user_data[CHARACTERS_CREATOR_KEY][DICE]
+
+    # update the dice number based on action
+    if action == '+':
+        temp_dice[die] += 1
+    elif action == '-':
+        temp_dice[die] -= 1
+
+    messages = create_dice_messages(temp_dice)
+    text, keyboard = messages[die]
+    await query.edit_message_text(text, reply_markup=keyboard)
+
+    return DICE_EDIT
+
+
+async def dice_roll_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    temp_dice = context.user_data[CHARACTERS_CREATOR_KEY][DICE]
+    character: Character = context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_CHARACTER_KEY]
+    total_rolls = []
+
+    for die, roll_to_do in temp_dice.items():
+        if roll_to_do != 0:
+            rolls = []
+
+            for i in range(roll_to_do):
+                rolls.append(random.randint(1, ROLLS_MAP[die]))
+
+            total_rolls.append((die, rolls))
+
+    if not total_rolls:
+        await update.effective_message.reply_text("Non hai selezionato nemmeno un dado da rollare!")
+        return DICE_EDIT
+
+    message_str = 'Roll eseguiti:\n'
+    for die_name, die_rolls in total_rolls:
+        message_str += f"{len(die_rolls)}{die_name}: [{', '.join([str(roll) for roll in die_rolls])}] = {sum(die_rolls)}\n"
+
+    await update.effective_message.reply_text(message_str)
+
+    # update history
+    character.rolls_history.extend(total_rolls)
+    context.user_data[CHARACTERS_CREATOR_KEY].pop(DICE, None)
+
+    msg, reply_markup = create_main_menu_message(character)
+    await update.callback_query.edit_message_text(msg, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
+
+    return FUNCTION_SELECTION
+
+
+async def clear_rolls_history_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    character: Character = context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_CHARACTER_KEY]
+    character.delete_rolls_history()
+
+    await update.effective_message.reply_text("Cronologia dadi cancellata!")
+    return DICE_EDIT

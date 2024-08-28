@@ -1,6 +1,6 @@
 from dataclasses import field, dataclass
 from enum import Enum
-from typing import List, Optional, Dict
+from typing import List, Optional, Dict, Tuple
 
 from src.model.character_creator.Ability import Ability
 from src.model.character_creator.FeaturePoints import FeaturePoints
@@ -32,6 +32,7 @@ class Character:
     abilities: List[Ability] = field(default_factory=list)
     carry_capacity: int = field(default_factory=int)
     encumbrance: int = field(default_factory=int)
+    rolls_history: Optional[List[Tuple[str, list[int]]]] = field(default_factory=list)
 
     def __post_init__(self):
         self.carry_capacity = self.feature_points.strength * 15
@@ -167,6 +168,18 @@ class Character:
         """Lists all spell slots and their statuses."""
         return [str(slot) for slot in self.spell_slots.values()]
 
+    def get_rolls_history(self):
+        """Return a formatted string of the rolls history"""
+        return_str = ''
+        for die_name, die_rolls in self.rolls_history:
+            return_str += f"{len(die_rolls)}{die_name}: [{', '.join([str(roll) for roll in die_rolls])}] = {sum(die_rolls)}\n"
+
+        return return_str
+
+    def delete_rolls_history(self):
+        """Deletes the rolls history"""
+        self.rolls_history.clear()
+
     def change_feature_points(self, feature_points: Dict[str, int]):
         self.feature_points.points = feature_points
         self.__reload_stats()
@@ -176,7 +189,8 @@ class Character:
                 f"multi_class={self.multi_class}, "
                 f"feature_points={self.feature_points}, items={len(self.bag)}, "
                 f"spells={len(self.spells)}, abilities={len(self.abilities)}, "
-                f"spell_slots={len(self.spell_slots)}), spell_slots_mode={self.spell_slots_mode}")
+                f"spell_slots={len(self.spell_slots)}), spell_slots_mode={self.spell_slots_mode}, "
+                f"rolls={self.rolls_history}")
 
     def __repr__(self):
         return (f"Character(name={self.name!r}, race={self.race!r}, gender={self.gender!r}, "

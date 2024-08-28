@@ -48,7 +48,8 @@ from character_creator import character_creator_start_handler, character_creatio
     HEALING_CALLBACK_DATA, character_damage_query_handler, character_healing_query_handler, \
     character_healing_registration_handler, character_hit_points_query_handler, HIT_POINTS_CALLBACK_DATA, \
     character_hit_points_registration_handler, character_damage_registration_handler, LONG_REST_WARNING_CALLBACK_DATA, \
-    character_long_rest_warning_query_handler, LONG_REST_CALLBACK_DATA, character_long_rest_query_handler
+    character_long_rest_warning_query_handler, LONG_REST_CALLBACK_DATA, character_long_rest_query_handler, \
+    ROLL_DICE_CALLBACK_DATA, dice_handler, dice_edit_query_handler, dice_roll_handler, clear_rolls_history_handler
 from class_submenus import class_submenus_query_handler, class_spells_menu_buttons_query_handler, \
     class_search_spells_text_handler, class_reading_spells_menu_buttons_query_handler, \
     class_spell_visualization_buttons_query_handler, class_resources_submenu_text_handler
@@ -58,7 +59,7 @@ from equipment_categories_submenus import equipment_categories_first_menu_query_
 from src.character_creator import character_bag_query_handler, character_selection_query_handler, BAG_MANAGEMENT, \
     HIT_POINTS_SELECTION, ABILITY_VISUALIZATION, ABILITY_LEARN, SPELLS_MENU, SPELL_VISUALIZATION, SPELL_ACTIONS, \
     SPELL_LEARN, MULTICLASSING_ACTIONS, MULTICLASSING_REMOVE_CALLBACK_DATA, SPELL_SLOT_ADDING, SPELL_SLOT_REMOVING, \
-    DAMAGE_REGISTRATION, HEALING_REGISTRATION, HIT_POINTS_REGISTRATION, LONG_REST
+    DAMAGE_REGISTRATION, HEALING_REGISTRATION, HIT_POINTS_REGISTRATION, LONG_REST, DICE_EDIT
 from wiki import wiki_main_menu_handler, main_menu_buttons_query_handler, details_menu_buttons_query_handler
 
 # Setup logging
@@ -365,6 +366,8 @@ def main() -> None:
                                      pattern=fr"^{HIT_POINTS_CALLBACK_DATA}$"),
                 CallbackQueryHandler(character_long_rest_warning_query_handler,
                                      pattern=fr"^{LONG_REST_WARNING_CALLBACK_DATA}$"),
+                CallbackQueryHandler(dice_handler,
+                                     pattern=fr"^{ROLL_DICE_CALLBACK_DATA}$"),
                 CommandHandler('stop', character_creator_stop_nested)
             ],
             DAMAGE_REGISTRATION: [
@@ -467,6 +470,11 @@ def main() -> None:
             ],
             SPELL_SLOT_REMOVING: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, character_spell_slot_remove_answer_query_handler)
+            ],
+            DICE_EDIT: [
+                CallbackQueryHandler(dice_edit_query_handler),
+                CommandHandler('roll', dice_roll_handler),
+                CommandHandler('cancellaRoll', clear_rolls_history_handler)
             ]
         },
         fallbacks=[CommandHandler("stop", character_creator_stop)],
