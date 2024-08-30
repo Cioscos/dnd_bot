@@ -291,7 +291,7 @@ def main() -> None:
             ConversationHandler.END: ConversationHandler.END,
             CLASS_SUBMENU: CLASS_SUBMENU
         },
-        name='class_options_handler_v1',
+        name='class_options_handler_v2',
         persistent=True
     )
 
@@ -306,7 +306,7 @@ def main() -> None:
             STOPPING: ConversationHandler.END,
             ConversationHandler.END: ConversationHandler.END
         },
-        name='equipment_categories_handler_v1',
+        name='equipment_categories_handler_v2',
         persistent=True
     )
 
@@ -316,8 +316,10 @@ def main() -> None:
             CommandHandler('wiki', wiki_main_menu_handler)
         ],
         states={
-            WIKI_MENU: [CallbackQueryHandler(main_menu_buttons_query_handler, pattern='^[^/]+$'),
-                        CommandHandler('wiki', wiki_main_menu_handler)],
+            WIKI_MENU: [
+                CallbackQueryHandler(main_menu_buttons_query_handler, pattern=r'^[^/]+$'),
+                CommandHandler('wiki', wiki_main_menu_handler)
+            ],
             ITEM_DETAILS_MENU: [CallbackQueryHandler(details_menu_buttons_query_handler)],
             CLASS_SUBMENU: [class_options_handler],
             EQUIPMENT_CATEGORIES_SUBMENU: [equipment_categories_handler]
@@ -327,7 +329,7 @@ def main() -> None:
             STOPPING: ConversationHandler.END,
             ConversationHandler.END: ConversationHandler.END
         },
-        name='wiki_handler_v1',
+        name='wiki_handler_v2',
         persistent=True
     )
 
@@ -480,7 +482,7 @@ def main() -> None:
             STOPPING: ConversationHandler.END,
             ConversationHandler.END: ConversationHandler.END
         },
-        name='character_creator_handler_v2',
+        name='character_creator_handler_v3',
         persistent=True
     )
 

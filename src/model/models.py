@@ -1906,7 +1906,7 @@ class Class(GraphQLBaseModel):
         if not self.multi_classing:
             multi_classing = 'Multiclasse non specificato'
         else:
-            multi_classing += f'Prerequisiti: {', '.join([f'Almeno {prerequisite.minimum_score} in {prerequisite.ability_score.full_name}' for prerequisite in self.multi_classing.prerequisites])}'
+            multi_classing += f'Prerequisiti: {', '.join([f'Almeno {prerequisite.minimum_score} in {prerequisite.ability_score.full_name}' for prerequisite in self.multi_classing.prerequisites ]) if self.multi_classing.prerequisites else 'Non ci sono prerequisiti'}'
 
         spellcasting = ''
         if not self.spellcasting:
