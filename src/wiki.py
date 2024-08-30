@@ -78,17 +78,17 @@ GRAPHQL_CATEOGRIES = [MONSTERS, PROFICIENCIES, RACES, RULE_SECTIONS, RULES, SKIL
 HTML_PARSING_CATEGORIES = [MONSTERS, PROFICIENCIES, RACES, SKILLS, SPELLS, WEAPON_PROPERTIES, LANGUAGES, CLASSES]
 
 # State definitions for top-level conv handler
-START_MENU, WIKI_MENU, CHARACTERS_CREATOR_MENU, ITEM_DETAILS_MENU = map(chr, range(4))
+START_MENU, WIKI_MENU, CHARACTERS_CREATOR_MENU, ITEM_DETAILS_MENU = map(int, range(4))
 
 # State definitions for class sub conversation
 CLASS_SUBMENU, CLASS_SPELLS_SUBMENU, CLASS_RESOURCES_SUBMENU, CLASS_MANUAL_SPELLS_SEARCHING, CLASS_READING_SPELLS_SEARCHING, CLASS_SPELL_VISUALIZATION = map(
-    chr, range(4, 10))
+    int, range(4, 10))
 
 # state definitions for equipment-categories conversation
-EQUIPMENT_CATEGORIES_SUBMENU, EQUIPMENT_VISUALIZATION = map(chr, range(10, 12))
+EQUIPMENT_CATEGORIES_SUBMENU, EQUIPMENT_VISUALIZATION = map(int, range(10, 12))
 
 # state definitions for features conversation
-FEATURES_SUBMENU, FEATURE_VISUALIZATION = map(chr, range(12, 14))
+FEATURES_SUBMENU, FEATURE_VISUALIZATION = map(int, range(12, 14))
 
 
 def parse_resource(category: str, data: Dict[str, Any], graphql_key: str = None) -> Union[
