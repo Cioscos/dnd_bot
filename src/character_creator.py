@@ -6,7 +6,7 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, Callbac
 from telegram.constants import ParseMode, ChatType
 from telegram.ext import ContextTypes, ConversationHandler
 
-from src.model.character_creator.Ability import Ability
+from src.model.character_creator.Ability import Ability, RestorationType
 from src.model.character_creator.Character import Character, SpellsSlotMode
 from src.model.character_creator.Item import Item
 from src.model.character_creator.MultiClass import MultiClass
@@ -65,6 +65,8 @@ CURRENT_ITEM_KEY = 'current_item'
 CURRENT_INLINE_PAGE_INDEX_KEY = 'current_page_index'
 INLINE_PAGES_KEY = 'inline_pages'
 CURRENT_ABILITY_KEY = 'current_ability'
+ABILITY_FEATURES_KEY = 'ability_features_keyboard'
+TEMP_ABILITY_KEY = 'temp_ability'
 CURRENT_SPELL_KEY = 'current_spell'
 # Keys to store the data allowing a rollback in the case user use /stop command before ending the multiclass deleting
 PENDING_REASSIGNMENT = 'pending_reassignment'
@@ -75,7 +77,7 @@ SPELL_SLOTS = 'spell_slots'
 DICE = 'dice'
 DICE_MESSAGES = 'dice_messages'
 
-# Main menu callback keys
+# character main menu callback keys
 BAG_CALLBACK_DATA = 'bag'
 SPELLS_CALLBACK_DATA = 'spells'
 ABILITIES_CALLBACK_DATA = 'abilities'
@@ -91,6 +93,9 @@ ABILITY_LEARN_CALLBACK_DATA = "ability_learn"
 ABILITY_EDIT_CALLBACK_DATA = "ability_edit"
 ABILITY_DELETE_CALLBACK_DATA = "ability_delete"
 ABILITY_BACK_MENU_CALLBACK_DATA = "ability_back_menu"
+ABILITY_IS_PASSIVE_CALLBACK_DATA = "ability_is_passive"
+ABILITY_RESTORATION_TYPE_CALLBACK_DATA = "ability_restoration_type"
+ABILITY_INSERT_CALLBACK_DATA = "ability_insert"
 SPELL_LEARN_CALLBACK_DATA = "spells_learn"
 SPELL_EDIT_CALLBACK_DATA = "spell_edit"
 SPELL_DELETE_CALLBACK_DATA = "spell_delete"
@@ -174,6 +179,32 @@ def create_main_menu_message(character: Character) -> Tuple[str, InlineKeyboardM
     ]
 
     return message_str, InlineKeyboardMarkup(keyboard)
+
+
+def create_ability_keyboard(features_chosen: Dict[str, str | bool]) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton(
+                f'Abilità passiva {'✅' if features_chosen['is_passive'] else '❌'}',
+                callback_data=f'{ABILITY_IS_PASSIVE_CALLBACK_DATA}|1'),
+            InlineKeyboardButton(
+                f'Abilità attiva {'✅' if not features_chosen['is_passive'] else '❌'}',
+                callback_data=f'{ABILITY_IS_PASSIVE_CALLBACK_DATA}|0'),
+        ],
+        [
+            InlineKeyboardButton(
+                f'Riposo breve {'✅' if features_chosen['restoration_type'] == RestorationType.SHORT_REST.value else '❌'}',
+                callback_data=f'{ABILITY_RESTORATION_TYPE_CALLBACK_DATA}|short'
+            ),
+            InlineKeyboardButton(
+                f'Riposo lungo {'✅' if features_chosen['restoration_type'] == RestorationType.LONG_REST.value else '❌'}',
+                callback_data=f'{ABILITY_RESTORATION_TYPE_CALLBACK_DATA}|long'
+            )
+        ],
+        [
+            InlineKeyboardButton('Impara abilità', callback_data=ABILITY_INSERT_CALLBACK_DATA)
+        ]
+    ])
 
 
 def create_feature_points_messages(feature_points: Dict[str, int]) -> Dict[str, Tuple[str, InlineKeyboardMarkup]]:
@@ -308,6 +339,9 @@ async def character_creator_stop(update: Update, context: ContextTypes.DEFAULT_T
         context.user_data[CHARACTERS_CREATOR_KEY].pop(TEMP_CHARACTER_KEY, None)
         context.user_data[CHARACTERS_CREATOR_KEY].pop(CURRENT_ITEM_KEY, None)
         context.user_data[CHARACTERS_CREATOR_KEY].pop(PENDING_REASSIGNMENT, None)
+        context.user_data[CHARACTERS_CREATOR_KEY].pop(ABILITY_FEATURES_KEY, None)
+        context.user_data[CHARACTERS_CREATOR_KEY].pop(TEMP_ABILITY_KEY, None)
+        context.user_data[CHARACTERS_CREATOR_KEY].pop(CURRENT_ABILITY_KEY, None)
 
         return FUNCTION_SELECTION
 
@@ -892,42 +926,6 @@ async def character_spell_edit_handler(update: Update, context: ContextTypes.DEF
     return SPELLS_MENU
 
 
-async def character_abilities_query_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    query = update.callback_query
-    await query.answer()
-
-    character: Character = context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_CHARACTER_KEY]
-
-    message_str = f"<b>Gestione abilità</b>\n\n"
-    if not character.abilities:
-
-        message_str += "Non hai ancora nessuna abilità 🤷‍♂️"
-        keyboard = [
-            [InlineKeyboardButton("Impara nuova abilità", callback_data=ABILITY_LEARN_CALLBACK_DATA)]
-        ]
-        await update.effective_message.reply_text(message_str, reply_markup=InlineKeyboardMarkup(keyboard),
-                                                  parse_mode=ParseMode.HTML)
-
-        return ABILITY_LEARN
-
-    else:
-        message_str += ("Usa /stop per tornare al menu\n"
-                        "Ecco la lista delle abilità")
-
-    abilities = character.abilities
-    abilities_pages = chunk_list(abilities, 8)
-
-    context.user_data[CHARACTERS_CREATOR_KEY][INLINE_PAGES_KEY] = abilities_pages
-    context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_INLINE_PAGE_INDEX_KEY] = 0
-    current_page = abilities_pages[context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_INLINE_PAGE_INDEX_KEY]]
-
-    reply_markup = generate_abilities_list_keyboard(current_page)
-
-    await update.effective_message.reply_text(message_str, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
-
-    return ABILITIES_MENU
-
-
 async def character_spell_delete_query_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     query = update.callback_query
     await query.answer()
@@ -970,6 +968,42 @@ async def character_spell_delete_query_handler(update: Update, context: ContextT
         return ABILITIES_MENU
 
 
+async def character_abilities_query_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    query = update.callback_query
+    await query.answer()
+
+    character: Character = context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_CHARACTER_KEY]
+
+    message_str = f"<b>Gestione abilità</b>\n\n"
+    if not character.abilities:
+
+        message_str += "Non hai ancora nessuna abilità 🤷‍♂️"
+        keyboard = [
+            [InlineKeyboardButton("Impara nuova abilità", callback_data=ABILITY_LEARN_CALLBACK_DATA)]
+        ]
+        await query.edit_message_text(message_str, reply_markup=InlineKeyboardMarkup(keyboard),
+                                      parse_mode=ParseMode.HTML)
+
+        return ABILITY_LEARN
+
+    else:
+        message_str += ("Usa /stop per tornare al menu\n"
+                        "Ecco la lista delle abilità")
+
+    abilities = character.abilities
+    abilities_pages = chunk_list(abilities, 8)
+
+    context.user_data[CHARACTERS_CREATOR_KEY][INLINE_PAGES_KEY] = abilities_pages
+    context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_INLINE_PAGE_INDEX_KEY] = 0
+    current_page = abilities_pages[context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_INLINE_PAGE_INDEX_KEY]]
+
+    reply_markup = generate_abilities_list_keyboard(current_page)
+
+    await query.edit_message_text(message_str, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
+
+    return ABILITIES_MENU
+
+
 async def character_abilities_menu_query_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     query = update.callback_query
     data = query.data
@@ -993,7 +1027,9 @@ async def character_abilities_menu_query_handler(update: Update, context: Contex
         character: Character = context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_CHARACTER_KEY]
         ability: Ability = next((ability for ability in character.abilities if ability.name == data), None)
         message_str = (f"<b>Abilità</b> {ability.name}\n\n"
-                       f"<b>Descrizione</b>\n{ability.description}")
+                       f"<b>Descrizione</b>\n{ability.description}\n\n"
+                       f"<i>Abilità {'passiva' if ability.is_passive else 'attiva'}, si ricarica con un riposo "
+                       f"{'breve' if ability.restoration_type == RestorationType.SHORT_REST else 'lungo'}</i>")
         keyboard = [
             [
                 InlineKeyboardButton("Modifica", callback_data=ABILITY_EDIT_CALLBACK_DATA),
@@ -1065,7 +1101,7 @@ async def character_ability_new_query_handler(update: Update, context: ContextTy
     query = update.callback_query
     await query.answer()
 
-    await update.effective_message.reply_text(
+    await query.edit_message_text(
         "Inviami l'abilità inserendo il nome e la descrizione separate da un #\n\n"
         "<b>Esempio:</b> <code>nome#bella descrizione</code>\n\n",
         parse_mode=ParseMode.HTML
@@ -1074,22 +1110,67 @@ async def character_ability_new_query_handler(update: Update, context: ContextTy
     return ABILITY_LEARN
 
 
-async def character_ability_learn_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+async def character_ability_text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     ability_info = update.effective_message.text
 
     ability_name, ability_desc = ability_info.split("#", 1)
     if ability_name.isdigit() or ability_desc.isdigit():
         await update.effective_message.reply_text("🔴 Inserisci solo lettere non numeri!\n\n"
                                                   "Invia di nuovo l'abilità o usa /stop per terminare")
-        return ABILITY_ACTIONS
+        return ABILITY_LEARN
 
-    ability = Ability(ability_name, ability_desc)
+    # Ask for ability features
+    features_chosen = {'is_passive': True, 'restoration_type': 'short'}
+    context.user_data[CHARACTERS_CREATOR_KEY][ABILITY_FEATURES_KEY] = features_chosen
+    context.user_data[CHARACTERS_CREATOR_KEY][TEMP_ABILITY_KEY] = (ability_name, ability_desc)
+    reply_markup = create_ability_keyboard(features_chosen)
+
+    await update.effective_message.reply_text(
+        "Scegli se l'abilità è passiva o se si ricarica con un riposo lungo o corto\n"
+        "Usa /stop per terminare", reply_markup=reply_markup)
+
+    return ABILITY_LEARN
+
+
+async def character_ability_features_query_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    query = update.callback_query
+    await query.answer()
+    data = query.data
+    feature, state = data.split('|', maxsplit=1)
+    features_chosen = context.user_data[CHARACTERS_CREATOR_KEY][ABILITY_FEATURES_KEY]
+
+    if feature == ABILITY_IS_PASSIVE_CALLBACK_DATA:
+        features_chosen['is_passive'] = True if state == '1' else False
+    elif feature == ABILITY_RESTORATION_TYPE_CALLBACK_DATA:
+        features_chosen['restoration_type'] = state
+
+    reply_markup = create_ability_keyboard(features_chosen)
+    context.user_data[CHARACTERS_CREATOR_KEY][ABILITY_FEATURES_KEY] = features_chosen
+    await query.edit_message_reply_markup(reply_markup)
+
+    return ABILITY_LEARN
+
+
+async def character_ability_insert_query_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    query = update.callback_query
+    await query.answer()
+
+    ability_name, ability_desc = context.user_data[CHARACTERS_CREATOR_KEY][TEMP_ABILITY_KEY]
+    context.user_data[CHARACTERS_CREATOR_KEY].pop(TEMP_ABILITY_KEY, None)
+    features_chosen = context.user_data[CHARACTERS_CREATOR_KEY][ABILITY_FEATURES_KEY]
+
+    ability = Ability(
+        name=ability_name,
+        description=ability_desc,
+        is_passive=features_chosen['is_passive'],
+        restoration_type=features_chosen['restoration_type']
+    )
     character: Character = context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_CHARACTER_KEY]
 
     if any(ability_name == ability.name for ability in character.abilities):
         await update.effective_message.reply_text("🔴 Hai già appreso questa abilità!\n\n"
                                                   "Invia un'altra abilità o usa /stop per terminare")
-        return ABILITY_ACTIONS
+        return ABILITY_LEARN
 
     character.learn_ability(ability)
     await update.effective_message.reply_text("Abilità appresa con successo! ✅")
