@@ -492,7 +492,7 @@ def main() -> None:
             STOPPING: ConversationHandler.END,
             ConversationHandler.END: ConversationHandler.END
         },
-        name='character_creator_handler_v3',
+        name='character_creator_handler_v4',
         persistent=True
     )
 
