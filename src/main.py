@@ -30,7 +30,7 @@ from character_creator import character_creator_start_handler, character_creatio
     NAME_SELECTION, RACE_SELECTION, GENDER_SELECTION, CLASS_SELECTION, FUNCTION_SELECTION, CHARACTER_SELECTION, \
     character_creator_stop, character_bag_item_edit_handler, ABILITIES_MENU, character_abilities_menu_query_handler, \
     character_ability_visualization_query_handler, ABILITY_ACTIONS, character_ability_edit_handler, \
-    character_ability_delete_query_handler, character_ability_learn_handler, character_ability_new_query_handler, \
+    character_ability_delete_query_handler, character_ability_text_handler, character_ability_new_query_handler, \
     character_change_level_query_handler, character_spells_menu_query_handler, \
     character_spell_visualization_query_handler, character_spell_new_query_handler, character_spell_learn_handler, \
     character_spell_edit_handler, character_spell_delete_query_handler, character_multiclassing_add_class_query_handler, \
@@ -49,7 +49,8 @@ from character_creator import character_creator_start_handler, character_creatio
     character_healing_registration_handler, character_hit_points_query_handler, HIT_POINTS_CALLBACK_DATA, \
     character_hit_points_registration_handler, character_damage_registration_handler, LONG_REST_WARNING_CALLBACK_DATA, \
     character_long_rest_warning_query_handler, LONG_REST_CALLBACK_DATA, character_long_rest_query_handler, \
-    ROLL_DICE_MENU_CALLBACK_DATA, dice_handler, dice_actions_query_handler
+    ROLL_DICE_MENU_CALLBACK_DATA, dice_handler, dice_actions_query_handler, character_ability_features_query_handler, \
+    character_ability_insert_query_handler, SPELL_LEARN_CALLBACK_DATA
 from class_submenus import class_submenus_query_handler, class_spells_menu_buttons_query_handler, \
     class_search_spells_text_handler, class_reading_spells_menu_buttons_query_handler, \
     class_spell_visualization_buttons_query_handler, class_resources_submenu_text_handler
@@ -59,7 +60,8 @@ from equipment_categories_submenus import equipment_categories_first_menu_query_
 from src.character_creator import character_bag_query_handler, character_selection_query_handler, BAG_MANAGEMENT, \
     HIT_POINTS_SELECTION, ABILITY_VISUALIZATION, ABILITY_LEARN, SPELLS_MENU, SPELL_VISUALIZATION, SPELL_ACTIONS, \
     SPELL_LEARN, MULTICLASSING_ACTIONS, MULTICLASSING_REMOVE_CALLBACK_DATA, SPELL_SLOT_ADDING, SPELL_SLOT_REMOVING, \
-    DAMAGE_REGISTRATION, HEALING_REGISTRATION, HIT_POINTS_REGISTRATION, LONG_REST, DICE_ACTION
+    DAMAGE_REGISTRATION, HEALING_REGISTRATION, HIT_POINTS_REGISTRATION, LONG_REST, DICE_ACTION, \
+    ABILITY_IS_PASSIVE_CALLBACK_DATA, ABILITY_RESTORATION_TYPE_CALLBACK_DATA, ABILITY_INSERT_CALLBACK_DATA
 from wiki import wiki_main_menu_handler, main_menu_buttons_query_handler, details_menu_buttons_query_handler
 
 # Setup logging
@@ -413,6 +415,8 @@ def main() -> None:
                 CallbackQueryHandler(character_feature_points_edit_query_handler)
             ],
             ABILITIES_MENU: [
+                CallbackQueryHandler(character_ability_new_query_handler,
+                                     pattern=fr"^{SPELL_LEARN_CALLBACK_DATA}$"),
                 CallbackQueryHandler(character_abilities_menu_query_handler)
             ],
             ABILITY_VISUALIZATION: [
@@ -424,8 +428,14 @@ def main() -> None:
                                      pattern=r'^[yn]$')
             ],
             ABILITY_LEARN: [
+                CallbackQueryHandler(character_ability_insert_query_handler,
+                                     pattern=fr"^{ABILITY_INSERT_CALLBACK_DATA}$"),
+                CallbackQueryHandler(
+                    character_ability_features_query_handler,
+                    pattern=fr"^({ABILITY_IS_PASSIVE_CALLBACK_DATA}\|\d+|{ABILITY_RESTORATION_TYPE_CALLBACK_DATA}\|(short|long))$"
+                ),
                 CallbackQueryHandler(character_ability_new_query_handler),
-                MessageHandler(filters.TEXT & ~filters.COMMAND, character_ability_learn_handler)
+                MessageHandler(filters.TEXT & ~filters.COMMAND, character_ability_text_handler)
             ],
             SPELLS_MENU: [
                 CallbackQueryHandler(character_spells_menu_query_handler)
@@ -482,7 +492,7 @@ def main() -> None:
             STOPPING: ConversationHandler.END,
             ConversationHandler.END: ConversationHandler.END
         },
-        name='character_creator_handler_v3',
+        name='character_creator_handler_v4',
         persistent=True
     )
 

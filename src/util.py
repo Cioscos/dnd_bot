@@ -14,6 +14,7 @@ from src.model.character_creator.Spell import Spell
 
 graphql_requests_logger.setLevel(logging.WARNING)
 ABILITY_SCORE_CALLBACK = 'ability_score'
+SPELL_LEARN_CALLBACK_DATA = "spells_learn"
 
 API = 'https://www.dnd5eapi.co'
 
@@ -202,6 +203,8 @@ def generate_abilities_list_keyboard(abilities: List[Ability],
         navigation_buttons = [InlineKeyboardButton("⬅️ Precedente", callback_data="prev_page"),
                               InlineKeyboardButton("Successiva ➡️", callback_data="next_page")]
         keyboard.append(navigation_buttons)
+
+    keyboard.append([InlineKeyboardButton("Impara nuovo incantesimo", callback_data=SPELL_LEARN_CALLBACK_DATA)])
 
     return InlineKeyboardMarkup(keyboard)
 
