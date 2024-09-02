@@ -10,11 +10,13 @@ class RestorationType(Enum):
 
 @dataclass
 class Ability:
-    VERSION = 2
+    VERSION = 3
     name: Optional[str] = field(default=None)
     description: Optional[str] = field(default=None)
     is_passive: Optional[bool] = field(default=None)
     restoration_type: Optional[RestorationType] = field(default=None)
+    max_uses: Optional[int] = field(default=None)
+    uses: Optional[int] = field(default=0)
 
     _version: int = field(default_factory=int)
 
@@ -33,7 +35,11 @@ class Ability:
             self.restoration_type = self.restoration_type if hasattr(self, 'restoration_type') else None
             # Update version's object
             self._version = 2
-        # FUTURE MIGRATIONS
+        elif self._version < 3:
+            # Migration for version 3
+            self.max_uses = self.max_uses if hasattr(self, 'max_uses') else None
+            self.uses = self.uses if hasattr(self, 'uses') else 0
+            self._version = 3
 
     def __setstate__(self, state):
         """Method called during deserialisation"""
@@ -48,10 +54,28 @@ class Ability:
         if self._version < Ability.VERSION:
             self.__migrate()
 
+    def __eq__(self, other):
+        """Check equality based on name, description, is_passive, and restoration_type."""
+        if isinstance(other, Ability):
+            return (
+                    self.name == other.name and
+                    self.description == other.description and
+                    self.is_passive == other.is_passive and
+                    self.restoration_type == other.restoration_type and
+                    self.max_uses == other.max_uses
+            )
+        return False
+
+    def use_ability(self):
+        if self.uses != 0:
+            self.uses -= 1
+
     def __str__(self) -> str:
         return (f"Ability(name={self.name}, description={self.description}, "
-                f"is_passive={self.is_passive}, restoration_type={self.restoration_type})")
+                f"is_passive={self.is_passive}, restoration_type={self.restoration_type}, "
+                f"uses={self.uses})")
 
     def __repr__(self) -> str:
         return (f"Ability(name={self.name!r}, description={self.description!r}, "
-                f"is_passive={self.is_passive!r}, restoration_type={self.restoration_type!r})")
+                f"is_passive={self.is_passive!r}, restoration_type={self.restoration_type!r}, "
+                f"uses={self.uses!r})")

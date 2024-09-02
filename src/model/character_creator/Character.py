@@ -2,7 +2,7 @@ from dataclasses import field, dataclass
 from enum import Enum
 from typing import List, Optional, Dict, Tuple
 
-from src.model.character_creator.Ability import Ability
+from src.model.character_creator.Ability import Ability, RestorationType
 from src.model.character_creator.FeaturePoints import FeaturePoints
 from src.model.character_creator.Item import Item
 from src.model.character_creator.MultiClass import MultiClass
@@ -142,6 +142,12 @@ class Character:
         """Adds an ability to the character's abilities list."""
         self.abilities.append(ability)
 
+    def use_ability(self, ability: Ability):
+        """Use an ability decreasing the uses from the ability object"""
+        a = next((a for a in self.abilities if a == ability), None)
+        if a:
+            a.use_ability()
+
     def forget_ability(self, ability_name: str):
         """Removes an ability from the character's abilities list by name."""
         self.abilities = [ability for ability in self.abilities if ability.name != ability_name]
@@ -214,6 +220,23 @@ class Character:
     def change_feature_points(self, feature_points: Dict[str, int]):
         self.feature_points.points = feature_points
         self.__reload_stats()
+
+    def long_rest(self):
+        """Do a long rest, restore hitpoints, restore all spell slots, restores abilities which require long rest"""
+        self.current_hit_points = self.hit_points
+        self.restore_all_spell_slots()
+        for ability in self.abilities:
+            if ability.restoration_type == RestorationType.LONG_REST:
+                ability.uses = ability.max_uses
+
+    def short_rest(self):
+        """
+        Do a short rest, restores abilities which require short rest.
+        It will also restore some hit points in the future implementations
+        """
+        for ability in self.abilities:
+            if ability.restoration_type == RestorationType.SHORT_REST:
+                ability.uses = ability.max_uses
 
     def __str__(self):
         return (f"Character(name={self.name}, race={self.race}, gender={self.gender}, "
