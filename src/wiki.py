@@ -14,6 +14,8 @@ from model.Alignment import Alignment
 from model.Condition import Condition
 from model.DamageType import DamageType
 from model.models import GraphQLBaseModel
+from src.class_submenus import CLASS_SUBMENU
+from src.equipment_categories_submenus import EQUIPMENT_CATEGORIES_SUBMENU
 from util import format_camel_case_to_title, chunk_list, generate_resource_list_keyboard, split_text_into_chunks, \
     async_graphql_query
 
@@ -78,17 +80,13 @@ GRAPHQL_CATEOGRIES = [MONSTERS, PROFICIENCIES, RACES, RULE_SECTIONS, RULES, SKIL
 HTML_PARSING_CATEGORIES = [MONSTERS, PROFICIENCIES, RACES, SKILLS, SPELLS, WEAPON_PROPERTIES, LANGUAGES, CLASSES]
 
 # State definitions for top-level conv handler
-START_MENU, WIKI_MENU, CHARACTERS_CREATOR_MENU, ITEM_DETAILS_MENU = map(int, range(4))
-
-# State definitions for class sub conversation
-CLASS_SUBMENU, CLASS_SPELLS_SUBMENU, CLASS_RESOURCES_SUBMENU, CLASS_MANUAL_SPELLS_SEARCHING, CLASS_READING_SPELLS_SEARCHING, CLASS_SPELL_VISUALIZATION = map(
-    int, range(4, 10))
-
-# state definitions for equipment-categories conversation
-EQUIPMENT_CATEGORIES_SUBMENU, EQUIPMENT_VISUALIZATION = map(int, range(10, 12))
+WIKI_MAIN_MENU, ITEM_DETAILS_MENU = map(int, range(3, 5))
 
 # state definitions for features conversation
-FEATURES_SUBMENU, FEATURE_VISUALIZATION = map(int, range(12, 14))
+FEATURES_SUBMENU, FEATURE_VISUALIZATION = map(int, range(13, 15))
+
+# user data keys
+ACTIVE_CONV = 'active_conv'
 
 
 def parse_resource(category: str, data: Dict[str, Any], graphql_key: str = None) -> Union[
@@ -143,6 +141,13 @@ async def wiki_main_menu_handler(update: Update, context: ContextTypes.DEFAULT_T
         query = update.callback_query
         await query.answer()
 
+    # Check if the user is already in another conversation
+    if context.user_data.get(ACTIVE_CONV) == 'character':
+        await update.message.reply_text("Usare /stop per uscire dalla gestione dei personaggi prima di usare la wiki.")
+        return ConversationHandler.END
+
+    context.user_data[ACTIVE_CONV] = 'wiki'
+
     # Check for BOT_DATA_CHAT_IDS initialization
     if BOT_DATA_CHAT_IDS not in context.bot_data or update.effective_chat.id not in context.bot_data.get(
             BOT_DATA_CHAT_IDS, []):
@@ -181,7 +186,7 @@ async def wiki_main_menu_handler(update: Update, context: ContextTypes.DEFAULT_T
                     "O premi /stop per terminare il comando")
     await update.effective_message.reply_text(wiki_message, reply_markup=reply_markup)
 
-    return WIKI_MENU
+    return WIKI_MAIN_MENU
 
 
 async def main_menu_buttons_query_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:

@@ -2,7 +2,7 @@ from dataclasses import field, dataclass
 from enum import Enum
 from typing import List, Optional, Dict, Tuple
 
-from src.model.character_creator.Ability import Ability
+from src.model.character_creator.Ability import Ability, RestorationType
 from src.model.character_creator.FeaturePoints import FeaturePoints
 from src.model.character_creator.Item import Item
 from src.model.character_creator.MultiClass import MultiClass
@@ -42,7 +42,18 @@ class Character:
         # If the object does not have the version, migration is necessary
         if not hasattr(self, '_version'):
             self._version = 1
+
+        # sets all the feature points to 10
+        self.feature_points.points = {
+            'strength': 10,
+            'dexterity': 10,
+            'constitution': 10,
+            'intelligence': 10,
+            'wisdom': 10,
+            'charisma': 10
+        }
         self.__reload_stats()
+
         if self._version < Character.VERSION:
             self.__migrate()
 
@@ -72,6 +83,8 @@ class Character:
         # Migrate if necessary
         if self._version < Character.VERSION:
             self.__migrate()
+
+        self.__reload_stats()
 
     def add_item(self, item: Item):
         """Add an item to the character's bag and update the encumbrance."""
@@ -141,6 +154,12 @@ class Character:
     def learn_ability(self, ability: Ability):
         """Adds an ability to the character's abilities list."""
         self.abilities.append(ability)
+
+    def use_ability(self, ability: Ability):
+        """Use an ability decreasing the uses from the ability object"""
+        a = next((a for a in self.abilities if a == ability), None)
+        if a:
+            a.use_ability()
 
     def forget_ability(self, ability_name: str):
         """Removes an ability from the character's abilities list by name."""
@@ -214,6 +233,23 @@ class Character:
     def change_feature_points(self, feature_points: Dict[str, int]):
         self.feature_points.points = feature_points
         self.__reload_stats()
+
+    def long_rest(self):
+        """Do a long rest, restore hitpoints, restore all spell slots, restores abilities which require long rest"""
+        self.current_hit_points = self.hit_points
+        self.restore_all_spell_slots()
+        for ability in self.abilities:
+            if ability.restoration_type == RestorationType.LONG_REST:
+                ability.uses = ability.max_uses
+
+    def short_rest(self):
+        """
+        Do a short rest, restores abilities which require short rest.
+        It will also restore some hit points in the future implementations
+        """
+        for ability in self.abilities:
+            if ability.restoration_type == RestorationType.SHORT_REST:
+                ability.uses = ability.max_uses
 
     def __str__(self):
         return (f"Character(name={self.name}, race={self.race}, gender={self.gender}, "
