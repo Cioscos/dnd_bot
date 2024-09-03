@@ -1783,6 +1783,10 @@ async def character_spell_slot_add_answer_query_handler(update: Update, context:
                                                   f"Corretto: 5#5 Usato: {data}")
         return SPELL_SLOT_ADDING
 
+    if int(slot_number) > 9:
+        await update.effective_message.reply_text("🔴 Non puoi inserire uno slot di livello superiore al 9! 🔴")
+        return SPELL_SLOT_ADDING
+
     character: Character = context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_CHARACTER_KEY]
 
     if slot_level in character.spell_slots:
