@@ -42,7 +42,18 @@ class Character:
         # If the object does not have the version, migration is necessary
         if not hasattr(self, '_version'):
             self._version = 1
+
+        # sets all the feature points to 10
+        self.feature_points.points = {
+            'strength': 10,
+            'dexterity': 10,
+            'constitution': 10,
+            'intelligence': 10,
+            'wisdom': 10,
+            'charisma': 10
+        }
         self.__reload_stats()
+
         if self._version < Character.VERSION:
             self.__migrate()
 
@@ -72,6 +83,8 @@ class Character:
         # Migrate if necessary
         if self._version < Character.VERSION:
             self.__migrate()
+
+        self.__reload_stats()
 
     def add_item(self, item: Item):
         """Add an item to the character's bag and update the encumbrance."""

@@ -19,7 +19,7 @@ from telegram.warnings import PTBUserWarning
 from character_creator import character_creator_start_handler, character_creation_handler, \
     character_spells_query_handler, character_abilities_query_handler, character_feature_point_query_handler, \
     character_name_handler, character_race_handler, character_gender_handler, character_class_handler, \
-    character_multiclassing_query_handler, character_creator_stop_nested, \
+    character_multiclassing_query_handler, \
     BAG_CALLBACK_DATA, SPELLS_CALLBACK_DATA, ABILITIES_CALLBACK_DATA, FEATURE_POINTS_CALLBACK_DATA, \
     MULTICLASSING_CALLBACK_DATA, character_deleting_query_handler, \
     DELETE_CHARACTER_CALLBACK_DATA, CHARACTER_DELETION, character_deleting_answer_query_handler, \
@@ -28,7 +28,8 @@ from character_creator import character_creator_start_handler, character_creatio
     character_bag_item_delete_one_handler, character_bag_item_add_one_handler, character_bag_item_delete_all_handler, \
     BAG_ITEM_EDIT_CALLBACK_DATA, FEATURE_POINTS_EDIT, character_feature_points_edit_query_handler, CHARACTER_CREATION, \
     NAME_SELECTION, RACE_SELECTION, GENDER_SELECTION, CLASS_SELECTION, FUNCTION_SELECTION, CHARACTER_SELECTION, \
-    character_creator_stop, character_bag_item_edit_handler, ABILITIES_MENU, character_abilities_menu_query_handler, \
+    character_creator_stop_submenu, character_bag_item_edit_handler, ABILITIES_MENU, \
+    character_abilities_menu_query_handler, \
     character_ability_visualization_query_handler, ABILITY_ACTIONS, character_ability_edit_handler, \
     character_ability_delete_query_handler, character_ability_text_handler, character_ability_new_query_handler, \
     character_change_level_query_handler, character_spells_menu_query_handler, \
@@ -50,20 +51,24 @@ from character_creator import character_creator_start_handler, character_creatio
     character_hit_points_registration_handler, character_damage_registration_handler, LONG_REST_WARNING_CALLBACK_DATA, \
     character_long_rest_warning_query_handler, LONG_REST_CALLBACK_DATA, character_long_rest_query_handler, \
     ROLL_DICE_MENU_CALLBACK_DATA, dice_handler, dice_actions_query_handler, character_ability_features_query_handler, \
-    character_ability_insert_query_handler, SPELL_LEARN_CALLBACK_DATA, character_short_rest_warning_query_handler
+    character_ability_insert_query_handler, SPELL_LEARN_CALLBACK_DATA, character_short_rest_warning_query_handler, \
+    character_creation_stop
 from class_submenus import class_submenus_query_handler, class_spells_menu_buttons_query_handler, \
     class_search_spells_text_handler, class_reading_spells_menu_buttons_query_handler, \
-    class_spell_visualization_buttons_query_handler, class_resources_submenu_text_handler
+    class_spell_visualization_buttons_query_handler, class_resources_submenu_text_handler, CLASS_SPELLS_SUBMENU, \
+    CLASS_MANUAL_SPELLS_SEARCHING, CLASS_READING_SPELLS_SEARCHING, CLASS_SPELL_VISUALIZATION, CLASS_RESOURCES_SUBMENU, \
+    CLASS_SUBMENU
 from environment_variables_mg import keyring_initialize, keyring_get
 from equipment_categories_submenus import equipment_categories_first_menu_query_handler, \
-    equipment_visualization_query_handler
+    equipment_visualization_query_handler, EQUIPMENT_CATEGORIES_SUBMENU, EQUIPMENT_VISUALIZATION
 from src.character_creator import character_bag_query_handler, character_selection_query_handler, BAG_MANAGEMENT, \
     HIT_POINTS_SELECTION, ABILITY_VISUALIZATION, ABILITY_LEARN, SPELLS_MENU, SPELL_VISUALIZATION, SPELL_ACTIONS, \
     SPELL_LEARN, MULTICLASSING_ACTIONS, MULTICLASSING_REMOVE_CALLBACK_DATA, SPELL_SLOT_ADDING, SPELL_SLOT_REMOVING, \
     DAMAGE_REGISTRATION, HEALING_REGISTRATION, HIT_POINTS_REGISTRATION, LONG_REST, DICE_ACTION, \
     ABILITY_IS_PASSIVE_CALLBACK_DATA, ABILITY_RESTORATION_TYPE_CALLBACK_DATA, ABILITY_INSERT_CALLBACK_DATA, SHORT_REST, \
     character_short_rest_query_handler, SHORT_REST_CALLBACK_DATA, SHORT_REST_WARNING_CALLBACK_DATA
-from wiki import wiki_main_menu_handler, main_menu_buttons_query_handler, details_menu_buttons_query_handler
+from wiki import wiki_main_menu_handler, main_menu_buttons_query_handler, details_menu_buttons_query_handler, \
+    ITEM_DETAILS_MENU, WIKI_MAIN_MENU
 
 # Setup logging
 logging.basicConfig(
@@ -82,17 +87,7 @@ logging.getLogger("httpx").setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
 
 # State definitions for top-level conv handler
-START_MENU, WIKI_MENU, CHARACTERS_CREATOR_MENU, ITEM_DETAILS_MENU = map(int, range(4))
-
-# State definitions for class sub conversation
-CLASS_SUBMENU, CLASS_SPELLS_SUBMENU, CLASS_RESOURCES_SUBMENU, CLASS_MANUAL_SPELLS_SEARCHING, CLASS_READING_SPELLS_SEARCHING, CLASS_SPELL_VISUALIZATION = map(
-    int, range(4, 10))
-
-# state definitions for equipment-categories conversation
-EQUIPMENT_CATEGORIES_SUBMENU, EQUIPMENT_VISUALIZATION = map(int, range(10, 12))
-
-# state definitions for features conversation
-FEATURES_SUBMENU, FEATURE_VISUALIZATION = map(int, range(12, 14))
+START_MENU, CHARACTERS_CREATOR_MENU, WIKI_MENU = map(int, range(3))
 
 STOPPING = 99
 
@@ -104,6 +99,9 @@ WIKI = 'wiki'
 CHARACTERS_CREATOR = 'characters_creator'
 CURRENT_INLINE_PAGE_FOR_SUBMENUS = 'current_inline_page_for_submenu'
 INLINE_PAGES = 'inline_pages'
+
+# user data keys
+ACTIVE_CONV = 'active_conv'
 
 # callback keys
 ABILITY_SCORE_CALLBACK = 'ability_score'
@@ -243,7 +241,9 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
 async def stop(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     await update.effective_message.reply_text('Ok! Usa il comando /start per avviare una nuova conversazione!\n'
                                               'Oppure invia direttamente i comandi /wiki o /character')
+
     context.chat_data[WIKI] = {}
+    context.user_data[ACTIVE_CONV] = None
     return ConversationHandler.END
 
 
@@ -276,6 +276,21 @@ def main() -> None:
 
     application.add_error_handler(error_handler)
 
+    # -------------------------------------------------- new
+    equipment_categories_handler = ConversationHandler(
+        entry_points=[CallbackQueryHandler(equipment_categories_first_menu_query_handler)],
+        states={
+            EQUIPMENT_CATEGORIES_SUBMENU: [CallbackQueryHandler(equipment_categories_first_menu_query_handler)],
+            EQUIPMENT_VISUALIZATION: [CallbackQueryHandler(equipment_visualization_query_handler)]
+        },
+        fallbacks=[CommandHandler("stop", stop_nested)],
+        map_to_parent={
+            STOPPING: STOPPING
+        },
+        name='equipment_categories_handler_v2',
+        persistent=True
+    )
+
     class_options_handler = ConversationHandler(
         entry_points=[CallbackQueryHandler(class_submenus_query_handler, pattern=r"^(spells\|)|(resources\|)")],
         states={
@@ -291,25 +306,9 @@ def main() -> None:
         fallbacks=[CommandHandler("stop", stop_nested)],
         map_to_parent={
             STOPPING: ConversationHandler.END,
-            ConversationHandler.END: ConversationHandler.END,
             CLASS_SUBMENU: CLASS_SUBMENU
         },
-        name='class_options_handler_v2',
-        persistent=True
-    )
-
-    equipment_categories_handler = ConversationHandler(
-        entry_points=[CallbackQueryHandler(equipment_categories_first_menu_query_handler)],
-        states={
-            EQUIPMENT_CATEGORIES_SUBMENU: [CallbackQueryHandler(equipment_categories_first_menu_query_handler)],
-            EQUIPMENT_VISUALIZATION: [CallbackQueryHandler(equipment_visualization_query_handler)]
-        },
-        fallbacks=[CommandHandler("stop", stop_nested)],
-        map_to_parent={
-            STOPPING: ConversationHandler.END,
-            ConversationHandler.END: ConversationHandler.END
-        },
-        name='equipment_categories_handler_v2',
+        name='class_options_handler_v3',
         persistent=True
     )
 
@@ -319,7 +318,7 @@ def main() -> None:
             CommandHandler('wiki', wiki_main_menu_handler)
         ],
         states={
-            WIKI_MENU: [
+            WIKI_MAIN_MENU: [
                 CallbackQueryHandler(main_menu_buttons_query_handler, pattern=r'^[^/]+$'),
                 CommandHandler('wiki', wiki_main_menu_handler)
             ],
@@ -327,12 +326,10 @@ def main() -> None:
             CLASS_SUBMENU: [class_options_handler],
             EQUIPMENT_CATEGORIES_SUBMENU: [equipment_categories_handler]
         },
-        fallbacks=[CommandHandler("stop", stop_nested)],
-        map_to_parent={
-            STOPPING: ConversationHandler.END,
-            ConversationHandler.END: ConversationHandler.END
-        },
-        name='wiki_handler_v2',
+        fallbacks=[
+            CommandHandler("stop", stop)
+        ],
+        name='wiki_handler_v3',
         persistent=True
     )
 
@@ -375,7 +372,7 @@ def main() -> None:
                                      pattern=fr"^{SHORT_REST_WARNING_CALLBACK_DATA}$"),
                 CallbackQueryHandler(dice_handler,
                                      pattern=fr"^{ROLL_DICE_MENU_CALLBACK_DATA}$"),
-                CommandHandler('stop', character_creator_stop_nested)
+                CommandHandler('stop', character_creation_stop)
             ],
             DAMAGE_REGISTRATION: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, character_damage_registration_handler)
@@ -494,29 +491,26 @@ def main() -> None:
                 CallbackQueryHandler(dice_actions_query_handler)
             ]
         },
-        fallbacks=[CommandHandler("stop", character_creator_stop)],
-        map_to_parent={
-            STOPPING: ConversationHandler.END,
-            ConversationHandler.END: ConversationHandler.END
-        },
-        name='character_creator_handler_v5',
+        fallbacks=[
+            CommandHandler("stop", character_creator_stop_submenu)
+        ],
+        name='character_creator_handler_v6',
         persistent=True
     )
 
-    main_handler = ConversationHandler(
-        entry_points=[
-            CommandHandler('start', start_handler),
-            wiki_handler,
-            character_creator_handler
-        ],
+    main_conversation_handler = ConversationHandler(
+        entry_points=[CommandHandler('start', start_handler)],
         states={
-            START_MENU: [wiki_handler, character_creator_handler]
+            START_MENU: [
+                wiki_handler,
+                character_creator_handler
+            ]
         },
-        fallbacks=[CommandHandler("stop", stop)],
-        name='main_handler_v1',
+        fallbacks=[CommandHandler('stop', stop)],
+        name='main_conversation_handler_v2',
         persistent=True
     )
-    application.add_handler(main_handler)
+    application.add_handler(main_conversation_handler)
 
     # Manage buttons pressing in old conversations
     application.add_handler(CallbackQueryHandler(handle_old_callback_queries))
