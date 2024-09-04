@@ -328,7 +328,7 @@ def create_bag_menu(character: Character) -> Tuple[str, InlineKeyboardMarkup]:
 
 
 def create_item_menu(item: Item) -> Tuple[str, InlineKeyboardMarkup]:
-    message_str = (f"<b>{item.name}</b>   {item.quantity}Pz\n\n"
+    message_str = (f"<b>{item.name:<{50}}</b>{item.quantity}Pz\n\n"
                    f"<b>Descrizione</b>\n{item.description}\n\n"
                    f"Premi /stop per terminare\n\n")
 
@@ -341,6 +341,36 @@ def create_item_menu(item: Item) -> Tuple[str, InlineKeyboardMarkup]:
     ]
 
     return message_str, InlineKeyboardMarkup(keyboard)
+
+
+async def create_spell_menu(character: Character, update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    message_str = f"<b>Gestione spells</b>\n\n"
+    if not character.spells:
+
+        message_str += "Non conosci ancora nessuna spell ‍🤷‍♂️"
+        keyboard = [
+            [InlineKeyboardButton("Impara nuova spell", callback_data=SPELL_LEARN_CALLBACK_DATA)]
+        ]
+        await update.effective_message.reply_text(message_str, reply_markup=InlineKeyboardMarkup(keyboard),
+                                                  parse_mode=ParseMode.HTML)
+
+        return SPELL_LEARN
+
+    else:
+
+        message_str += ("Usa /stop per tornare al menu\n"
+                        "Ecco la lista delle abilità")
+
+    spells = character.spells
+    spells_pages = chunk_list(spells, 8)
+
+    context.user_data[CHARACTERS_CREATOR_KEY][INLINE_PAGES_KEY] = spells_pages
+    context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_INLINE_PAGE_INDEX_KEY] = 0
+    current_page = spells_pages[context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_INLINE_PAGE_INDEX_KEY]]
+
+    reply_markup = generate_spells_list_keyboard(current_page)
+    await update.effective_message.reply_text(message_str, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
+    return SPELLS_MENU
 
 
 async def character_creator_stop_submenu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -749,35 +779,7 @@ async def character_spells_query_handler(update: Update, context: ContextTypes.D
 
     character: Character = context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_CHARACTER_KEY]
 
-    message_str = f"<b>Gestione spells</b>\n\n"
-    if not character.spells:
-
-        message_str += "Non conosci ancora nessuna spell ‍🤷‍♂️"
-        keyboard = [
-            [InlineKeyboardButton("Impara nuova spell", callback_data=SPELL_LEARN_CALLBACK_DATA)]
-        ]
-        await update.effective_message.reply_text(message_str, reply_markup=InlineKeyboardMarkup(keyboard),
-                                                  parse_mode=ParseMode.HTML)
-
-        return SPELL_LEARN
-
-    else:
-
-        message_str += ("Usa /stop per tornare al menu\n"
-                        "Ecco la lista delle abilità")
-
-    spells = character.spells
-    spells_pages = chunk_list(spells, 8)
-
-    context.user_data[CHARACTERS_CREATOR_KEY][INLINE_PAGES_KEY] = spells_pages
-    context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_INLINE_PAGE_INDEX_KEY] = 0
-    current_page = spells_pages[context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_INLINE_PAGE_INDEX_KEY]]
-
-    reply_markup = generate_spells_list_keyboard(current_page)
-
-    await update.effective_message.reply_text(message_str, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
-
-    return SPELLS_MENU
+    return await create_spell_menu(character, update, context)
 
 
 async def character_spells_menu_query_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -791,18 +793,22 @@ async def character_spells_menu_query_handler(update: Update, context: ContextTy
         else:
             context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_INLINE_PAGE_INDEX_KEY] -= 1
 
-        return ABILITIES_MENU
+        return SPELLS_MENU
 
     elif data == "next_page":
 
         context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_INLINE_PAGE_INDEX_KEY] += 1
+
+    elif data == SPELL_LEARN_CALLBACK_DATA:
+
+        return await character_spell_new_query_handler(update, context)
 
     else:
 
         await query.answer()
         character: Character = context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_CHARACTER_KEY]
         spell: Spell = next((spell for spell in character.spells if spell.name == data), None)
-        message_str = (f"<b>Incantesimo:</b> {spell.name} Livello {spell.level.value}\n\n"
+        message_str = (f"<b>{spell.name:<{50}}</b>L{spell.level.value}\n\n"
                        f"<b>Descrizione</b>\n{spell.description}")
         keyboard = [
             [
@@ -910,10 +916,8 @@ async def character_spell_learn_handler(update: Update, context: ContextTypes.DE
 
     character.learn_spell(spell)
     await update.effective_message.reply_text("Incantesimo appresa con successo! ✅")
-    msg, reply_markup = create_main_menu_message(character)
-    await update.effective_message.reply_text(msg, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
 
-    return FUNCTION_SELECTION
+    return await create_spell_menu(character, update, context)
 
 
 async def character_spell_edit_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -943,20 +947,7 @@ async def character_spell_edit_handler(update: Update, context: ContextTypes.DEF
 
     await update.effective_message.reply_text("Incantesimo modificato con successo!")
 
-    spells = character.spells
-    message_str = f"<b>Gestione incantesimi</b>\n\n"
-    message_str += ("Usa /stop per tornare al menu\n"
-                    "Ecco la lista degli incantesimi")
-
-    spells_pages = chunk_list(spells, 8)
-    context.user_data[CHARACTERS_CREATOR_KEY][INLINE_PAGES_KEY] = spells_pages
-    current_page = spells_pages[context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_INLINE_PAGE_INDEX_KEY]]
-
-    reply_markup = generate_spells_list_keyboard(current_page)
-
-    await update.effective_message.reply_text(message_str, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
-
-    return SPELLS_MENU
+    return await create_spell_menu(character, update, context)
 
 
 async def character_spell_delete_query_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -972,33 +963,7 @@ async def character_spell_delete_query_handler(update: Update, context: ContextT
         await update.effective_message.reply_text(f"Hai una buona memoria, ti ricordi ancora l'incantesimo "
                                                   f"{spell_to_forget.name}")
 
-    spells = character.spells
-
-    message_str = f"<b>Gestione incantesimi</b>\n\n"
-    if not character.abilities:
-
-        message_str += "Non conosci ancora alcun incantesimo 🤷‍♂️"
-        keyboard = [
-            [InlineKeyboardButton("Impara nuovo incantesimo", callback_data=SPELL_LEARN_CALLBACK_DATA)]
-        ]
-        await update.effective_message.reply_text(message_str, reply_markup=InlineKeyboardMarkup(keyboard),
-                                                  parse_mode=ParseMode.HTML)
-
-        return ABILITY_LEARN
-
-    else:
-        message_str += ("Usa /stop per tornare al menu\n"
-                        "Ecco la lista degli incantesimi")
-
-        spells_pages = chunk_list(spells, 8)
-        context.user_data[CHARACTERS_CREATOR_KEY][INLINE_PAGES_KEY] = spells_pages
-        current_page = spells_pages[context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_INLINE_PAGE_INDEX_KEY]]
-
-        reply_markup = generate_spells_list_keyboard(current_page)
-
-        await update.effective_message.reply_text(message_str, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
-
-        return ABILITIES_MENU
+    return await create_spell_menu(character, update, context)
 
 
 async def character_abilities_query_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
