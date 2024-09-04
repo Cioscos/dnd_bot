@@ -546,7 +546,7 @@ async def character_bag_query_handler(update: Update, context: ContextTypes.DEFA
     if character.bag:
         keyboard.append([InlineKeyboardButton('Modifica oggetto', callback_data=BAG_ITEM_EDIT)])
 
-    await query.edit_message_text(
+    await update.effective_message.reply_text(
         message_str,
         reply_markup=InlineKeyboardMarkup(keyboard),
         parse_mode=ParseMode.HTML
@@ -1040,7 +1040,7 @@ async def character_abilities_query_handler(update: Update, context: ContextType
         keyboard = [
             [InlineKeyboardButton("Impara nuova abilità", callback_data=ABILITY_LEARN_CALLBACK_DATA)]
         ]
-        await query.edit_message_text(message_str, reply_markup=InlineKeyboardMarkup(keyboard),
+        await update.effective_message.reply_text(message_str, reply_markup=InlineKeyboardMarkup(keyboard),
                                       parse_mode=ParseMode.HTML)
 
         return ABILITY_LEARN
@@ -1058,7 +1058,7 @@ async def character_abilities_query_handler(update: Update, context: ContextType
 
     reply_markup = generate_abilities_list_keyboard(current_page)
 
-    await query.edit_message_text(message_str, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
+    await update.effective_message.reply_text(message_str, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
 
     return ABILITIES_MENU
 
@@ -1443,13 +1443,14 @@ async def character_change_level_query_handler(update: Update, context: ContextT
             for class_name in multi_class.classes.keys()
         ]
         keyboard = InlineKeyboardMarkup(buttons)
-        await query.edit_message_text("Scegli quale classe livellare in positivo o negativo:", reply_markup=keyboard)
+        await update.effective_message.reply_text("Scegli quale classe livellare in positivo o negativo:",
+                                                  reply_markup=keyboard)
     else:
         # If only one class, level up/down automatically
         class_name = next(iter(multi_class.classes))  # Get the only class name
         await apply_level_change(multi_class, class_name, data, query)
         msg, reply_markup = create_main_menu_message(character)
-        await query.edit_message_text(msg, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
+        await update.effective_message.reply_text(msg, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
 
     return FUNCTION_SELECTION
 
@@ -1663,7 +1664,7 @@ async def character_deleting_query_handler(update: Update, context: ContextTypes
         ]
     ]
 
-    await update.effective_message.reply_text("Sei sicuro di voler chancellare il personaggio?\n\n"
+    await query.edit_message_text("Sei sicuro di voler chancellare il personaggio?\n\n"
                                               f"{character.name} - classe {', '.join(f"{class_name} (Level {level})" for class_name, level in character.multi_class.classes.items())} di L. {character.total_levels()}",
                                               reply_markup=InlineKeyboardMarkup(keyboard))
 
@@ -1713,7 +1714,7 @@ async def character_spells_slots_query_handler(update: Update, context: ContextT
                 InlineKeyboardButton("Manuale", callback_data=SPELL_SLOTS_MANUAL_CALLBACK_DATA),
             ]
         ]
-        await update.callback_query.edit_message_text(
+        await update.effective_message.reply_text(
             "Che tipo di gestione vuoi scegliere per gli slot incantesimo?\n\n"
             "<b>Automatica:</b> scegli collegare il tuo personaggio ad una predefinita\n"
             "in questo modo quando sale di livello gli slot si modificano "
@@ -1725,7 +1726,7 @@ async def character_spells_slots_query_handler(update: Update, context: ContextT
     else:
 
         message_str, reply_markup = create_spells_slot_menu(context)
-        await update.callback_query.edit_message_text(message_str, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
+        await update.effective_message.reply_text(message_str, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
 
     return SPELLS_SLOTS_MANAGEMENT
 
@@ -2006,7 +2007,7 @@ async def character_long_rest_warning_query_handler(update: Update, context: Con
                    f"Vuoi procedere? Usa /stop per annullare")
     keyboard = [[InlineKeyboardButton("Riposa", callback_data=LONG_REST_CALLBACK_DATA)]]
 
-    await update.callback_query.edit_message_text(message_str, reply_markup=InlineKeyboardMarkup(keyboard),
+    await update.effective_message.reply_text(message_str, reply_markup=InlineKeyboardMarkup(keyboard),
                                                   parse_mode=ParseMode.HTML)
 
     return LONG_REST
@@ -2036,7 +2037,7 @@ async def character_short_rest_warning_query_handler(update: Update, context: Co
                    f"Vuoi procedere? Usa /stop per annullare")
     keyboard = [[InlineKeyboardButton("Riposa", callback_data=SHORT_REST_CALLBACK_DATA)]]
 
-    await update.callback_query.edit_message_text(message_str, reply_markup=InlineKeyboardMarkup(keyboard),
+    await update.effective_message.reply_text(message_str, reply_markup=InlineKeyboardMarkup(keyboard),
                                                   parse_mode=ParseMode.HTML)
 
     return SHORT_REST
@@ -2181,7 +2182,7 @@ async def dice_actions_query_handler(update: Update, context: ContextTypes.DEFAU
         character.rolls_history.extend(total_rolls)
         context.user_data[CHARACTERS_CREATOR_KEY].pop(DICE, None)
         await delete_dice_menu(context)
-        await send_dice_menu(update, context, is_edit=False)
+        await send_dice_menu(update, context, is_edit=True)
 
     elif query.data == ROLL_DICE_DELETE_HISTORY_CALLBACK_DATA:
 
