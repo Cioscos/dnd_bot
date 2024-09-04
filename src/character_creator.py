@@ -327,6 +327,22 @@ def create_bag_menu(character: Character) -> Tuple[str, InlineKeyboardMarkup]:
     return message_str, InlineKeyboardMarkup(keyboard)
 
 
+def create_item_menu(item: Item) -> Tuple[str, InlineKeyboardMarkup]:
+    message_str = (f"<b>{item.name}</b>   {item.quantity}Pz\n\n"
+                   f"<b>Descrizione</b>\n{item.description}\n\n"
+                   f"Premi /stop per terminare\n\n")
+
+    keyboard = [
+        [
+            InlineKeyboardButton("-", callback_data=f"{BAG_ITEM_EDIT_CALLBACK_DATA}|-"),
+            InlineKeyboardButton("+", callback_data=f"{BAG_ITEM_EDIT_CALLBACK_DATA}|+")
+        ],
+        [InlineKeyboardButton("Rimuovi tutti", callback_data=f"{BAG_ITEM_EDIT_CALLBACK_DATA}|all")]
+    ]
+
+    return message_str, InlineKeyboardMarkup(keyboard)
+
+
 async def character_creator_stop_submenu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     # Rollback for multiclass management
     if PENDING_REASSIGNMENT in context.user_data[CHARACTERS_CREATOR_KEY]:
@@ -660,23 +676,12 @@ async def character_bag_item_edit_handler(update: Update, context: ContextTypes.
         await update.effective_message.reply_text("🔴 Oggetto non trovato! Prova di nuovo o premi /stop 🔴")
         return BAG_ITEM_EDIT
 
-    message_str = (f"<b>Nome:</b> <code>{item.name}</code>\n"
-                   f"<b>Descrizione:</b> <code>{item.description}</code>\n"
-                   f"<b>Quantità:</b> <code>{item.quantity}</code>\n\n"
-                   f"Premi /stop per terminare\n\n")
+    message_str, reply_markup = create_item_menu(item)
 
+    # save the current item name
     context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_ITEM_KEY] = item.name
 
-    keyboard = [
-        [
-            InlineKeyboardButton("-", callback_data=f"{BAG_ITEM_EDIT_CALLBACK_DATA}|-"),
-            InlineKeyboardButton("+", callback_data=f"{BAG_ITEM_EDIT_CALLBACK_DATA}|+")
-        ],
-        [InlineKeyboardButton("Rimuovi tutti", callback_data=f"{BAG_ITEM_EDIT_CALLBACK_DATA}|all")]
-    ]
-
-    await update.effective_message.reply_text(message_str, parse_mode=ParseMode.HTML,
-                                              reply_markup=InlineKeyboardMarkup(keyboard))
+    await update.effective_message.reply_text(message_str, parse_mode=ParseMode.HTML, reply_markup=reply_markup)
     return BAG_ITEM_EDIT
 
 
@@ -691,40 +696,16 @@ async def character_bag_item_delete_one_handler(update: Update, context: Context
     if item:
 
         await query.answer()
-        message_str = (f"<b>Nome:</b> <code>{item.name}</code>\n"
-                       f"<b>Descrizione:</b> <code>{item.description}</code>\n"
-                       f"<b>Quantità:</b> <code>{item.quantity}</code>\n\n"
-                       f"Premi /stop per terminare\n\n")
-        keyboard = [
-            [
-                InlineKeyboardButton("-", callback_data=f"{BAG_ITEM_EDIT_CALLBACK_DATA}|-"),
-                InlineKeyboardButton("+", callback_data=f"{BAG_ITEM_EDIT_CALLBACK_DATA}|+")
-            ],
-            [InlineKeyboardButton("Rimuovi tutti", callback_data=f"{BAG_ITEM_EDIT_CALLBACK_DATA}|all")]
-        ]
-
-        await query.edit_message_text(message_str, parse_mode=ParseMode.HTML,
-                                      reply_markup=InlineKeyboardMarkup(keyboard))
+        message_str, reply_markup = create_item_menu(item)
+        await update.effective_message.reply_text(message_str, parse_mode=ParseMode.HTML, reply_markup=reply_markup)
         return BAG_ITEM_EDIT
 
     else:
 
         await query.answer(f'{item_name} rimosso dalla borsa!', show_alert=True)
         context.user_data[CHARACTERS_CREATOR_KEY].pop(CURRENT_ITEM_KEY, None)
-        message_str = (f"<b>Oggetti nella borsa</b>\n\n"
-                       f"{'\n'.join(f'<code>{item.name}</code> x{item.quantity}' for item in character.bag) if character.bag else
-                       "Lo zaino è ancora vuoto"}")
-
-        keyboard = [[InlineKeyboardButton('Inserisci nuovo oggetto', callback_data=BAG_ITEM_INSERTION_CALLBACK_DATA)]]
-
-        if character.bag:
-            keyboard.append([InlineKeyboardButton('Modifica oggetto', callback_data=BAG_ITEM_EDIT)])
-
-        await update.effective_message.reply_text(
-            message_str,
-            reply_markup=InlineKeyboardMarkup(keyboard),
-            parse_mode=ParseMode.HTML
-        )
+        message_str, reply_markup = create_bag_menu(character)
+        await update.effective_message.reply_text(message_str, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
 
         return BAG_MANAGEMENT
 
@@ -738,19 +719,9 @@ async def character_bag_item_add_one_handler(update: Update, context: ContextTyp
     character.increment_item_quantity(item_name)
     item: Item = next((item for item in character.bag if item_name == item.name), None)
 
-    message_str = (f"<b>Nome:</b> <code>{item.name}</code>\n"
-                   f"<b>Descrizione:</b> <code>{item.description}</code>\n"
-                   f"<b>Quantità:</b> <code>{item.quantity}</code>\n\n"
-                   f"Premi /stop per terminare\n\n")
-    keyboard = [
-        [
-            InlineKeyboardButton("-", callback_data=f"{BAG_ITEM_EDIT_CALLBACK_DATA}|-"),
-            InlineKeyboardButton("+", callback_data=f"{BAG_ITEM_EDIT_CALLBACK_DATA}|+")
-        ],
-        [InlineKeyboardButton("Rimuovi tutti", callback_data=f"{BAG_ITEM_EDIT_CALLBACK_DATA}|all")]
-    ]
+    message_str, reply_markup = create_item_menu(item)
+    await update.effective_message.reply_text(message_str, parse_mode=ParseMode.HTML, reply_markup=reply_markup)
 
-    await query.edit_message_text(message_str, parse_mode=ParseMode.HTML, reply_markup=InlineKeyboardMarkup(keyboard))
     return BAG_ITEM_EDIT
 
 
