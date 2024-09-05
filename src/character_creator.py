@@ -46,10 +46,11 @@ CHARACTER_CREATOR_VERSION = "1.0.0"
  SPELL_SLOT_REMOVING,
  DAMAGE_REGISTRATION,
  HEALING_REGISTRATION,
+ OVER_HEALING_CONFIRMATION,
  HIT_POINTS_REGISTRATION,
  LONG_REST,
  SHORT_REST,
- DICE_ACTION) = map(int, range(14, 45))
+ DICE_ACTION) = map(int, range(14, 46))
 
 STOPPING = 99
 
@@ -68,6 +69,7 @@ INLINE_PAGES_KEY = 'inline_pages'
 CURRENT_ABILITY_KEY = 'current_ability'
 ABILITY_FEATURES_KEY = 'ability_features_keyboard'
 TEMP_ABILITY_KEY = 'temp_ability'
+TEMP_HEALING_KEY = 'temp_healing'
 CURRENT_SPELL_KEY = 'current_spell'
 # Keys to store the data allowing a rollback in the case user use /stop command before ending the multiclass deleting
 PENDING_REASSIGNMENT = 'pending_reassignment'
@@ -153,8 +155,9 @@ def create_main_menu_message(character: Character) -> Tuple[str, InlineKeyboardM
                    f"<b>Razza:</b> {character.race}\n"
                    f"<b>Genere:</b> {character.gender}\n"
                    f"<b>Classe:</b> {', '.join(f"{class_name} (Level {level})" for class_name, level in character.multi_class.classes.items())}\n"
-                   f"<b>Punti ferita:</b> {character.current_hit_points}/{character.hit_points} PF\n\n"
-                   f"<b>Peso trasportato:</b> {character.encumbrance} Lb"
+                   f"<b>Punti ferita:</b> {character.current_hit_points if character.current_hit_points <= character.hit_points else character.hit_points}/{character.hit_points} PF "
+                   f"{f'({(character.current_hit_points - character.hit_points)} Punti ferita temporanei)\n' if character.current_hit_points > character.hit_points else ''}"
+                   f"<b>Peso trasportato:</b> {character.encumbrance} Lb\n\n"
                    f"<b>Punti caratteristica</b>\n{str(character.feature_points)}\n\n"
                    f"<b>Slot incantesimo</b>\n{"\n".join([f"L{str(slot.level)} {"🟥" * slot.used_slots}{"🟦" * (slot.total_slots - slot.used_slots)}" for _, slot in sorted(character.spell_slots.items())]) if character.spell_slots else "Non hai registrato ancora nessuno Slot incantesimo"}\n\n"
                    f"<b>Abilità passive attivate:</b>\n{'\n'.join(ability.name for ability in character.abilities if ability.activated) if any(ability.activated for ability in character.abilities) else 'Nessuna abilità attiva'}\n")
@@ -1861,20 +1864,64 @@ async def character_healing_query_handler(update: Update, context: ContextTypes.
     return HEALING_REGISTRATION
 
 
-async def character_healing_registration_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+async def character_healing_value_check_or_registration_handler(update: Update,
+                                                                context: ContextTypes.DEFAULT_TYPE) -> int:
     healing = update.effective_message.text
 
-    if not healing or healing.isalpha():
+    if not healing or not healing.isdigit():
         await update.effective_message.reply_text("🔴 Inserisci un numero non una parola!")
+        return HEALING_REGISTRATION
+    healing = int(healing)
+
+    if healing <= 0:
+        await update.effective_message.reply_text("🔴 Inserisci un valore superiore a 0!")
         return HEALING_REGISTRATION
 
     character: Character = context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_CHARACTER_KEY]
+
+    if (character.current_hit_points + healing) > character.hit_points:
+        keyboard = [
+            [
+                InlineKeyboardButton('Si', callback_data='y'),
+                InlineKeyboardButton('No', callback_data='n')
+            ]
+        ]
+        await update.effective_message.reply_text(f"Se ti curi di {healing} punti ferità, aggiungerai "
+                                                  f"{(character.current_hit_points + healing) - character.hit_points} punti ferita temporanei.\n\n"
+                                                  f"Vuoi procedere?", reply_markup=InlineKeyboardMarkup(keyboard))
+
+        context.user_data[CHARACTERS_CREATOR_KEY][TEMP_HEALING_KEY] = healing
+        return OVER_HEALING_CONFIRMATION
+
     # check to fix the retro-compatibility problem with the bug
     if isinstance(character.current_hit_points, str):
         character.current_hit_points = int(character.current_hit_points)
     character.current_hit_points += int(healing)
 
     await update.effective_message.reply_text(f"Sei stato curato di {healing} PF!")
+
+    msg, reply_markup = create_main_menu_message(character)
+    await update.effective_message.reply_text(msg, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
+
+    return FUNCTION_SELECTION
+
+
+async def character_over_healing_registration_query_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    query = update.callback_query
+    data = query.data
+    character: Character = context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_CHARACTER_KEY]
+
+    if data == 'y':
+
+        await query.answer()
+        healing = context.user_data[CHARACTERS_CREATOR_KEY][TEMP_HEALING_KEY]
+        character.current_hit_points += int(healing)
+        context.user_data[CHARACTERS_CREATOR_KEY].pop(TEMP_HEALING_KEY, None)
+        await update.effective_message.reply_text(f"Sei stato curato di {healing} PF!")
+
+    elif data == 'n':
+
+        await query.answer('Curagione annullata!', show_alert=True)
 
     msg, reply_markup = create_main_menu_message(character)
     await update.effective_message.reply_text(msg, reply_markup=reply_markup, parse_mode=ParseMode.HTML)

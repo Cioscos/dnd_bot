@@ -47,12 +47,13 @@ from character_creator import character_creator_start_handler, character_creatio
     character_spells_slot_use_reset_query_handler, SPELLS_SLOTS_RESET_CALLBACK_DATA, \
     character_spells_slot_change_mode_query_handler, SPELLS_SLOTS_CHANGE_CALLBACK_DATA, DAMAGE_CALLBACK_DATA, \
     HEALING_CALLBACK_DATA, character_damage_query_handler, character_healing_query_handler, \
-    character_healing_registration_handler, character_hit_points_query_handler, HIT_POINTS_CALLBACK_DATA, \
+    character_hit_points_query_handler, HIT_POINTS_CALLBACK_DATA, \
     character_hit_points_registration_handler, character_damage_registration_handler, LONG_REST_WARNING_CALLBACK_DATA, \
     character_long_rest_warning_query_handler, LONG_REST_CALLBACK_DATA, character_long_rest_query_handler, \
     ROLL_DICE_MENU_CALLBACK_DATA, dice_handler, dice_actions_query_handler, character_ability_features_query_handler, \
     character_ability_insert_query_handler, SPELL_LEARN_CALLBACK_DATA, character_short_rest_warning_query_handler, \
-    character_creation_stop
+    character_creation_stop, OVER_HEALING_CONFIRMATION, character_healing_value_check_or_registration_handler, \
+    character_over_healing_registration_query_handler
 from class_submenus import class_submenus_query_handler, class_spells_menu_buttons_query_handler, \
     class_search_spells_text_handler, class_reading_spells_menu_buttons_query_handler, \
     class_spell_visualization_buttons_query_handler, class_resources_submenu_text_handler, CLASS_SPELLS_SUBMENU, \
@@ -378,7 +379,11 @@ def main() -> None:
                 MessageHandler(filters.TEXT & ~filters.COMMAND, character_damage_registration_handler)
             ],
             HEALING_REGISTRATION: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, character_healing_registration_handler)
+                MessageHandler(filters.TEXT & ~filters.COMMAND, character_healing_value_check_or_registration_handler)
+            ],
+            OVER_HEALING_CONFIRMATION: [
+                CallbackQueryHandler(character_over_healing_registration_query_handler,
+                                     pattern=r'^[yn]$')
             ],
             HIT_POINTS_REGISTRATION: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, character_hit_points_registration_handler)
@@ -494,7 +499,7 @@ def main() -> None:
         fallbacks=[
             CommandHandler("stop", character_creator_stop_submenu)
         ],
-        name='character_creator_handler_v6',
+        name='character_creator_handler_v7',
         persistent=True
     )
 
