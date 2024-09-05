@@ -1347,7 +1347,7 @@ async def character_change_level_query_handler(update: Update, context: ContextT
         class_name = next(iter(multi_class.classes))  # Get the only class name
         await apply_level_change(multi_class, class_name, data, query)
         msg, reply_markup = create_main_menu_message(character)
-        await update.effective_message.reply_text(msg, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
+        await query.edit_message_text(msg, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
 
     return FUNCTION_SELECTION
 
