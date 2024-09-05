@@ -10,13 +10,15 @@ class RestorationType(Enum):
 
 @dataclass
 class Ability:
-    VERSION = 3
+    VERSION = 4
+
     name: Optional[str] = field(default=None)
     description: Optional[str] = field(default=None)
     is_passive: Optional[bool] = field(default=None)
     restoration_type: Optional[RestorationType] = field(default=None)
     max_uses: Optional[int] = field(default=None)
     uses: Optional[int] = field(default=0)
+    activated: Optional[bool] = field(default=None)
 
     _version: int = field(default_factory=int)
 
@@ -30,16 +32,25 @@ class Ability:
     def __migrate(self):
         """Migrates the data to the current version of the class."""
         if self._version < 2:
+
             # Migration for version 2
             self.is_passive = self.is_passive if hasattr(self, 'is_passive') else None
             self.restoration_type = self.restoration_type if hasattr(self, 'restoration_type') else None
             # Update version's object
             self._version = 2
+
         elif self._version < 3:
+
             # Migration for version 3
             self.max_uses = self.max_uses if hasattr(self, 'max_uses') else None
             self.uses = self.uses if hasattr(self, 'uses') else 0
             self._version = 3
+
+        elif self._version < 4:
+
+            # Migration for version 4
+            self.activated = self.activated if hasattr(self, 'activated') else None
+            self._version = 4
 
     def __setstate__(self, state):
         """Method called during deserialisation"""
@@ -69,6 +80,9 @@ class Ability:
     def use_ability(self):
         if self.uses != 0:
             self.uses -= 1
+
+    def toggle_activate_ability(self):
+        self.activated = True if not self.activated else False
 
     def __str__(self) -> str:
         return (f"Ability(name={self.name}, description={self.description}, "

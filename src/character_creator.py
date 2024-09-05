@@ -95,6 +95,7 @@ ABILITY_LEARN_CALLBACK_DATA = "ability_learn"
 ABILITY_EDIT_CALLBACK_DATA = "ability_edit"
 ABILITY_DELETE_CALLBACK_DATA = "ability_delete"
 ABILITY_USE_CALLBACK_DATA = "ability_use"
+ABILITY_ACTIVE_CALLBACK_DATA = 'ability_active'
 ABILITY_BACK_MENU_CALLBACK_DATA = "ability_back_menu"
 ABILITY_IS_PASSIVE_CALLBACK_DATA = "ability_is_passive"
 ABILITY_RESTORATION_TYPE_CALLBACK_DATA = "ability_restoration_type"
@@ -153,9 +154,10 @@ def create_main_menu_message(character: Character) -> Tuple[str, InlineKeyboardM
                    f"<b>Genere:</b> {character.gender}\n"
                    f"<b>Classe:</b> {', '.join(f"{class_name} (Level {level})" for class_name, level in character.multi_class.classes.items())}\n"
                    f"<b>Punti ferita:</b> {character.current_hit_points}/{character.hit_points} PF\n\n"
+                   f"<b>Peso trasportato:</b> {character.encumbrance} Lb"
                    f"<b>Punti caratteristica</b>\n{str(character.feature_points)}\n\n"
                    f"<b>Slot incantesimo</b>\n{"\n".join([f"L{str(slot.level)} {"🟥" * slot.used_slots}{"🟦" * (slot.total_slots - slot.used_slots)}" for _, slot in sorted(character.spell_slots.items())]) if character.spell_slots else "Non hai registrato ancora nessuno Slot incantesimo"}\n\n"
-                   f"<b>Peso trasportato:</b> {character.encumbrance} Lb")
+                   f"<b>Abilità passive attivate:</b>\n{'\n'.join(ability.name for ability in character.abilities if ability.activated) if any(ability.activated for ability in character.abilities) else 'Nessuna abilità attiva'}\n")
 
     keyboard = [
         [
@@ -416,10 +418,17 @@ def create_ability_menu(ability: Ability) -> Tuple[str, InlineKeyboardMarkup]:
         [
             InlineKeyboardButton("Modifica", callback_data=ABILITY_EDIT_CALLBACK_DATA),
             InlineKeyboardButton("Dimentica", callback_data=ABILITY_DELETE_CALLBACK_DATA)
-        ],
-        [InlineKeyboardButton('Usa', callback_data=ABILITY_USE_CALLBACK_DATA)],
-        [InlineKeyboardButton("Indietro 🔙", callback_data=ABILITY_BACK_MENU_CALLBACK_DATA)]
+        ]
     ]
+
+    if ability.is_passive:
+        second_row = [InlineKeyboardButton(f'{'Attiva' if not ability.activated else 'Disattiva'}',
+                                           callback_data=ABILITY_ACTIVE_CALLBACK_DATA)]
+    else:
+        second_row = [InlineKeyboardButton('Usa', callback_data=ABILITY_USE_CALLBACK_DATA)]
+
+    keyboard.append(second_row)
+    keyboard.append([InlineKeyboardButton("Indietro 🔙", callback_data=ABILITY_BACK_MENU_CALLBACK_DATA)])
 
     return message_str, InlineKeyboardMarkup(keyboard)
 
@@ -1126,6 +1135,19 @@ async def character_ability_visualization_query_handler(update: Update, context:
 
         return ABILITY_VISUALIZATION
 
+    elif data == ABILITY_ACTIVE_CALLBACK_DATA:
+
+        character: Character = context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_CHARACTER_KEY]
+        ability: Ability = context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_ABILITY_KEY]
+
+        await query.answer()
+        character.toggle_activate_ability(ability)
+
+        message_str, reply_keyboard = create_ability_menu(ability)
+        await query.edit_message_text(message_str, reply_markup=reply_keyboard, parse_mode=ParseMode.HTML)
+
+        return ABILITY_VISUALIZATION
+
     return ABILITY_ACTIONS
 
 
@@ -1164,7 +1186,7 @@ async def character_ability_text_handler(update: Update, context: ContextTypes.D
         return ABILITY_LEARN
 
     # Ask for ability features
-    features_chosen = {'is_passive': True, 'restoration_type': 'short'}
+    features_chosen = {'is_passive': True, 'restoration_type': RestorationType.SHORT_REST}
     context.user_data[CHARACTERS_CREATOR_KEY][ABILITY_FEATURES_KEY] = features_chosen
     context.user_data[CHARACTERS_CREATOR_KEY][TEMP_ABILITY_KEY] = (ability_name, ability_desc, int(ability_max_uses))
     reply_markup = create_ability_keyboard(features_chosen)
