@@ -151,12 +151,11 @@ def create_main_menu_message(character: Character) -> Tuple[str, InlineKeyboardM
                    f"<b>Nome personaggio:</b> {character.name} L. {character.total_levels()}\n"
                    f"<b>Razza:</b> {character.race}\n"
                    f"<b>Genere:</b> {character.gender}\n"
-                   f"<b>Classe:</b> {', '.join(f"{class_name} (Level {level})" for class_name, level in character.multi_class.classes.items())}\n\n"
-                   f"<b>Punti ferita:</b> {character.current_hit_points}/{character.hit_points} PF\n"
-                   f"<b>Slot incantesimo</b>\n{"\n".join([f"L{str(slot.level)} {"🟥" * slot.used_slots}{"🟦" * (slot.total_slots - slot.used_slots)}" for _, slot in sorted(character.spell_slots.items())]) if character.spell_slots else "Non hai registrato ancora nessuno Slot incantesimo"}")
-
-    message_str += (f"\n<b>Punti caratteristica</b>\n{str(character.feature_points)}\n\n"
-                    f"<b>Peso trasportato:</b> {character.encumbrance} Lb")
+                   f"<b>Classe:</b> {', '.join(f"{class_name} (Level {level})" for class_name, level in character.multi_class.classes.items())}\n"
+                   f"<b>Punti ferita:</b> {character.current_hit_points}/{character.hit_points} PF\n\n"
+                   f"<b>Punti caratteristica</b>\n{str(character.feature_points)}\n\n"
+                   f"<b>Slot incantesimo</b>\n{"\n".join([f"L{str(slot.level)} {"🟥" * slot.used_slots}{"🟦" * (slot.total_slots - slot.used_slots)}" for _, slot in sorted(character.spell_slots.items())]) if character.spell_slots else "Non hai registrato ancora nessuno Slot incantesimo"}\n\n"
+                   f"<b>Peso trasportato:</b> {character.encumbrance} Lb")
 
     keyboard = [
         [
@@ -317,7 +316,8 @@ def create_spells_slot_menu(context: ContextTypes.DEFAULT_TYPE):
 
 
 def create_bag_menu(character: Character) -> Tuple[str, InlineKeyboardMarkup]:
-    message_str = (f"<b>Oggetti nella borsa</b>\n\n"
+    message_str = (f"<b>Oggetti nella borsa</b>\n"
+                   f"<b>Peso trasportabile massimo</b>{character.carry_capacity}Lb\n\n"
                    f"{'\n'.join(f'<code>{item.name}</code> x{item.quantity}' for item in character.bag) if character.bag else
                    "Lo zaino è ancora vuoto"}")
 
