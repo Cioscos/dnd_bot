@@ -356,7 +356,7 @@ async def create_spells_menu(character: Character, update: Update, context: Cont
 
         message_str += "Non conosci ancora nessuna spell ‍🤷‍♂️"
         keyboard = [
-            [InlineKeyboardButton("Impara nuova spell", callback_data=SPELL_LEARN_CALLBACK_DATA)]
+            [InlineKeyboardButton("Impara nuovo incantesimo", callback_data=SPELL_LEARN_CALLBACK_DATA)]
         ]
         await update.effective_message.reply_text(message_str, reply_markup=InlineKeyboardMarkup(keyboard),
                                                   parse_mode=ParseMode.HTML)
