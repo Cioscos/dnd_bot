@@ -153,7 +153,7 @@ def create_main_menu_message(character: Character) -> Tuple[str, InlineKeyboardM
                    f"<b>Genere:</b> {character.gender}\n"
                    f"<b>Classe:</b> {', '.join(f"{class_name} (Level {level})" for class_name, level in character.multi_class.classes.items())}\n\n"
                    f"<b>Punti ferita:</b> {character.current_hit_points}/{character.hit_points} PF\n"
-                   f"<b>Slot incantesimo</b>\n{"\n".join([f"L{str(slot.level)} {"🟦" * (slot.total_slots - slot.used_slots)}{"🟥" * slot.used_slots}" for slot in character.spell_slots.values()]) if character.spell_slots else "Non hai registrato ancora nessuno Slot incantesimo"}")
+                   f"<b>Slot incantesimo</b>\n{"\n".join([f"L{str(slot.level)} {"🟥" * slot.used_slots}{"🟦" * (slot.total_slots - slot.used_slots)}" for _, slot in sorted(character.spell_slots.items())]) if character.spell_slots else "Non hai registrato ancora nessuno Slot incantesimo"}")
 
     message_str += (f"\n<b>Punti caratteristica</b>\n{str(character.feature_points)}\n\n"
                     f"<b>Peso trasportato:</b> {character.encumbrance} Lb")
@@ -285,9 +285,11 @@ def create_spells_slot_menu(context: ContextTypes.DEFAULT_TYPE):
     else:
 
         spell_slots_buttons = []
-        for slot in character.spell_slots.values():
+
+        # Sort slots by level (dictionary key)
+        for level, slot in sorted(character.spell_slots.items()):
             spell_slots_buttons.append(InlineKeyboardButton(
-                f"{str(slot.level)} {"🟦" * (slot.total_slots - slot.used_slots)}{"🟥" * slot.used_slots}",
+                f"{str(slot.level)} {'🟥' * slot.used_slots}{'🟦' * (slot.total_slots - slot.used_slots)}",
                 callback_data=f"{SPELL_SLOT_SELECTED_CALLBACK_DATA}|{slot.level}"))
 
         # Group buttons into rows of maximum 3 buttons each
@@ -1645,10 +1647,10 @@ async def character_spells_slots_mode_answer_query_handler(update: Update, conte
 
         await update.effective_message.reply_text("Modalità di gestione slot incantesimo impostata correttamente! ✅")
 
-        msg, reply_markup = create_main_menu_message(character)
-        await update.effective_message.reply_text(msg, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
+        message_str, reply_markup = create_spells_slot_menu(context)
+        await update.effective_message.reply_text(message_str, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
 
-        return FUNCTION_SELECTION
+        return SPELLS_SLOTS_MANAGEMENT
 
 
 async def character_spells_slots_add_query_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -1728,6 +1730,8 @@ async def character_spell_slot_remove_answer_query_handler(update: Update, conte
         return SPELL_SLOT_REMOVING
 
     character: Character = context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_CHARACTER_KEY]
+    slot_number = int(slot_number)
+    slot_level = int(slot_level)
 
     if slot_level not in character.spell_slots:
         await update.effective_message.reply_text(f"Slot di livello {slot_level} non presente!\n\n"
@@ -1735,19 +1739,19 @@ async def character_spell_slot_remove_answer_query_handler(update: Update, conte
 
         return SPELL_SLOT_REMOVING
 
-    spell_slot_to_edit = character.spell_slots[int(slot_level)]
+    spell_slot_to_edit = character.spell_slots[slot_level]
 
-    if spell_slot_to_edit.total_slots - int(slot_number) <= 0:
+    if spell_slot_to_edit.total_slots - slot_number <= 0:
 
         await update.effective_message.reply_text("Il numero di slot da rimuovere coprono o superano "
                                                   f"il numero di slot di livello {slot_level} già presenti.\n"
                                                   f"Gli slot di questo livello sono stati tutti rimossi!")
 
-        character.spell_slots.pop(int(slot_level), None)
+        character.spell_slots.pop(slot_level, None)
 
     else:
 
-        spell_slot_to_edit.total_slots -= int(slot_number)
+        spell_slot_to_edit.total_slots -= slot_number
         await update.effective_message.reply_text(f"{slot_number} slot di livello {slot_level} rimossi!")
 
     message_str, reply_markup = create_spells_slot_menu(context)
