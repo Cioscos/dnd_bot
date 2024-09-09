@@ -1,5 +1,6 @@
 import logging
 import random
+import re
 from typing import List, Tuple, Dict
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, CallbackQuery
@@ -1588,7 +1589,7 @@ async def character_deleting_query_handler(update: Update, context: ContextTypes
         ]
     ]
 
-    await query.edit_message_text("Sei sicuro di voler chancellare il personaggio?\n\n"
+    await update.effective_message.reply_text("Sei sicuro di voler chancellare il personaggio?\n\n"
                                               f"{character.name} - classe {', '.join(f"{class_name} (Level {level})" for class_name, level in character.multi_class.classes.items())} di L. {character.total_levels()}",
                                               reply_markup=InlineKeyboardMarkup(keyboard))
 
@@ -1598,7 +1599,7 @@ async def character_deleting_query_handler(update: Update, context: ContextTypes
 async def character_deleting_answer_query_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     query = update.callback_query
     data = query.data
-    current_character: Character = context.user_data[CHARACTERS_CREATOR_KEY].pop(CURRENT_CHARACTER_KEY, None)
+    current_character: Character = context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_CHARACTER_KEY]
 
     if data == AFFERMATIVE_CHARACTER_DELETION_CALLBACK_DATA:
 
@@ -1608,6 +1609,8 @@ async def character_deleting_answer_query_handler(update: Update, context: Conte
         for character in characters:
             if character.name == current_character.name:
                 characters.remove(character)
+
+        context.user_data[CHARACTERS_CREATOR_KEY].pop(CURRENT_CHARACTER_KEY, None)
 
         await update.effective_message.reply_text("Personaggio eliminato con successo ✅\n\n"
                                                   "Usa il comando /start per avviare una nuova conversazione!\n"
@@ -2164,6 +2167,59 @@ async def dice_actions_query_handler(update: Update, context: ContextTypes.DEFAU
     return DICE_ACTION
 
 
-async def character_generic_main_menu_query_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+async def character_generic_main_menu_query_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     query = update.callback_query
-    await query.answer("Chiamata intercettata")
+    await query.answer()
+
+    # Rollback for multiclass management
+    if PENDING_REASSIGNMENT in context.user_data[CHARACTERS_CREATOR_KEY]:
+        # Get the pending reassignment information
+        pending_reassignment = context.user_data[CHARACTERS_CREATOR_KEY][PENDING_REASSIGNMENT]
+        removed_class_level = pending_reassignment[REMOVED_CLASS_LEVEL]
+        remaining_classes = pending_reassignment[REMAINING_CLASSES]
+
+        if len(remaining_classes) == 1:
+            # Automatically reassign levels if only one class is left
+            remaining_class_name = remaining_classes[0]
+            character: Character = context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_CHARACTER_KEY]
+            multi_class = character.multi_class
+
+            multi_class.add_class(remaining_class_name, removed_class_level)
+
+            await update.message.reply_text(f"Il comando /stop è stato ricevuto.\n"
+                                            f"I {removed_class_level} livelli rimossi sono stati aggiunti automaticamente alla classe {remaining_class_name}.")
+        else:
+            # Ask the user to finish reassigning the levels before stopping
+            await update.message.reply_text("Devi assegnare i livelli rimanenti prima di poter usare il comando /stop.")
+            return MULTICLASSING_ACTIONS
+
+    else:
+
+        context.user_data[CHARACTERS_CREATOR_KEY].pop(TEMP_CHARACTER_KEY, None)
+        context.user_data[CHARACTERS_CREATOR_KEY].pop(CURRENT_ITEM_KEY, None)
+        context.user_data[CHARACTERS_CREATOR_KEY].pop(PENDING_REASSIGNMENT, None)
+        context.user_data[CHARACTERS_CREATOR_KEY].pop(ABILITY_FEATURES_KEY, None)
+        context.user_data[CHARACTERS_CREATOR_KEY].pop(TEMP_ABILITY_KEY, None)
+        context.user_data[CHARACTERS_CREATOR_KEY].pop(CURRENT_ABILITY_KEY, None)
+
+    MAINMENU_CALLBACKDATA_TO_CALLBACK = {
+        r"^level_(up|down)$": character_change_level_query_handler,
+        fr"^{LEVEL_UP_CALLBACK_DATA}\|.*$|^{LEVEL_DOWN_CALLBACK_DATA}\|.*$": character_level_change_class_choice_handler,
+        fr"^{BAG_CALLBACK_DATA}$": character_bag_query_handler,
+        fr"^{SPELLS_CALLBACK_DATA}$": character_spells_query_handler,
+        fr"^{ABILITIES_CALLBACK_DATA}$": character_abilities_query_handler,
+        fr"^{SPELLS_SLOT_CALLBACK_DATA}$": character_spells_slots_query_handler,
+        fr"^{FEATURE_POINTS_CALLBACK_DATA}$": character_feature_point_query_handler,
+        fr"^{MULTICLASSING_CALLBACK_DATA}$": character_multiclassing_query_handler,
+        fr"^{DELETE_CHARACTER_CALLBACK_DATA}$": character_deleting_query_handler,
+        fr"^{DAMAGE_CALLBACK_DATA}$": character_damage_query_handler,
+        fr"^{HEALING_CALLBACK_DATA}$": character_healing_query_handler,
+        fr"^{HIT_POINTS_CALLBACK_DATA}$": character_hit_points_query_handler,
+        fr"^{LONG_REST_WARNING_CALLBACK_DATA}$": character_long_rest_warning_query_handler,
+        fr"^{SHORT_REST_WARNING_CALLBACK_DATA}$": character_short_rest_warning_query_handler,
+        fr"^{ROLL_DICE_MENU_CALLBACK_DATA}$": dice_handler
+    }
+
+    for regex, func in MAINMENU_CALLBACKDATA_TO_CALLBACK.items():
+        if re.match(regex, query.data):
+            return await func(update, context)
