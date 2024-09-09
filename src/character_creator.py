@@ -1059,8 +1059,9 @@ async def character_abilities_menu_query_handler(update: Update, context: Contex
     else:
 
         await query.answer()
+        _, ability_name = data.split('|', maxsplit=1)
         character: Character = context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_CHARACTER_KEY]
-        ability: Ability = next((ability for ability in character.abilities if ability.name == data), None)
+        ability: Ability = next((ability for ability in character.abilities if ability.name == ability_name), None)
 
         message_str, reply_keyboard = create_ability_menu(ability)
         await query.edit_message_text(message_str, reply_markup=reply_keyboard, parse_mode=ParseMode.HTML)
@@ -1093,8 +1094,8 @@ async def character_ability_visualization_query_handler(update: Update, context:
     if data == ABILITY_EDIT_CALLBACK_DATA:
 
         await query.answer()
-        await query.edit_message_text("Inviami l'abilità inserendo il nome e la descrizione separate da un #\n\n"
-                                      "<b>Esempio:</b> <code>nome#bella descrizione</code>\n\n",
+        await query.edit_message_text("Inviami l'abilità inserendo il nome, descrizione e livello separati da un #\n\n"
+                                      "<b>Esempio:</b> <code>nome#bella descrizione#2</code>\n\n",
                                       parse_mode=ParseMode.HTML)
 
     elif data == ABILITY_DELETE_CALLBACK_DATA:
