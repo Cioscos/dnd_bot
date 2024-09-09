@@ -425,7 +425,8 @@ def main() -> None:
                                      pattern=fr"^{BAG_ITEM_EDIT_CALLBACK_DATA}\|all")
             ],
             FEATURE_POINTS_EDIT: [
-                CallbackQueryHandler(character_feature_points_edit_query_handler)
+                CallbackQueryHandler(character_feature_points_edit_query_handler,
+                                     pattern=r"^(strength|dexterity|constitution|intelligence|wisdom|charisma)\|[+-]$")
             ],
             ABILITIES_MENU: [
                 CallbackQueryHandler(character_ability_new_query_handler,
