@@ -57,7 +57,7 @@ from character_creator import character_creator_start_handler, character_creatio
     ROLL_DICE_CALLBACK_DATA, ROLL_DICE_DELETE_HISTORY_CALLBACK_DATA, SPELL_EDIT_CALLBACK_DATA, \
     SPELL_DELETE_CALLBACK_DATA, SPELL_BACK_MENU_CALLBACK_DATA, ABILITY_EDIT_CALLBACK_DATA, ABILITY_ACTIVE_CALLBACK_DATA, \
     ABILITY_DELETE_CALLBACK_DATA, ABILITY_USE_CALLBACK_DATA, ABILITY_BACK_MENU_CALLBACK_DATA, \
-    ABILITY_LEARN_CALLBACK_DATA
+    ABILITY_LEARN_CALLBACK_DATA, AFFERMATIVE_CHARACTER_DELETION_CALLBACK_DATA, NEGATIVE_CHARACTER_DELETION_CALLBACK_DATA
 from class_submenus import class_submenus_query_handler, class_spells_menu_buttons_query_handler, \
     class_search_spells_text_handler, class_reading_spells_menu_buttons_query_handler, \
     class_spell_visualization_buttons_query_handler, class_resources_submenu_text_handler, CLASS_SPELLS_SUBMENU, \
@@ -405,7 +405,8 @@ def main() -> None:
                 CommandHandler('newCharacter', character_creation_handler)
             ],
             CHARACTER_DELETION: [
-                CallbackQueryHandler(character_deleting_answer_query_handler)
+                CallbackQueryHandler(character_deleting_answer_query_handler,
+                                     pattern=fr"^{AFFERMATIVE_CHARACTER_DELETION_CALLBACK_DATA}|{NEGATIVE_CHARACTER_DELETION_CALLBACK_DATA}$")
             ],
             BAG_MANAGEMENT: [
                 CallbackQueryHandler(character_bag_new_object_query_handler,
