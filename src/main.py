@@ -53,7 +53,9 @@ from character_creator import character_creator_start_handler, character_creatio
     ROLL_DICE_MENU_CALLBACK_DATA, dice_handler, dice_actions_query_handler, character_ability_features_query_handler, \
     character_ability_insert_query_handler, SPELL_LEARN_CALLBACK_DATA, character_short_rest_warning_query_handler, \
     character_creation_stop, OVER_HEALING_CONFIRMATION, character_healing_value_check_or_registration_handler, \
-    character_over_healing_registration_query_handler
+    character_over_healing_registration_query_handler, character_generic_main_menu_query_handler, \
+    ROLL_DICE_CALLBACK_DATA, ROLL_DICE_DELETE_HISTORY_CALLBACK_DATA, SPELL_EDIT_CALLBACK_DATA, \
+    SPELL_DELETE_CALLBACK_DATA, SPELL_BACK_MENU_CALLBACK_DATA
 from class_submenus import class_submenus_query_handler, class_spells_menu_buttons_query_handler, \
     class_search_spells_text_handler, class_reading_spells_menu_buttons_query_handler, \
     class_spell_visualization_buttons_query_handler, class_resources_submenu_text_handler, CLASS_SPELLS_SUBMENU, \
@@ -447,10 +449,12 @@ def main() -> None:
                 MessageHandler(filters.TEXT & ~filters.COMMAND, character_ability_text_handler)
             ],
             SPELLS_MENU: [
-                CallbackQueryHandler(character_spells_menu_query_handler)
+                CallbackQueryHandler(character_spells_menu_query_handler,
+                                     pattern=fr"^(spell_name\|.+|prev_page|next_page)$")
             ],
             SPELL_VISUALIZATION: [
-                CallbackQueryHandler(character_spell_visualization_query_handler)
+                CallbackQueryHandler(character_spell_visualization_query_handler,
+                                     pattern=fr"{SPELL_EDIT_CALLBACK_DATA}|{SPELL_DELETE_CALLBACK_DATA}|{SPELL_BACK_MENU_CALLBACK_DATA}")
             ],
             SPELL_ACTIONS: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, character_spell_edit_handler),
@@ -458,7 +462,8 @@ def main() -> None:
                                      pattern=r'^[yn]$')
             ],
             SPELL_LEARN: [
-                CallbackQueryHandler(character_spell_new_query_handler),
+                CallbackQueryHandler(character_spell_new_query_handler,
+                                     pattern=fr"^{SPELL_LEARN_CALLBACK_DATA}$"),
                 MessageHandler(filters.TEXT & ~filters.COMMAND, character_spell_learn_handler)
             ],
             MULTICLASSING_ACTIONS: [
@@ -493,11 +498,13 @@ def main() -> None:
                 MessageHandler(filters.TEXT & ~filters.COMMAND, character_spell_slot_remove_answer_query_handler)
             ],
             DICE_ACTION: [
-                CallbackQueryHandler(dice_actions_query_handler)
+                CallbackQueryHandler(dice_actions_query_handler,
+                                     pattern=fr"^(d\d+\|[+-]|{ROLL_DICE_CALLBACK_DATA}|{ROLL_DICE_DELETE_HISTORY_CALLBACK_DATA})$")
             ]
         },
         fallbacks=[
-            CommandHandler("stop", character_creator_stop_submenu)
+            CommandHandler("stop", character_creator_stop_submenu),
+            CallbackQueryHandler(character_generic_main_menu_query_handler)
         ],
         name='character_creator_handler_v7',
         persistent=True

@@ -224,7 +224,7 @@ def generate_spells_list_keyboard(spells: List[Spell],
     keyboard = []
     row = []
     for spell in spells:
-        button = InlineKeyboardButton(spell.name, callback_data=f"{spell.name}")
+        button = InlineKeyboardButton(spell.name, callback_data=f"spell_name|{spell.name}")
         row.append(button)
 
         if len(row) == 2:

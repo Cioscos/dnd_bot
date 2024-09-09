@@ -869,8 +869,9 @@ async def character_spells_menu_query_handler(update: Update, context: ContextTy
     else:
 
         await query.answer()
+        _, spell_name = data.split('|', maxsplit=1)
         character: Character = context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_CHARACTER_KEY]
-        spell: Spell = next((spell for spell in character.spells if spell.name == data), None)
+        spell: Spell = next((spell for spell in character.spells if spell.name == spell_name), None)
         message_str = (f"<b>{spell.name:<{50}}</b>L{spell.level.value}\n\n"
                        f"<b>Descrizione</b>\n{spell.description}")
         keyboard = [
@@ -2160,3 +2161,8 @@ async def dice_actions_query_handler(update: Update, context: ContextTypes.DEFAU
         await send_dice_menu(update, context, is_edit=True)
 
     return DICE_ACTION
+
+
+async def character_generic_main_menu_query_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    query = update.callback_query
+    await query.answer("Chiamata intercettata")
