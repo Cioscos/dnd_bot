@@ -56,7 +56,8 @@ from character_creator import character_creator_start_handler, character_creatio
     character_over_healing_registration_query_handler, character_generic_main_menu_query_handler, \
     ROLL_DICE_CALLBACK_DATA, ROLL_DICE_DELETE_HISTORY_CALLBACK_DATA, SPELL_EDIT_CALLBACK_DATA, \
     SPELL_DELETE_CALLBACK_DATA, SPELL_BACK_MENU_CALLBACK_DATA, ABILITY_EDIT_CALLBACK_DATA, ABILITY_ACTIVE_CALLBACK_DATA, \
-    ABILITY_DELETE_CALLBACK_DATA, ABILITY_USE_CALLBACK_DATA, ABILITY_BACK_MENU_CALLBACK_DATA
+    ABILITY_DELETE_CALLBACK_DATA, ABILITY_USE_CALLBACK_DATA, ABILITY_BACK_MENU_CALLBACK_DATA, \
+    ABILITY_LEARN_CALLBACK_DATA
 from class_submenus import class_submenus_query_handler, class_spells_menu_buttons_query_handler, \
     class_search_spells_text_handler, class_reading_spells_menu_buttons_query_handler, \
     class_spell_visualization_buttons_query_handler, class_resources_submenu_text_handler, CLASS_SPELLS_SUBMENU, \
@@ -450,7 +451,8 @@ def main() -> None:
                     character_ability_features_query_handler,
                     pattern=fr"^({ABILITY_IS_PASSIVE_CALLBACK_DATA}\|\d+|{ABILITY_RESTORATION_TYPE_CALLBACK_DATA}\|(short|long))$"
                 ),
-                CallbackQueryHandler(character_ability_new_query_handler),
+                CallbackQueryHandler(character_ability_new_query_handler,
+                                     pattern=fr"^{ABILITY_LEARN_CALLBACK_DATA}$"),
                 MessageHandler(filters.TEXT & ~filters.COMMAND, character_ability_text_handler)
             ],
             SPELLS_MENU: [
