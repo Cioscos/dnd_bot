@@ -47,12 +47,17 @@ from character_creator import character_creator_start_handler, character_creatio
     character_spells_slot_use_reset_query_handler, SPELLS_SLOTS_RESET_CALLBACK_DATA, \
     character_spells_slot_change_mode_query_handler, SPELLS_SLOTS_CHANGE_CALLBACK_DATA, DAMAGE_CALLBACK_DATA, \
     HEALING_CALLBACK_DATA, character_damage_query_handler, character_healing_query_handler, \
-    character_healing_registration_handler, character_hit_points_query_handler, HIT_POINTS_CALLBACK_DATA, \
+    character_hit_points_query_handler, HIT_POINTS_CALLBACK_DATA, \
     character_hit_points_registration_handler, character_damage_registration_handler, LONG_REST_WARNING_CALLBACK_DATA, \
     character_long_rest_warning_query_handler, LONG_REST_CALLBACK_DATA, character_long_rest_query_handler, \
     ROLL_DICE_MENU_CALLBACK_DATA, dice_handler, dice_actions_query_handler, character_ability_features_query_handler, \
     character_ability_insert_query_handler, SPELL_LEARN_CALLBACK_DATA, character_short_rest_warning_query_handler, \
-    character_creation_stop
+    character_creation_stop, OVER_HEALING_CONFIRMATION, character_healing_value_check_or_registration_handler, \
+    character_over_healing_registration_query_handler, character_generic_main_menu_query_handler, \
+    ROLL_DICE_CALLBACK_DATA, ROLL_DICE_DELETE_HISTORY_CALLBACK_DATA, SPELL_EDIT_CALLBACK_DATA, \
+    SPELL_DELETE_CALLBACK_DATA, SPELL_BACK_MENU_CALLBACK_DATA, ABILITY_EDIT_CALLBACK_DATA, ABILITY_ACTIVE_CALLBACK_DATA, \
+    ABILITY_DELETE_CALLBACK_DATA, ABILITY_USE_CALLBACK_DATA, ABILITY_BACK_MENU_CALLBACK_DATA, \
+    ABILITY_LEARN_CALLBACK_DATA, AFFERMATIVE_CHARACTER_DELETION_CALLBACK_DATA, NEGATIVE_CHARACTER_DELETION_CALLBACK_DATA
 from class_submenus import class_submenus_query_handler, class_spells_menu_buttons_query_handler, \
     class_search_spells_text_handler, class_reading_spells_menu_buttons_query_handler, \
     class_spell_visualization_buttons_query_handler, class_resources_submenu_text_handler, CLASS_SPELLS_SUBMENU, \
@@ -378,7 +383,11 @@ def main() -> None:
                 MessageHandler(filters.TEXT & ~filters.COMMAND, character_damage_registration_handler)
             ],
             HEALING_REGISTRATION: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, character_healing_registration_handler)
+                MessageHandler(filters.TEXT & ~filters.COMMAND, character_healing_value_check_or_registration_handler)
+            ],
+            OVER_HEALING_CONFIRMATION: [
+                CallbackQueryHandler(character_over_healing_registration_query_handler,
+                                     pattern=r'^[yn]$')
             ],
             HIT_POINTS_REGISTRATION: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, character_hit_points_registration_handler)
@@ -396,7 +405,8 @@ def main() -> None:
                 CommandHandler('newCharacter', character_creation_handler)
             ],
             CHARACTER_DELETION: [
-                CallbackQueryHandler(character_deleting_answer_query_handler)
+                CallbackQueryHandler(character_deleting_answer_query_handler,
+                                     pattern=fr"^{AFFERMATIVE_CHARACTER_DELETION_CALLBACK_DATA}|{NEGATIVE_CHARACTER_DELETION_CALLBACK_DATA}$")
             ],
             BAG_MANAGEMENT: [
                 CallbackQueryHandler(character_bag_new_object_query_handler,
@@ -416,15 +426,20 @@ def main() -> None:
                                      pattern=fr"^{BAG_ITEM_EDIT_CALLBACK_DATA}\|all")
             ],
             FEATURE_POINTS_EDIT: [
-                CallbackQueryHandler(character_feature_points_edit_query_handler)
+                CallbackQueryHandler(character_feature_points_edit_query_handler,
+                                     pattern=r"^(strength|dexterity|constitution|intelligence|wisdom|charisma)\|[+-]$")
             ],
             ABILITIES_MENU: [
                 CallbackQueryHandler(character_ability_new_query_handler,
                                      pattern=fr"^{SPELL_LEARN_CALLBACK_DATA}$"),
-                CallbackQueryHandler(character_abilities_menu_query_handler)
+                CallbackQueryHandler(character_abilities_menu_query_handler,
+                                     pattern=fr"^(ability_name\|.+|prev_page|next_page)$")
             ],
             ABILITY_VISUALIZATION: [
-                CallbackQueryHandler(character_ability_visualization_query_handler)
+                CallbackQueryHandler(character_ability_visualization_query_handler,
+                                     pattern=fr"{ABILITY_EDIT_CALLBACK_DATA}|{ABILITY_DELETE_CALLBACK_DATA}|"
+                                             fr"{ABILITY_ACTIVE_CALLBACK_DATA}|{ABILITY_USE_CALLBACK_DATA}"
+                                             fr"|{ABILITY_BACK_MENU_CALLBACK_DATA}")
             ],
             ABILITY_ACTIONS: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, character_ability_edit_handler),
@@ -438,14 +453,17 @@ def main() -> None:
                     character_ability_features_query_handler,
                     pattern=fr"^({ABILITY_IS_PASSIVE_CALLBACK_DATA}\|\d+|{ABILITY_RESTORATION_TYPE_CALLBACK_DATA}\|(short|long))$"
                 ),
-                CallbackQueryHandler(character_ability_new_query_handler),
+                CallbackQueryHandler(character_ability_new_query_handler,
+                                     pattern=fr"^{ABILITY_LEARN_CALLBACK_DATA}$"),
                 MessageHandler(filters.TEXT & ~filters.COMMAND, character_ability_text_handler)
             ],
             SPELLS_MENU: [
-                CallbackQueryHandler(character_spells_menu_query_handler)
+                CallbackQueryHandler(character_spells_menu_query_handler,
+                                     pattern=fr"^(spell_name\|.+|prev_page|next_page)$")
             ],
             SPELL_VISUALIZATION: [
-                CallbackQueryHandler(character_spell_visualization_query_handler)
+                CallbackQueryHandler(character_spell_visualization_query_handler,
+                                     pattern=fr"{SPELL_EDIT_CALLBACK_DATA}|{SPELL_DELETE_CALLBACK_DATA}|{SPELL_BACK_MENU_CALLBACK_DATA}")
             ],
             SPELL_ACTIONS: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, character_spell_edit_handler),
@@ -453,7 +471,8 @@ def main() -> None:
                                      pattern=r'^[yn]$')
             ],
             SPELL_LEARN: [
-                CallbackQueryHandler(character_spell_new_query_handler),
+                CallbackQueryHandler(character_spell_new_query_handler,
+                                     pattern=fr"^{SPELL_LEARN_CALLBACK_DATA}$"),
                 MessageHandler(filters.TEXT & ~filters.COMMAND, character_spell_learn_handler)
             ],
             MULTICLASSING_ACTIONS: [
@@ -488,13 +507,15 @@ def main() -> None:
                 MessageHandler(filters.TEXT & ~filters.COMMAND, character_spell_slot_remove_answer_query_handler)
             ],
             DICE_ACTION: [
-                CallbackQueryHandler(dice_actions_query_handler)
+                CallbackQueryHandler(dice_actions_query_handler,
+                                     pattern=fr"^(d\d+\|[+-]|{ROLL_DICE_CALLBACK_DATA}|{ROLL_DICE_DELETE_HISTORY_CALLBACK_DATA})$")
             ]
         },
         fallbacks=[
-            CommandHandler("stop", character_creator_stop_submenu)
+            CommandHandler("stop", character_creator_stop_submenu),
+            CallbackQueryHandler(character_generic_main_menu_query_handler)
         ],
-        name='character_creator_handler_v6',
+        name='character_creator_handler_v7',
         persistent=True
     )
 

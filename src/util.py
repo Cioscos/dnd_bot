@@ -187,7 +187,7 @@ def generate_abilities_list_keyboard(abilities: List[Ability],
     keyboard = []
     row = []
     for ability in abilities:
-        button = InlineKeyboardButton(ability.name, callback_data=f"{ability.name}")
+        button = InlineKeyboardButton(ability.name, callback_data=f"ability_name|{ability.name}")
         row.append(button)
 
         if len(row) == 2:
@@ -224,7 +224,7 @@ def generate_spells_list_keyboard(spells: List[Spell],
     keyboard = []
     row = []
     for spell in spells:
-        button = InlineKeyboardButton(spell.name, callback_data=f"{spell.name}")
+        button = InlineKeyboardButton(spell.name, callback_data=f"spell_name|{spell.name}")
         row.append(button)
 
         if len(row) == 2:
@@ -240,6 +240,7 @@ def generate_spells_list_keyboard(spells: List[Spell],
         navigation_buttons = [InlineKeyboardButton("⬅️ Precedente", callback_data="prev_page"),
                               InlineKeyboardButton("Successiva ➡️", callback_data="next_page")]
         keyboard.append(navigation_buttons)
+        keyboard.append([InlineKeyboardButton("Impara nuova spell", callback_data=SPELL_LEARN_CALLBACK_DATA)])
 
     return InlineKeyboardMarkup(keyboard)
 
