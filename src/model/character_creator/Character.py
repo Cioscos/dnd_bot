@@ -176,6 +176,12 @@ class Character:
         """Lists all abilities the character has learned."""
         return [str(ability) for ability in self.abilities]
 
+    def use_spell(self, spell_to_use: Spell):
+        """Use a spell consuming the proper spell slot"""
+        for spell in self.spells:
+            if spell.name == spell_to_use.name:
+                self.use_spell_slot(spell.level.value)
+
     def add_spell_slot(self, spell_slot: SpellSlot):
         """Adds or updates a spell slot at a given level."""
         self.spell_slots[spell_slot.level] = spell_slot
@@ -183,13 +189,13 @@ class Character:
     def use_spell_slot(self, level: int):
         """Uses a spell slot at the specified level."""
         if level not in self.spell_slots:
-            raise ValueError(f"No spell slots available at level {level}.")
+            raise ValueError(f"Nessun slot incantesimo disponibile al livello {level}.")
         self.spell_slots[level].use_slot()
 
     def restore_spell_slot(self, level: int):
         """Restores a used spell slot at the specified level."""
         if level not in self.spell_slots:
-            raise ValueError(f"No spell slots available at level {level}.")
+            raise ValueError(f"Nessun slot incantesimo disponibile al livello {level}.")
         self.spell_slots[level].restore_slot()
 
     def restore_all_spell_slots(self):

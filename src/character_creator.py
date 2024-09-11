@@ -105,6 +105,7 @@ ABILITY_RESTORATION_TYPE_CALLBACK_DATA = "ability_restoration_type"
 ABILITY_INSERT_CALLBACK_DATA = "ability_insert"
 SPELL_LEARN_CALLBACK_DATA = "spells_learn"
 SPELL_EDIT_CALLBACK_DATA = "spell_edit"
+SPELL_USE_CALLBACK_DATA = "spell_use"
 SPELL_DELETE_CALLBACK_DATA = "spell_delete"
 SPELL_BACK_MENU_CALLBACK_DATA = "spell_back_menu"
 LEVEL_UP_CALLBACK_DATA = "level_up"
@@ -877,6 +878,9 @@ async def character_spells_menu_query_handler(update: Update, context: ContextTy
                        f"<b>Descrizione</b>\n{spell.description}")
         keyboard = [
             [
+                InlineKeyboardButton("Usa", callback_data=SPELL_USE_CALLBACK_DATA)
+            ],
+            [
                 InlineKeyboardButton("Modifica", callback_data=SPELL_EDIT_CALLBACK_DATA),
                 InlineKeyboardButton("Dimentica", callback_data=SPELL_DELETE_CALLBACK_DATA)
             ],
@@ -908,11 +912,11 @@ async def character_spells_menu_query_handler(update: Update, context: ContextTy
 
 async def character_spell_visualization_query_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     query = update.callback_query
-    await query.answer()
     data = query.data
 
     if data == SPELL_EDIT_CALLBACK_DATA:
 
+        await query.answer()
         await query.edit_message_text("Inviami l'incantesimo inserendo il nome, descrizione e livello "
                                       "separati da un #\n\n"
                                       "<b>Esempio:</b> <code>Palla di fuoco#Unico incantesimo dei maghi#3</code>\n\n",
@@ -920,6 +924,7 @@ async def character_spell_visualization_query_handler(update: Update, context: C
 
     elif data == SPELL_DELETE_CALLBACK_DATA:
 
+        await query.answer()
         keyboard = [
             [
                 InlineKeyboardButton("Si", callback_data='y'),
@@ -931,6 +936,7 @@ async def character_spell_visualization_query_handler(update: Update, context: C
 
     elif data == SPELL_BACK_MENU_CALLBACK_DATA:
 
+        await query.answer()
         spells_page = context.user_data[CHARACTERS_CREATOR_KEY][INLINE_PAGES_KEY][
             context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_INLINE_PAGE_INDEX_KEY]]
 
@@ -940,6 +946,20 @@ async def character_spell_visualization_query_handler(update: Update, context: C
         await query.edit_message_text(message_str, reply_markup=reply_markup)
 
         return SPELLS_MENU
+
+    elif data == SPELL_USE_CALLBACK_DATA:
+
+        spell: Spell = context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_SPELL_KEY]
+        character: Character = context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_CHARACTER_KEY]
+        try:
+            character.use_spell(spell)
+        except ValueError as e:
+            await query.answer(str(e), show_alert=True)
+        else:
+            await query.answer(f"Slot di livello {spell.level.value} usato")
+
+        return SPELL_VISUALIZATION
+
 
     return SPELL_ACTIONS
 
