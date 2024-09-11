@@ -517,7 +517,7 @@ def main() -> None:
             CommandHandler("stop", character_creator_stop_submenu),
             CallbackQueryHandler(character_generic_main_menu_query_handler)
         ],
-        name='character_creator_handler_v9',
+        name='character_creator_handler_v10',
         persistent=True
     )
 
