@@ -460,7 +460,7 @@ def main() -> None:
             ],
             SPELLS_MENU: [
                 CallbackQueryHandler(character_spells_menu_query_handler,
-                                     pattern=fr"^(spell_name\|.+|prev_page|next_page)$")
+                                     pattern=fr"^(spell_name\|.+|prev_page|next_page|{SPELL_LEARN_CALLBACK_DATA})$")
             ],
             SPELL_VISUALIZATION: [
                 CallbackQueryHandler(character_spell_visualization_query_handler,
@@ -517,7 +517,7 @@ def main() -> None:
             CommandHandler("stop", character_creator_stop_submenu),
             CallbackQueryHandler(character_generic_main_menu_query_handler)
         ],
-        name='character_creator_handler_v8',
+        name='character_creator_handler_v9',
         persistent=True
     )
 
