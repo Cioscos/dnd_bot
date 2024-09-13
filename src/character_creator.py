@@ -73,7 +73,7 @@ ABILITY_FEATURES_KEY = 'ability_features_keyboard'
 TEMP_ABILITY_KEY = 'temp_ability'
 TEMP_HEALING_KEY = 'temp_healing'
 CURRENT_SPELL_KEY = 'current_spell'
-LAST_MENU_MESSAGE = 'last_menu_message'
+LAST_MENU_MESSAGES = 'last_menu_message'
 # Keys to store the data allowing a rollback in the case user use /stop command before ending the multiclass deleting
 PENDING_REASSIGNMENT = 'pending_reassignment'
 REMOVED_CLASS_LEVEL = 'removed_class_level'
@@ -159,11 +159,11 @@ async def send_and_save_message(update: Update, context: ContextTypes.DEFAULT_TY
     message = await update.effective_message.reply_text(text, **kwargs)
 
     # Check if the mailing list already exists, if not, create it
-    if LAST_MENU_MESSAGE not in context.user_data[CHARACTERS_CREATOR_KEY]:
-        context.user_data[CHARACTERS_CREATOR_KEY][LAST_MENU_MESSAGE] = []
+    if LAST_MENU_MESSAGES not in context.user_data[CHARACTERS_CREATOR_KEY]:
+        context.user_data[CHARACTERS_CREATOR_KEY][LAST_MENU_MESSAGES] = []
 
     # Add new message to the list
-    context.user_data[CHARACTERS_CREATOR_KEY][LAST_MENU_MESSAGE].append(message)
+    context.user_data[CHARACTERS_CREATOR_KEY][LAST_MENU_MESSAGES].append(message)
 
     return message
 
@@ -784,6 +784,9 @@ async def character_bag_new_object_query_handler(update: Update, context: Contex
 
 async def character_bag_item_insert(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     item_info = update.effective_message.text
+    context.user_data[CHARACTERS_CREATOR_KEY][LAST_MENU_MESSAGES].append(update.effective_message)
+
+    # TODO: salvare i messaggi inviati dall'utente per la cancellazione
 
     # Split the input, allowing up to 3 splits
     components = item_info.split('#', maxsplit=3)
@@ -869,6 +872,7 @@ async def character_bag_edit_object_query_handler(update: Update, context: Conte
 
 async def character_bag_item_edit_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     item_name = update.effective_message.text
+    context.user_data[CHARACTERS_CREATOR_KEY][LAST_MENU_MESSAGES].append(update.effective_message)
 
     character: Character = context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_CHARACTER_KEY]
     item: Item = next((item for item in character.bag if item_name == item.name), None)
@@ -1041,7 +1045,6 @@ async def character_spell_visualization_query_handler(update: Update, context: C
 
     elif data == SPELL_USE_CALLBACK_DATA:
 
-        # TODO: Refactoring
         await query.answer()
         spell: Spell = context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_SPELL_KEY]
         character: Character = context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_CHARACTER_KEY]
@@ -1072,6 +1075,7 @@ async def character_spell_new_query_handler(update: Update, context: ContextType
 
 async def character_spell_learn_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     spell_info = update.effective_message.text
+    context.user_data[CHARACTERS_CREATOR_KEY][LAST_MENU_MESSAGES].append(update.effective_message)
 
     try:
         spell_name, spell_desc, spell_level = spell_info.split("#", 2)
@@ -1113,6 +1117,7 @@ async def character_spell_learn_handler(update: Update, context: ContextTypes.DE
 
 async def character_spell_edit_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     spell_info = update.effective_message.text
+    context.user_data[CHARACTERS_CREATOR_KEY][LAST_MENU_MESSAGES].append(update.effective_message)
 
     try:
         spell_name, spell_desc, spell_level = spell_info.split("#", 2)
@@ -1337,6 +1342,7 @@ async def character_ability_new_query_handler(update: Update, context: ContextTy
 
 async def character_ability_text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     ability_info = update.effective_message.text
+    context.user_data[CHARACTERS_CREATOR_KEY][LAST_MENU_MESSAGES].append(update.effective_message)
 
     try:
         ability_name, ability_desc, ability_max_uses = ability_info.split("#", 2)
@@ -1434,6 +1440,7 @@ async def character_ability_insert_query_handler(update: Update, context: Contex
 
 async def character_ability_edit_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     ability_info = update.effective_message.text
+    context.user_data[CHARACTERS_CREATOR_KEY][LAST_MENU_MESSAGES].append(update.effective_message)
 
     try:
         ability_name, ability_desc, ability_max_uses = ability_info.split("#", 2)
@@ -1649,6 +1656,7 @@ async def character_multiclassing_add_class_query_handler(update: Update, contex
 
 async def character_multiclassing_add_class_answer_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     multi_class_info = update.effective_message.text
+    context.user_data[CHARACTERS_CREATOR_KEY][LAST_MENU_MESSAGES].append(update.effective_message)
 
     try:
         class_name, class_level = multi_class_info.split("#", maxsplit=1)
@@ -1921,6 +1929,7 @@ async def character_spells_slots_add_query_handler(update: Update, context: Cont
 
 async def character_spell_slot_add_answer_query_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     data = update.effective_message.text
+    context.user_data[CHARACTERS_CREATOR_KEY][LAST_MENU_MESSAGES].append(update.effective_message)
 
     try:
         slot_number, slot_level = data.split("#", maxsplit=1)
@@ -1981,6 +1990,7 @@ async def character_spells_slots_remove_query_handler(update: Update, context: C
 
 async def character_spell_slot_remove_answer_query_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     data = update.effective_message.text
+    context.user_data[CHARACTERS_CREATOR_KEY][LAST_MENU_MESSAGES].append(update.effective_message)
 
     try:
         slot_number, slot_level = data.split("#", maxsplit=1)
@@ -2451,13 +2461,13 @@ async def character_generic_main_menu_query_handler(update: Update, context: Con
 
     for regex, func in MAINMENU_CALLBACKDATA_TO_CALLBACK.items():
         if re.match(regex, query.data):
-            messages = context.user_data[CHARACTERS_CREATOR_KEY].get(LAST_MENU_MESSAGE, [])
+            messages = context.user_data[CHARACTERS_CREATOR_KEY].get(LAST_MENU_MESSAGES, [])
             for message in messages:
                 try:
                     await context.bot.delete_message(chat_id=message.chat_id, message_id=message.message_id)
                 except TelegramError as e:
                     logger.warning(f"Errore durante la cancellazione del messaggio: {e}")
-            context.user_data[CHARACTERS_CREATOR_KEY][LAST_MENU_MESSAGE].clear()
+            context.user_data[CHARACTERS_CREATOR_KEY][LAST_MENU_MESSAGES].clear()
             return await func(update, context)
 
 
