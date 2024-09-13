@@ -170,13 +170,18 @@ async def send_and_save_message(update: Update, context: ContextTypes.DEFAULT_TY
 
 
 def create_main_menu_message(character: Character) -> Tuple[str, InlineKeyboardMarkup]:
+    if character.current_hit_points <= -character.hit_points:
+        health_str = '☠️\n\n'
+    else:
+        health_str = f"{character.current_hit_points if character.current_hit_points <= character.hit_points else character.hit_points}/{character.hit_points} PF "
+        f"{f'({(character.current_hit_points - character.hit_points)} Punti ferita temporanei)\n' if character.current_hit_points > character.hit_points else '\n'}"
+
     message_str = (f"Benvenuto nella gestione personaggio! v.{CHARACTER_CREATOR_VERSION}\n"
                    f"<b>Nome personaggio:</b> {character.name} L. {character.total_levels()}\n"
                    f"<b>Razza:</b> {character.race}\n"
                    f"<b>Genere:</b> {character.gender}\n"
                    f"<b>Classe:</b> {', '.join(f"{class_name} (Level {level})" for class_name, level in character.multi_class.classes.items())}\n"
-                   f"<b>Punti ferita:</b> {character.current_hit_points if character.current_hit_points <= character.hit_points else character.hit_points}/{character.hit_points} PF "
-                   f"{f'({(character.current_hit_points - character.hit_points)} Punti ferita temporanei)\n' if character.current_hit_points > character.hit_points else '\n'}"
+                   f"<b>Punti ferita:</b> {health_str}"
                    f"<b>Peso trasportato:</b> {character.encumbrance} Lb\n\n"
                    f"<b>Punti caratteristica</b>\n{str(character.feature_points)}\n\n"
                    f"<b>Slot incantesimo</b>\n{"\n".join([f"L{str(slot.level)} {"🟥" * slot.used_slots}{"🟦" * (slot.total_slots - slot.used_slots)}" for _, slot in sorted(character.spell_slots.items())]) if character.spell_slots else "Non hai registrato ancora nessuno Slot incantesimo"}\n\n"
@@ -502,6 +507,34 @@ def create_ability_menu(ability: Ability) -> Tuple[str, InlineKeyboardMarkup]:
     keyboard.append([InlineKeyboardButton("Indietro 🔙", callback_data=ABILITY_BACK_MENU_CALLBACK_DATA)])
 
     return message_str, InlineKeyboardMarkup(keyboard)
+
+
+def create_skull_asciart() -> str:
+    return r"""<code>
+           ______
+        .-"      "-.
+       /            \
+      |              |
+      |,  .-.  .-.  ,|
+      | )(_o/  \o_)( |
+      |/     /\     \|
+      (_     ^^     _)
+       \__|IIIIII|__/
+        | \IIIIII/ |
+        \          /
+         `--------`
+         
+     SSSSS   EEEEE  III       
+     S       E       I 
+     SSS     EEEE    I
+         S   E       I
+     SSSSS   EEEEE  III        
+
+M   M   OOO   RRRR  TTTTT  OOO
+MM MM  O   O  R   R   T   O   O
+M M M  O   O  RRRR    T   O   O
+M   M  O   O  R  R    T   O   O
+M   M   OOO   R   R   T    OOO</code>"""
 
 
 async def character_creator_stop_submenu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -2160,7 +2193,11 @@ async def character_damage_registration_handler(update: Update, context: Context
 
     character.current_hit_points -= int(damage)
 
-    await send_and_save_message(update, context, f"{damage} danni subiti!")
+    you_died_str = f"{damage} danni subiti!\n\n\n"
+    if character.current_hit_points <= -character.hit_points:
+        you_died_str += create_skull_asciart()
+
+    await send_and_save_message(update, context, you_died_str, parse_mode=ParseMode.HTML)
 
     msg, reply_markup = create_main_menu_message(character)
     await update.effective_message.reply_text(msg, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
