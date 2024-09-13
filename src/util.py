@@ -187,7 +187,8 @@ def generate_abilities_list_keyboard(abilities: List[Ability],
     keyboard = []
     row = []
     for ability in abilities:
-        button = InlineKeyboardButton(ability.name, callback_data=f"ability_name|{ability.name}")
+        button = InlineKeyboardButton(f"{ability.name}{' ✅' if ability.activated else ''}",
+                                      callback_data=f"ability_name|{ability.name}")
         row.append(button)
 
         if len(row) == 2:

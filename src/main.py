@@ -58,7 +58,9 @@ from character_creator import character_creator_start_handler, character_creatio
     SPELL_DELETE_CALLBACK_DATA, SPELL_BACK_MENU_CALLBACK_DATA, ABILITY_EDIT_CALLBACK_DATA, ABILITY_ACTIVE_CALLBACK_DATA, \
     ABILITY_DELETE_CALLBACK_DATA, ABILITY_USE_CALLBACK_DATA, ABILITY_BACK_MENU_CALLBACK_DATA, \
     ABILITY_LEARN_CALLBACK_DATA, AFFERMATIVE_CHARACTER_DELETION_CALLBACK_DATA, \
-    NEGATIVE_CHARACTER_DELETION_CALLBACK_DATA, SPELL_USE_CALLBACK_DATA
+    NEGATIVE_CHARACTER_DELETION_CALLBACK_DATA, SPELL_USE_CALLBACK_DATA, character_spell_use_query_handler, \
+    SPELL_USAGE_BACK_MENU_CALLBACK_DATA, character_bag_ask_item_overwrite_quantity_query_handler, BAG_ITEM_OVERWRITE, \
+    character_ask_item_overwrite_quantity
 from class_submenus import class_submenus_query_handler, class_spells_menu_buttons_query_handler, \
     class_search_spells_text_handler, class_reading_spells_menu_buttons_query_handler, \
     class_spell_visualization_buttons_query_handler, class_resources_submenu_text_handler, CLASS_SPELLS_SUBMENU, \
@@ -245,8 +247,7 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
 
 
 async def stop(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    await update.effective_message.reply_text('Ok! Usa il comando /start per avviare una nuova conversazione!\n'
-                                              'Oppure invia direttamente i comandi /wiki o /character')
+    await update.effective_message.reply_text('Ok! Usa il comando /start per avviare una nuova conversazione!\n')
 
     context.chat_data[WIKI] = {}
     context.user_data[ACTIVE_CONV] = None
@@ -424,7 +425,12 @@ def main() -> None:
                 CallbackQueryHandler(character_bag_item_add_one_handler,
                                      pattern=fr"^{BAG_ITEM_EDIT_CALLBACK_DATA}\|\+"),
                 CallbackQueryHandler(character_bag_item_delete_all_handler,
-                                     pattern=fr"^{BAG_ITEM_EDIT_CALLBACK_DATA}\|all")
+                                     pattern=fr"^{BAG_ITEM_EDIT_CALLBACK_DATA}\|all"),
+                CallbackQueryHandler(character_bag_ask_item_overwrite_quantity_query_handler,
+                                     pattern=fr"^{BAG_ITEM_EDIT_CALLBACK_DATA}\|overwrite$")
+            ],
+            BAG_ITEM_OVERWRITE: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, character_ask_item_overwrite_quantity)
             ],
             FEATURE_POINTS_EDIT: [
                 CallbackQueryHandler(character_feature_points_edit_query_handler,
@@ -460,7 +466,7 @@ def main() -> None:
             ],
             SPELLS_MENU: [
                 CallbackQueryHandler(character_spells_menu_query_handler,
-                                     pattern=fr"^(spell_name\|.+|prev_page|next_page)$")
+                                     pattern=fr"^(spell_name\|.+|prev_page|next_page|{SPELL_LEARN_CALLBACK_DATA})$")
             ],
             SPELL_VISUALIZATION: [
                 CallbackQueryHandler(character_spell_visualization_query_handler,
@@ -470,7 +476,9 @@ def main() -> None:
             SPELL_ACTIONS: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, character_spell_edit_handler),
                 CallbackQueryHandler(character_spell_delete_query_handler,
-                                     pattern=r'^[yn]$')
+                                     pattern=r'^[yn]$'),
+                CallbackQueryHandler(character_spell_use_query_handler,
+                                     pattern=fr"^{SPELL_USAGE_BACK_MENU_CALLBACK_DATA}|{SPELL_SLOT_SELECTED_CALLBACK_DATA}\|\d+$")
             ],
             SPELL_LEARN: [
                 CallbackQueryHandler(character_spell_new_query_handler,
@@ -517,7 +525,7 @@ def main() -> None:
             CommandHandler("stop", character_creator_stop_submenu),
             CallbackQueryHandler(character_generic_main_menu_query_handler)
         ],
-        name='character_creator_handler_v8',
+        name='character_creator_handler_v12',
         persistent=True
     )
 
