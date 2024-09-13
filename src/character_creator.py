@@ -176,7 +176,7 @@ def create_main_menu_message(character: Character) -> Tuple[str, InlineKeyboardM
                    f"<b>Genere:</b> {character.gender}\n"
                    f"<b>Classe:</b> {', '.join(f"{class_name} (Level {level})" for class_name, level in character.multi_class.classes.items())}\n"
                    f"<b>Punti ferita:</b> {character.current_hit_points if character.current_hit_points <= character.hit_points else character.hit_points}/{character.hit_points} PF "
-                   f"{f'({(character.current_hit_points - character.hit_points)} Punti ferita temporanei)\n' if character.current_hit_points > character.hit_points else ''}"
+                   f"{f'({(character.current_hit_points - character.hit_points)} Punti ferita temporanei)\n' if character.current_hit_points > character.hit_points else '\n'}"
                    f"<b>Peso trasportato:</b> {character.encumbrance} Lb\n\n"
                    f"<b>Punti caratteristica</b>\n{str(character.feature_points)}\n\n"
                    f"<b>Slot incantesimo</b>\n{"\n".join([f"L{str(slot.level)} {"🟥" * slot.used_slots}{"🟦" * (slot.total_slots - slot.used_slots)}" for _, slot in sorted(character.spell_slots.items())]) if character.spell_slots else "Non hai registrato ancora nessuno Slot incantesimo"}\n\n"
