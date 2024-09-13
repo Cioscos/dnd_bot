@@ -567,6 +567,16 @@ async def character_creator_stop_submenu(update: Update, context: ContextTypes.D
 
         if CURRENT_CHARACTER_KEY in context.user_data[CHARACTERS_CREATOR_KEY]:
             character: Character = context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_CHARACTER_KEY]
+
+            # Delete messages sent by bot and user
+            messages = context.user_data[CHARACTERS_CREATOR_KEY].get(LAST_MENU_MESSAGES, [])
+            for message in messages:
+                try:
+                    await context.bot.delete_message(chat_id=message.chat_id, message_id=message.message_id)
+                except TelegramError as e:
+                    logger.warning(f"Errore durante la cancellazione del messaggio: {e}")
+            context.user_data[CHARACTERS_CREATOR_KEY][LAST_MENU_MESSAGES].clear()
+
             msg, reply_markup = create_main_menu_message(character)
             await update.effective_message.reply_text(msg, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
 
