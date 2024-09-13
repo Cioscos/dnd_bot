@@ -2201,7 +2201,7 @@ async def character_healing_value_check_or_registration_handler(update: Update,
             context,
             f"Se ti curi di {healing} punti ferita, aggiungerai "
             f"{(character.current_hit_points + healing) - character.hit_points} punti ferita temporanei.\n\n"
-            "Vuoi procedere?",
+            "Vuoi aggiungere i punti ferita temporanei?",
             reply_markup=InlineKeyboardMarkup(keyboard)
         )
 
@@ -2223,19 +2223,22 @@ async def character_healing_value_check_or_registration_handler(update: Update,
 
 async def character_over_healing_registration_query_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     query = update.callback_query
+    await query.answer()
     data = query.data
     character: Character = context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_CHARACTER_KEY]
+    healing = context.user_data[CHARACTERS_CREATOR_KEY][TEMP_HEALING_KEY]
 
     if data == 'y':
-        await query.answer()
-        healing = context.user_data[CHARACTERS_CREATOR_KEY][TEMP_HEALING_KEY]
+
         character.current_hit_points += int(healing)
-        context.user_data[CHARACTERS_CREATOR_KEY].pop(TEMP_HEALING_KEY, None)
-        await send_and_save_message(update, context, f"Sei stato curato di {healing} PF!")
+        await send_and_save_message(update, context, f"Sei stato curato di {healing} PF!\n"
+                                                     f"{(character.current_hit_points + healing) - character.hit_points} punti ferita temporanei aggiunti!")
 
     elif data == 'n':
-        await query.answer('Curagione annullata!', show_alert=True)
+        character.current_hit_points = character.hit_points
+        await send_and_save_message(update, context, f"Sei stato curato di {healing} PF!")
 
+    context.user_data[CHARACTERS_CREATOR_KEY].pop(TEMP_HEALING_KEY, None)
     msg, reply_markup = create_main_menu_message(character)
     await update.effective_message.reply_text(msg, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
 

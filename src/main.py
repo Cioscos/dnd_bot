@@ -247,8 +247,7 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
 
 
 async def stop(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    await update.effective_message.reply_text('Ok! Usa il comando /start per avviare una nuova conversazione!\n'
-                                              'Oppure invia direttamente i comandi /wiki o /character')
+    await update.effective_message.reply_text('Ok! Usa il comando /start per avviare una nuova conversazione!\n')
 
     context.chat_data[WIKI] = {}
     context.user_data[ACTIVE_CONV] = None
