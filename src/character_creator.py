@@ -183,8 +183,8 @@ def create_main_menu_message(character: Character) -> Tuple[str, InlineKeyboardM
                    f"<b>Classe:</b> {', '.join(f"{class_name} (Level {level})" for class_name, level in character.multi_class.classes.items())}\n"
                    f"<b>Punti ferita:</b> {health_str}"
                    f"<b>Peso trasportato:</b> {character.encumbrance} Lb\n\n"
-                   f"<b>Punti caratteristica</b>\n{str(character.feature_points)}\n\n"
-                   f"<b>Slot incantesimo</b>\n{"\n".join([f"L{str(slot.level)} {"🟥" * slot.used_slots}{"🟦" * (slot.total_slots - slot.used_slots)}" for _, slot in sorted(character.spell_slots.items())]) if character.spell_slots else "Non hai registrato ancora nessuno Slot incantesimo"}\n\n"
+                   f"<b>Punti caratteristica</b>\n<code>{str(character.feature_points)}\n\n</code>"
+                   f"<b>Slot incantesimo</b>\n{"\n".join([f"L{str(slot.level)}  {"🟥" * slot.used_slots}{"🟦" * (slot.total_slots - slot.used_slots)}" for _, slot in sorted(character.spell_slots.items())]) if character.spell_slots else "Non hai registrato ancora nessuno Slot incantesimo"}\n\n"
                    f"<b>Abilità passive attivate:</b>\n{'\n'.join(ability.name for ability in character.abilities if ability.activated) if any(ability.activated for ability in character.abilities) else 'Nessuna abilità attiva'}\n")
 
     keyboard = [
@@ -201,18 +201,18 @@ def create_main_menu_message(character: Character) -> Tuple[str, InlineKeyboardM
         ],
         [
             InlineKeyboardButton('🧳 Borsa', callback_data=BAG_CALLBACK_DATA),
-            InlineKeyboardButton('Azioni', callback_data=ABILITIES_CALLBACK_DATA),
-            InlineKeyboardButton('🔮 Spell', callback_data=SPELLS_CALLBACK_DATA)
+            InlineKeyboardButton('🗯 Azioni', callback_data=ABILITIES_CALLBACK_DATA),
+            InlineKeyboardButton('📖 Spell', callback_data=SPELLS_CALLBACK_DATA)
         ],
-        [InlineKeyboardButton('Gestisci slot incantesimo', callback_data=SPELLS_SLOT_CALLBACK_DATA)],
-        [InlineKeyboardButton('Punti caratteristica', callback_data=FEATURE_POINTS_CALLBACK_DATA)],
-        [InlineKeyboardButton('Gestisci multiclasse', callback_data=MULTICLASSING_CALLBACK_DATA)],
+        [InlineKeyboardButton('🔮 Gestisci slot incantesimo', callback_data=SPELLS_SLOT_CALLBACK_DATA)],
+        [InlineKeyboardButton('🧮 Punti caratteristica', callback_data=FEATURE_POINTS_CALLBACK_DATA)],
+        [InlineKeyboardButton('🪓🛡🪄 Gestisci multiclasse', callback_data=MULTICLASSING_CALLBACK_DATA)],
         [
-            InlineKeyboardButton('Riposo lungo', callback_data=LONG_REST_WARNING_CALLBACK_DATA),
-            InlineKeyboardButton('Riposo breve', callback_data=SHORT_REST_WARNING_CALLBACK_DATA)
+            InlineKeyboardButton('🌙 Riposo lungo', callback_data=LONG_REST_WARNING_CALLBACK_DATA),
+            InlineKeyboardButton('🍻 Riposo breve', callback_data=SHORT_REST_WARNING_CALLBACK_DATA)
         ],
-        [InlineKeyboardButton('Lancia Dado', callback_data=ROLL_DICE_MENU_CALLBACK_DATA)],
-        [InlineKeyboardButton('Elimina personaggio', callback_data=DELETE_CHARACTER_CALLBACK_DATA)]
+        [InlineKeyboardButton('🎲 Lancia Dado', callback_data=ROLL_DICE_MENU_CALLBACK_DATA)],
+        [InlineKeyboardButton('🗑️ Elimina personaggio', callback_data=DELETE_CHARACTER_CALLBACK_DATA)]
     ]
 
     return message_str, InlineKeyboardMarkup(keyboard)
@@ -247,7 +247,7 @@ def create_ability_keyboard(features_chosen: Dict[str, str | bool]) -> InlineKey
 def create_feature_points_messages(feature_points: Dict[str, int]) -> Dict[str, Tuple[str, InlineKeyboardMarkup]]:
     return {
         'strength': (
-            f"Forza {feature_points['strength']}",
+            f"<code>Forza        {' ' if feature_points['strength'] < 10 else ''}{feature_points['strength']}</code>",
             InlineKeyboardMarkup([
                 [
                     InlineKeyboardButton("-", callback_data="strength|-"),
@@ -256,7 +256,7 @@ def create_feature_points_messages(feature_points: Dict[str, int]) -> Dict[str, 
             ])
         ),
         'dexterity': (
-            f"Destrezza {feature_points['dexterity']}",
+            f"<code>Destrezza    {' ' if feature_points['dexterity'] < 10 else ''}{feature_points['dexterity']}</code>",
             InlineKeyboardMarkup([
                 [
                     InlineKeyboardButton("-", callback_data="dexterity|-"),
@@ -265,7 +265,7 @@ def create_feature_points_messages(feature_points: Dict[str, int]) -> Dict[str, 
             ])
         ),
         'constitution': (
-            f"Costituzione {feature_points['constitution']}",
+            f"<code>Costituzione {' ' if feature_points['constitution'] < 10 else ''}{feature_points['constitution']}</code>",
             InlineKeyboardMarkup([
                 [
                     InlineKeyboardButton("-", callback_data="constitution|-"),
@@ -274,7 +274,7 @@ def create_feature_points_messages(feature_points: Dict[str, int]) -> Dict[str, 
             ])
         ),
         'intelligence': (
-            f"Intelligenza {feature_points['intelligence']}",
+            f"<code>Intelligenza {' ' if feature_points['intelligence'] < 10 else ''}{feature_points['intelligence']}</code>",
             InlineKeyboardMarkup([
                 [
                     InlineKeyboardButton("-", callback_data="intelligence|-"),
@@ -283,7 +283,7 @@ def create_feature_points_messages(feature_points: Dict[str, int]) -> Dict[str, 
             ])
         ),
         'wisdom': (
-            f"Saggezza {feature_points['wisdom']}",
+            f"<code>Saggezza     {' ' if feature_points['wisdom'] < 10 else ''}{feature_points['wisdom']}</code>",
             InlineKeyboardMarkup([
                 [
                     InlineKeyboardButton("-", callback_data="wisdom|-"),
@@ -292,7 +292,7 @@ def create_feature_points_messages(feature_points: Dict[str, int]) -> Dict[str, 
             ])
         ),
         'charisma': (
-            f"Carisma {feature_points['charisma']}",
+            f"<code>Carisma      {' ' if feature_points['charisma'] < 10 else ''}{feature_points['charisma']}</code>",
             InlineKeyboardMarkup([
                 [
                     InlineKeyboardButton("-", callback_data="charisma|-"),
