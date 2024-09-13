@@ -176,11 +176,14 @@ class Character:
         """Lists all abilities the character has learned."""
         return [str(ability) for ability in self.abilities]
 
-    def use_spell(self, spell_to_use: Spell):
+    def use_spell(self, spell_to_use: Spell, spell_level: int = None):
         """Use a spell consuming the proper spell slot"""
         for spell in self.spells:
             if spell.name == spell_to_use.name:
-                self.use_spell_slot(spell.level.value)
+                if spell_level is None:
+                    self.use_spell_slot(spell.level.value)
+                else:
+                    self.use_spell_slot(spell_level)
 
     def add_spell_slot(self, spell_slot: SpellSlot):
         """Adds or updates a spell slot at a given level."""

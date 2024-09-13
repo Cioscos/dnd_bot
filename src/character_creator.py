@@ -110,6 +110,7 @@ SPELL_EDIT_CALLBACK_DATA = "spell_edit"
 SPELL_USE_CALLBACK_DATA = "spell_use"
 SPELL_DELETE_CALLBACK_DATA = "spell_delete"
 SPELL_BACK_MENU_CALLBACK_DATA = "spell_back_menu"
+SPELL_USAGE_BACK_MENU_CALLBACK_DATA = "spell_usage_back_menu"
 LEVEL_UP_CALLBACK_DATA = "level_up"
 LEVEL_DOWN_CALLBACK_DATA = "level_down"
 DAMAGE_CALLBACK_DATA = "damage"
@@ -296,9 +297,9 @@ def create_feature_points_messages(feature_points: Dict[str, int]) -> Dict[str, 
     }
 
 
-def create_spells_slot_menu(context: ContextTypes.DEFAULT_TYPE):
+def create_spell_slots_menu(context: ContextTypes.DEFAULT_TYPE):
     character: Character = context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_CHARACTER_KEY]
-    message_str = f"Seleziona i pulsanti nella prima linea per utilizzare uno slot del livello corrispondente.\n\n"
+    message_str = f"Seleziona i pulsanti con gli slot liberi 🟦 per utilizzare uno slot del livello corrispondente.\n\n"
     keyboard = []
     if not character.spell_slots:
 
@@ -338,6 +339,38 @@ def create_spells_slot_menu(context: ContextTypes.DEFAULT_TYPE):
     return message_str, InlineKeyboardMarkup(keyboard)
 
 
+def create_spell_slots_menu_for_spell(character: Character, spell: Spell) -> Tuple[str, InlineKeyboardMarkup]:
+    keyboard = []
+    message_str = "Seleziona i pulsanti con gli slot liberi 🟦 per utilizzare un incantesimo del livello corrispondente al livello dello slot utilizzato.\n\n"
+
+    if not character.spell_slots:
+
+        message_str += ("Non hai ancora nessuno slot incantesimo!\n"
+                        "Usa il menu <i><b>Gestisci slot incantesimo</b></i> per aggiungerli")
+
+    else:
+
+        spell_slots_buttons = []
+
+        # Sort slots by level (dictionary key)
+        for level, slot in sorted(character.spell_slots.items()):
+            if level >= spell.level.value:
+                spell_slots_buttons.append(InlineKeyboardButton(
+                    f"{str(slot.level)} {'🟥' * slot.used_slots}{'🟦' * (slot.total_slots - slot.used_slots)}",
+                    callback_data=f"{SPELL_SLOT_SELECTED_CALLBACK_DATA}|{slot.level}"))
+
+        # Group buttons into rows of maximum 3 buttons each
+        for slot in spell_slots_buttons:
+            keyboard.append([slot])
+
+        if not keyboard:
+            message_str += f"Non hai slot incantesimo del livello necessario a castare questa spell!"
+
+    keyboard.append([InlineKeyboardButton("Indietro 🔙", callback_data=SPELL_USAGE_BACK_MENU_CALLBACK_DATA)])
+
+    return message_str, InlineKeyboardMarkup(keyboard)
+
+
 def create_bag_menu(character: Character) -> Tuple[str, InlineKeyboardMarkup]:
     message_str = (f"<b>Oggetti nella borsa</b>\n"
                    f"<b>Peso trasportabile massimo</b>{character.carry_capacity}Lb\n\n"
@@ -368,11 +401,24 @@ def create_item_menu(item: Item) -> Tuple[str, InlineKeyboardMarkup]:
     return message_str, InlineKeyboardMarkup(keyboard)
 
 
+def create_spell_menu(spell: Spell) -> Tuple[str, InlineKeyboardMarkup]:
+    message_str = (f"<b>{spell.name:<{50}}</b>L{spell.level.value}\n\n"
+                   f"<b>Descrizione</b>\n{spell.description}")
+    keyboard = [
+        [InlineKeyboardButton("Usa", callback_data=SPELL_USE_CALLBACK_DATA)],
+        [InlineKeyboardButton("Modifica", callback_data=SPELL_EDIT_CALLBACK_DATA),
+         InlineKeyboardButton("Dimentica", callback_data=SPELL_DELETE_CALLBACK_DATA)],
+        [InlineKeyboardButton("Indietro 🔙", callback_data=SPELL_BACK_MENU_CALLBACK_DATA)]
+    ]
+
+    return message_str, InlineKeyboardMarkup(keyboard)
+
+
 async def create_spells_menu(character: Character, update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     message_str = f"<b>Gestione spells</b>\n\n"
     if not character.spells:
 
-        message_str += "Non conosci ancora nessuna spell ‍🤷‍♂️"
+        message_str += "Non conosci ancora nessun incantesimo ‍🤷‍♂️"
         keyboard = [
             [InlineKeyboardButton("Impara nuovo incantesimo", callback_data=SPELL_LEARN_CALLBACK_DATA)]
         ]
@@ -931,16 +977,9 @@ async def character_spells_menu_query_handler(update: Update, context: ContextTy
         _, spell_name = data.split('|', maxsplit=1)
         character: Character = context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_CHARACTER_KEY]
         spell: Spell = next((spell for spell in character.spells if spell.name == spell_name), None)
-        message_str = (f"<b>{spell.name:<{50}}</b>L{spell.level.value}\n\n"
-                       f"<b>Descrizione</b>\n{spell.description}")
-        keyboard = [
-            [InlineKeyboardButton("Usa", callback_data=SPELL_USE_CALLBACK_DATA)],
-            [InlineKeyboardButton("Modifica", callback_data=SPELL_EDIT_CALLBACK_DATA),
-             InlineKeyboardButton("Dimentica", callback_data=SPELL_DELETE_CALLBACK_DATA)],
-            [InlineKeyboardButton("Indietro 🔙", callback_data=SPELL_BACK_MENU_CALLBACK_DATA)]
-        ]
-        await query.edit_message_text(message_str, reply_markup=InlineKeyboardMarkup(keyboard),
-                                      parse_mode=ParseMode.HTML)
+
+        message_str, reply_markup = create_spell_menu(spell)
+        await query.edit_message_text(message_str, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
 
         # Save the current spell in the userdata
         context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_SPELL_KEY] = spell
@@ -1002,16 +1041,15 @@ async def character_spell_visualization_query_handler(update: Update, context: C
 
     elif data == SPELL_USE_CALLBACK_DATA:
 
+        # TODO: Refactoring
+        await query.answer()
         spell: Spell = context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_SPELL_KEY]
         character: Character = context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_CHARACTER_KEY]
-        try:
-            character.use_spell(spell)
-        except ValueError as e:
-            await query.answer(str(e), show_alert=True)
-        else:
-            await query.answer(f"Slot di livello {spell.level.value} usato")
 
-        return SPELL_VISUALIZATION
+        # generate inline keyboard with spell slots available
+        message_str, reply_markup = create_spell_slots_menu_for_spell(character, spell)
+
+        await query.edit_message_text(message_str, reply_markup=reply_markup)
 
     return SPELL_ACTIONS
 
@@ -1129,6 +1167,33 @@ async def character_spell_delete_query_handler(update: Update, context: ContextT
         )
 
     return await create_spells_menu(character, update, context)
+
+
+async def character_spell_use_query_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    query = update.callback_query
+    data = query.data
+
+    spell: Spell = context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_SPELL_KEY]
+    character: Character = context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_CHARACTER_KEY]
+
+    if data != SPELL_USAGE_BACK_MENU_CALLBACK_DATA:
+
+        _, slot_level = data.split("|", maxsplit=1)
+
+        try:
+            character.use_spell(spell, int(slot_level))
+        except ValueError as e:
+            await query.answer(str(e), show_alert=True)
+        else:
+            await query.answer(f"Slot di livello {slot_level} usato")
+
+    else:
+        await query.answer()
+
+    message_str, reply_markup = create_spell_menu(spell)
+    await query.edit_message_text(message_str, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
+
+    return SPELL_VISUALIZATION
 
 
 async def character_abilities_query_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -1811,7 +1876,7 @@ async def character_spells_slots_query_handler(update: Update, context: ContextT
             update, context, message_str, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML
         )
     else:
-        message_str, reply_markup = create_spells_slot_menu(context)
+        message_str, reply_markup = create_spell_slots_menu(context)
         await send_and_save_message(update, context, message_str, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
 
     return SPELLS_SLOTS_MANAGEMENT
@@ -1835,7 +1900,7 @@ async def character_spells_slots_mode_answer_query_handler(update: Update, conte
             update, context, "Modalità di gestione slot incantesimo impostata correttamente! ✅"
         )
 
-        message_str, reply_markup = create_spells_slot_menu(context)
+        message_str, reply_markup = create_spell_slots_menu(context)
         await send_and_save_message(update, context, message_str, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
 
         return SPELLS_SLOTS_MANAGEMENT
@@ -1895,7 +1960,7 @@ async def character_spell_slot_add_answer_query_handler(update: Update, context:
         update, context, f"{slot_number} slot di livello {slot_level} aggiunti!"
     )
 
-    message_str, reply_markup = create_spells_slot_menu(context)
+    message_str, reply_markup = create_spell_slots_menu(context)
     await send_and_save_message(update, context, message_str, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
 
     return SPELLS_SLOTS_MANAGEMENT
@@ -1962,7 +2027,7 @@ async def character_spell_slot_remove_answer_query_handler(update: Update, conte
         spell_slot_to_edit.total_slots -= slot_number
         await send_and_save_message(update, context, f"{slot_number} slot di livello {slot_level} rimossi!")
 
-    message_str, reply_markup = create_spells_slot_menu(context)
+    message_str, reply_markup = create_spell_slots_menu(context)
     await send_and_save_message(update, context, message_str, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
 
     return SPELLS_SLOTS_MANAGEMENT
@@ -1981,7 +2046,7 @@ async def character_spells_slot_use_slot_query_handler(update: Update, context: 
     except ValueError as e:
         await query.answer(str(e), show_alert=True)
 
-    message_str, reply_markup = create_spells_slot_menu(context)
+    message_str, reply_markup = create_spell_slots_menu(context)
     await query.edit_message_text(message_str, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
 
     return SPELLS_SLOTS_MANAGEMENT
@@ -1994,7 +2059,7 @@ async def character_spells_slot_use_reset_query_handler(update: Update, context:
     character.restore_all_spell_slots()
     await query.answer("Tutti gli spell slot sono stati ripristinati!", show_alert=True)
 
-    message_str, reply_markup = create_spells_slot_menu(context)
+    message_str, reply_markup = create_spell_slots_menu(context)
     await query.edit_message_text(message_str, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
 
     return SPELLS_SLOTS_MANAGEMENT

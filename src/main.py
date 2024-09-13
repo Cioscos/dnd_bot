@@ -58,7 +58,8 @@ from character_creator import character_creator_start_handler, character_creatio
     SPELL_DELETE_CALLBACK_DATA, SPELL_BACK_MENU_CALLBACK_DATA, ABILITY_EDIT_CALLBACK_DATA, ABILITY_ACTIVE_CALLBACK_DATA, \
     ABILITY_DELETE_CALLBACK_DATA, ABILITY_USE_CALLBACK_DATA, ABILITY_BACK_MENU_CALLBACK_DATA, \
     ABILITY_LEARN_CALLBACK_DATA, AFFERMATIVE_CHARACTER_DELETION_CALLBACK_DATA, \
-    NEGATIVE_CHARACTER_DELETION_CALLBACK_DATA, SPELL_USE_CALLBACK_DATA
+    NEGATIVE_CHARACTER_DELETION_CALLBACK_DATA, SPELL_USE_CALLBACK_DATA, character_spell_use_query_handler, \
+    SPELL_USAGE_BACK_MENU_CALLBACK_DATA
 from class_submenus import class_submenus_query_handler, class_spells_menu_buttons_query_handler, \
     class_search_spells_text_handler, class_reading_spells_menu_buttons_query_handler, \
     class_spell_visualization_buttons_query_handler, class_resources_submenu_text_handler, CLASS_SPELLS_SUBMENU, \
@@ -470,7 +471,9 @@ def main() -> None:
             SPELL_ACTIONS: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, character_spell_edit_handler),
                 CallbackQueryHandler(character_spell_delete_query_handler,
-                                     pattern=r'^[yn]$')
+                                     pattern=r'^[yn]$'),
+                CallbackQueryHandler(character_spell_use_query_handler,
+                                     pattern=fr"^{SPELL_USAGE_BACK_MENU_CALLBACK_DATA}|{SPELL_SLOT_SELECTED_CALLBACK_DATA}\|\d+$")
             ],
             SPELL_LEARN: [
                 CallbackQueryHandler(character_spell_new_query_handler,
@@ -517,7 +520,7 @@ def main() -> None:
             CommandHandler("stop", character_creator_stop_submenu),
             CallbackQueryHandler(character_generic_main_menu_query_handler)
         ],
-        name='character_creator_handler_v10',
+        name='character_creator_handler_v11',
         persistent=True
     )
 
