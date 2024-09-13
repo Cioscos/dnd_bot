@@ -373,7 +373,7 @@ def create_spell_slots_menu_for_spell(character: Character, spell: Spell) -> Tup
 
 def create_bag_menu(character: Character) -> Tuple[str, InlineKeyboardMarkup]:
     message_str = (f"<b>Oggetti nella borsa</b>\n"
-                   f"<b>Peso trasportabile massimo</b>{character.carry_capacity}Lb\n\n"
+                   f"<b>Peso trasportabile massimo</b> {character.carry_capacity}Lb\n\n"
                    f"{'\n'.join(f'<code>{item.name}</code> x{item.quantity}' for item in character.bag) if character.bag else
                    "Lo zaino è ancora vuoto"}")
 
@@ -435,7 +435,7 @@ async def create_spells_menu(character: Character, update: Update, context: Cont
                         "Ecco la lista delle abilità")
 
     spells = character.spells
-    spells_pages = chunk_list(spells, 8)
+    spells_pages = chunk_list(spells, 10)
 
     context.user_data[CHARACTERS_CREATOR_KEY][INLINE_PAGES_KEY] = spells_pages
     context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_INLINE_PAGE_INDEX_KEY] = 0
@@ -786,8 +786,6 @@ async def character_bag_item_insert(update: Update, context: ContextTypes.DEFAUL
     item_info = update.effective_message.text
     context.user_data[CHARACTERS_CREATOR_KEY][LAST_MENU_MESSAGES].append(update.effective_message)
 
-    # TODO: salvare i messaggi inviati dall'utente per la cancellazione
-
     # Split the input, allowing up to 3 splits
     components = item_info.split('#', maxsplit=3)
 
@@ -1109,8 +1107,16 @@ async def character_spell_learn_handler(update: Update, context: ContextTypes.DE
         )
         return SPELL_ACTIONS
 
+    if spell.level.value not in character.spell_slots.keys():
+        await send_and_save_message(update,
+                                    context,
+                                    f"🔴 Questo incantesimo è di livello troppo alto!\n\n"
+                                    f"Sblocca prima almeno uno slot di livello {spell.level.value} per impararlo.\n"
+                                    f"Invia un altro incantesimo o usa /stop per terminare")
+        return SPELL_ACTIONS
+
     character.learn_spell(spell)
-    await send_and_save_message(update, context, "Incantesimo appresa con successo! ✅")
+    await send_and_save_message(update, context, "Incantesimo appreso con successo! ✅")
 
     return await create_spells_menu(character, update, context)
 
@@ -1190,7 +1196,7 @@ async def character_spell_use_query_handler(update: Update, context: ContextType
         except ValueError as e:
             await query.answer(str(e), show_alert=True)
         else:
-            await query.answer(f"Slot di livello {slot_level} usato")
+            await query.answer(f"Slot di livello {slot_level} usato", show_alert=True)
 
     else:
         await query.answer()
