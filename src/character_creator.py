@@ -33,6 +33,7 @@ CHARACTER_CREATOR_VERSION = "1.0.0"
  CHARACTER_DELETION,
  BAG_ITEM_INSERTION,
  BAG_ITEM_EDIT,
+ BAG_ITEM_OVERWRITE,
  FEATURE_POINTS_EDIT,
  ABILITIES_MENU,
  ABILITY_VISUALIZATION,
@@ -52,7 +53,7 @@ CHARACTER_CREATOR_VERSION = "1.0.0"
  HIT_POINTS_REGISTRATION,
  LONG_REST,
  SHORT_REST,
- DICE_ACTION) = map(int, range(14, 46))
+ DICE_ACTION) = map(int, range(14, 47))
 
 STOPPING = 99
 
@@ -395,6 +396,7 @@ def create_item_menu(item: Item) -> Tuple[str, InlineKeyboardMarkup]:
             InlineKeyboardButton("-", callback_data=f"{BAG_ITEM_EDIT_CALLBACK_DATA}|-"),
             InlineKeyboardButton("+", callback_data=f"{BAG_ITEM_EDIT_CALLBACK_DATA}|+")
         ],
+        [InlineKeyboardButton('Sovrascrivi quantità', callback_data=f"{BAG_ITEM_EDIT_CALLBACK_DATA}|overwrite")],
         [InlineKeyboardButton("Rimuovi tutti", callback_data=f"{BAG_ITEM_EDIT_CALLBACK_DATA}|all")]
     ]
 
@@ -903,13 +905,13 @@ async def character_bag_item_delete_one_handler(update: Update, context: Context
     if item:
         await query.answer()
         message_str, reply_markup = create_item_menu(item)
-        await send_and_save_message(update, context, message_str, parse_mode=ParseMode.HTML, reply_markup=reply_markup)
+        await query.edit_message_text(message_str, parse_mode=ParseMode.HTML, reply_markup=reply_markup)
         return BAG_ITEM_EDIT
     else:
         await query.answer(f'{item_name} rimosso dalla borsa!', show_alert=True)
         context.user_data[CHARACTERS_CREATOR_KEY].pop(CURRENT_ITEM_KEY, None)
         message_str, reply_markup = create_bag_menu(character)
-        await send_and_save_message(update, context, message_str, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
+        await query.edit_message_text(message_str, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
 
         return BAG_MANAGEMENT
 
@@ -924,7 +926,7 @@ async def character_bag_item_add_one_handler(update: Update, context: ContextTyp
     item: Item = next((item for item in character.bag if item_name == item.name), None)
 
     message_str, reply_markup = create_item_menu(item)
-    await send_and_save_message(update, context, message_str, parse_mode=ParseMode.HTML, reply_markup=reply_markup)
+    await query.edit_message_text(message_str, parse_mode=ParseMode.HTML, reply_markup=reply_markup)
 
     return BAG_ITEM_EDIT
 
@@ -946,6 +948,52 @@ async def character_bag_item_delete_all_handler(update: Update, context: Context
     await send_and_save_message(update, context, message_str, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
 
     return BAG_MANAGEMENT
+
+
+async def character_bag_ask_item_overwrite_quantity_query_handler(update: Update,
+                                                                  context: ContextTypes.DEFAULT_TYPE) -> int:
+    query = update.callback_query
+    await query.answer()
+
+    await query.edit_message_text("Inviami la quntità da sovrascrivere")
+
+    return BAG_ITEM_OVERWRITE
+
+
+async def character_ask_item_overwrite_quantity(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    text = update.effective_message.text
+    context.user_data[CHARACTERS_CREATOR_KEY][LAST_MENU_MESSAGES].append(update.effective_message)
+
+    try:
+        item_quantity = int(text)
+    except ValueError:
+        await send_and_save_message(update, context, "La quantità inserita non è un numero!\n\n"
+                                                     "Inserisci una quantità corretta o usa /stop per terminare")
+        return BAG_ITEM_OVERWRITE
+
+    item_name = context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_ITEM_KEY]
+    character: Character = context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_CHARACTER_KEY]
+    item: Item = next((item for item in character.bag if item_name == item.name), None)
+
+    if item_quantity < item.quantity:
+        quantity_to_remove = item.quantity - item_quantity
+        character.decrement_item_quantity(item_name, quantity_to_remove)
+        await send_and_save_message(update, context,
+                                    f"{'Sono stati rimossi' if quantity_to_remove > 1 else 'È stato rimosso'} "
+                                    f"{quantity_to_remove} {item_name} dal tuo inventario")
+    elif item_quantity > item.quantity:
+        quantity_to_add = item_quantity - item.quantity
+        character.increment_item_quantity(item_name, quantity_to_add)
+        await send_and_save_message(update, context,
+                                    f"{'Sono stati aggiunti' if quantity_to_add > 1 else 'È stato aggiunto'} "
+                                    f"{quantity_to_add} {item_name} al tuo inventario")
+    else:
+        await send_and_save_message(update, context, "🔴 La quantità inviata è uguale a quella presente!")
+
+    message_str, reply_markup = create_item_menu(item)
+    await send_and_save_message(update, context, message_str, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
+
+    return BAG_ITEM_EDIT
 
 
 async def character_spells_query_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:

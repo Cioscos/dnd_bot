@@ -59,7 +59,8 @@ from character_creator import character_creator_start_handler, character_creatio
     ABILITY_DELETE_CALLBACK_DATA, ABILITY_USE_CALLBACK_DATA, ABILITY_BACK_MENU_CALLBACK_DATA, \
     ABILITY_LEARN_CALLBACK_DATA, AFFERMATIVE_CHARACTER_DELETION_CALLBACK_DATA, \
     NEGATIVE_CHARACTER_DELETION_CALLBACK_DATA, SPELL_USE_CALLBACK_DATA, character_spell_use_query_handler, \
-    SPELL_USAGE_BACK_MENU_CALLBACK_DATA
+    SPELL_USAGE_BACK_MENU_CALLBACK_DATA, character_bag_ask_item_overwrite_quantity_query_handler, BAG_ITEM_OVERWRITE, \
+    character_ask_item_overwrite_quantity
 from class_submenus import class_submenus_query_handler, class_spells_menu_buttons_query_handler, \
     class_search_spells_text_handler, class_reading_spells_menu_buttons_query_handler, \
     class_spell_visualization_buttons_query_handler, class_resources_submenu_text_handler, CLASS_SPELLS_SUBMENU, \
@@ -425,7 +426,12 @@ def main() -> None:
                 CallbackQueryHandler(character_bag_item_add_one_handler,
                                      pattern=fr"^{BAG_ITEM_EDIT_CALLBACK_DATA}\|\+"),
                 CallbackQueryHandler(character_bag_item_delete_all_handler,
-                                     pattern=fr"^{BAG_ITEM_EDIT_CALLBACK_DATA}\|all")
+                                     pattern=fr"^{BAG_ITEM_EDIT_CALLBACK_DATA}\|all"),
+                CallbackQueryHandler(character_bag_ask_item_overwrite_quantity_query_handler,
+                                     pattern=fr"^{BAG_ITEM_EDIT_CALLBACK_DATA}\|overwrite$")
+            ],
+            BAG_ITEM_OVERWRITE: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, character_ask_item_overwrite_quantity)
             ],
             FEATURE_POINTS_EDIT: [
                 CallbackQueryHandler(character_feature_points_edit_query_handler,
@@ -520,7 +526,7 @@ def main() -> None:
             CommandHandler("stop", character_creator_stop_submenu),
             CallbackQueryHandler(character_generic_main_menu_query_handler)
         ],
-        name='character_creator_handler_v11',
+        name='character_creator_handler_v12',
         persistent=True
     )
 
