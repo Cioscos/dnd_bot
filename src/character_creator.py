@@ -18,7 +18,7 @@ from src.util import chunk_list, generate_abilities_list_keyboard, generate_spel
 
 logger = logging.getLogger(__name__)
 
-CHARACTER_CREATOR_VERSION = "1.0.0"
+CHARACTER_CREATOR_VERSION = "3.0.0"
 
 # states definition
 (CHARACTER_CREATION,
@@ -171,9 +171,9 @@ async def send_and_save_message(update: Update, context: ContextTypes.DEFAULT_TY
 
 def create_main_menu_message(character: Character) -> Tuple[str, InlineKeyboardMarkup]:
     if character.current_hit_points <= -character.hit_points:
-        health_str = '☠️\n\n'
+        health_str = '☠️\n'
     else:
-        health_str = f"{character.current_hit_points if character.current_hit_points <= character.hit_points else character.hit_points}/{character.hit_points} PF "
+        health_str = f"{character.current_hit_points if character.current_hit_points <= character.hit_points else character.hit_points}/{character.hit_points} PF\n"
         f"{f'({(character.current_hit_points - character.hit_points)} Punti ferita temporanei)\n' if character.current_hit_points > character.hit_points else '\n'}"
 
     message_str = (f"Benvenuto nella gestione personaggio! v.{CHARACTER_CREATOR_VERSION}\n"
@@ -378,11 +378,17 @@ def create_spell_slots_menu_for_spell(character: Character, spell: Spell) -> Tup
 
 
 def create_bag_menu(character: Character) -> Tuple[str, InlineKeyboardMarkup]:
-    message_str = (f"<b>Oggetti nella borsa</b>\n"
-                   f"<b>Peso trasportabile massimo</b> {character.carry_capacity}Lb\n\n"
-                   f"{'\n'.join(f'<code>{item.name}</code> x{item.quantity}' for item in character.bag) if character.bag else
-                   "Lo zaino è ancora vuoto"}")
+    # Determine the max length of the quantity string for alignment
+    max_quantity_length = max((len(str(item.quantity)) for item in character.bag), default=0)
 
+    # Create the message string with aligned quantities
+    message_str = (
+        f"<b>Oggetti nella borsa</b>\n"
+        f"<b>Peso trasportabile massimo</b> {character.carry_capacity}Lb\n\n"
+        f"{''.join(f'<code>• Pz {str(item.quantity).ljust(max_quantity_length)}</code>   <code>{item.name}</code>\n' for item in character.bag) if character.bag else 'Lo zaino è ancora vuoto'}"
+    )
+
+    # Create the keyboard with action buttons
     keyboard = [[InlineKeyboardButton('Inserisci nuovo oggetto', callback_data=BAG_ITEM_INSERTION_CALLBACK_DATA)]]
 
     if character.bag:
@@ -471,7 +477,7 @@ async def create_abilities_menu(character: Character, update: Update, context: C
                         "Ecco la lista delle azioni")
 
     abilities = character.abilities
-    abilities_pages = chunk_list(abilities, 8)
+    abilities_pages = chunk_list(abilities, 10)
 
     context.user_data[CHARACTERS_CREATOR_KEY][INLINE_PAGES_KEY] = abilities_pages
     context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_INLINE_PAGE_INDEX_KEY] = 0
@@ -908,7 +914,7 @@ async def character_bag_edit_object_query_handler(update: Update, context: Conte
         f"<b>Esempio:</b> <code>Pozione di guarigione superiore</code>\n"
     )
 
-    await send_and_save_message(update, context, message_str, parse_mode=ParseMode.HTML)
+    await query.edit_message_text(message_str, parse_mode=ParseMode.HTML)
 
     return BAG_ITEM_EDIT
 
@@ -1018,18 +1024,20 @@ async def character_ask_item_overwrite_quantity(update: Update, context: Context
     character: Character = context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_CHARACTER_KEY]
     item: Item = next((item for item in character.bag if item_name == item.name), None)
 
-    if item_quantity < item.quantity:
-        quantity_to_remove = item.quantity - item_quantity
-        character.decrement_item_quantity(item_name, quantity_to_remove)
+    if item.quantity + item_quantity < 0:
+        await send_and_save_message(update, context, f'Non hai almeno {item_quantity * -1} Pz di {item_name}')
+
+    elif item_quantity < 0:
+
+        character.decrement_item_quantity(item_name, item_quantity * -1)
         await send_and_save_message(update, context,
-                                    f"{'Sono stati rimossi' if quantity_to_remove > 1 else 'È stato rimosso'} "
-                                    f"{quantity_to_remove} {item_name} dal tuo inventario")
-    elif item_quantity > item.quantity:
-        quantity_to_add = item_quantity - item.quantity
-        character.increment_item_quantity(item_name, quantity_to_add)
+                                    f"{'Sono stati rimossi' if item_quantity > 1 else 'È stato rimosso'} "
+                                    f"{item_quantity} Pz di {item_name} dal tuo inventario")
+    elif item_quantity > 0:
+        character.increment_item_quantity(item_name, item_quantity)
         await send_and_save_message(update, context,
-                                    f"{'Sono stati aggiunti' if quantity_to_add > 1 else 'È stato aggiunto'} "
-                                    f"{quantity_to_add} {item_name} al tuo inventario")
+                                    f"{'Sono stati aggiunti' if item_quantity > 1 else 'È stato aggiunto'} "
+                                    f"{item_quantity} Pz di {item_name} al tuo inventario")
     else:
         await send_and_save_message(update, context, "🔴 La quantità inviata è uguale a quella presente!")
 
