@@ -189,20 +189,20 @@ def create_main_menu_message(character: Character) -> Tuple[str, InlineKeyboardM
 
     keyboard = [
         [
-            InlineKeyboardButton('Level down', callback_data=LEVEL_DOWN_CALLBACK_DATA),
-            InlineKeyboardButton('Level up', callback_data=LEVEL_UP_CALLBACK_DATA)
+            InlineKeyboardButton('⬇️ Level down', callback_data=LEVEL_DOWN_CALLBACK_DATA),
+            InlineKeyboardButton('⬆️ Level up', callback_data=LEVEL_UP_CALLBACK_DATA)
         ],
         [
-            InlineKeyboardButton('Prendi danni', callback_data=DAMAGE_CALLBACK_DATA),
-            InlineKeyboardButton('Curati', callback_data=HEALING_CALLBACK_DATA)
+            InlineKeyboardButton('💔 Prendi danni', callback_data=DAMAGE_CALLBACK_DATA),
+            InlineKeyboardButton('❤️‍🩹 Curati', callback_data=HEALING_CALLBACK_DATA)
         ],
         [
-            InlineKeyboardButton('Punti ferita', callback_data=HIT_POINTS_CALLBACK_DATA)
+            InlineKeyboardButton('🧬 Gestisci punti ferita 💉', callback_data=HIT_POINTS_CALLBACK_DATA)
         ],
         [
-            InlineKeyboardButton('Borsa', callback_data=BAG_CALLBACK_DATA),
-            InlineKeyboardButton('Abilità', callback_data=ABILITIES_CALLBACK_DATA),
-            InlineKeyboardButton('Spell', callback_data=SPELLS_CALLBACK_DATA)
+            InlineKeyboardButton('🧳 Borsa', callback_data=BAG_CALLBACK_DATA),
+            InlineKeyboardButton('Azioni', callback_data=ABILITIES_CALLBACK_DATA),
+            InlineKeyboardButton('🔮 Spell', callback_data=SPELLS_CALLBACK_DATA)
         ],
         [InlineKeyboardButton('Gestisci slot incantesimo', callback_data=SPELLS_SLOT_CALLBACK_DATA)],
         [InlineKeyboardButton('Punti caratteristica', callback_data=FEATURE_POINTS_CALLBACK_DATA)],
@@ -457,9 +457,9 @@ async def create_abilities_menu(character: Character, update: Update, context: C
     message_str = f"<b>Gestione abilità</b>\n\n"
     if not character.abilities:
 
-        message_str += "Non hai ancora nessuna abilità 🤷‍♂️"
+        message_str += "Non hai ancora nessuna azione 🤷‍♂️"
         keyboard = [
-            [InlineKeyboardButton("Impara nuova abilità", callback_data=ABILITY_LEARN_CALLBACK_DATA)]
+            [InlineKeyboardButton("Impara nuova azione", callback_data=ABILITY_LEARN_CALLBACK_DATA)]
         ]
         await send_and_save_message(update, context, message_str, reply_markup=InlineKeyboardMarkup(keyboard),
                                     parse_mode=ParseMode.HTML)
@@ -468,7 +468,7 @@ async def create_abilities_menu(character: Character, update: Update, context: C
 
     else:
         message_str += ("Usa /stop per tornare al menu\n"
-                        "Ecco la lista delle abilità")
+                        "Ecco la lista delle azioni")
 
     abilities = character.abilities
     abilities_pages = chunk_list(abilities, 8)
@@ -488,7 +488,7 @@ def create_ability_menu(ability: Ability) -> Tuple[str, InlineKeyboardMarkup]:
     message_str = (f"<b>{ability.name}</b>\n\n"
                    f"<b>Descrizione</b>\n{ability.description}\n\n"
                    f"<b>Usi</b> {ability.uses}x\n\n"
-                   f"<i>Abilità {'passiva' if ability.is_passive else 'attiva'}, si ricarica con un riposo "
+                   f"<i>Azione {'passiva' if ability.is_passive else 'attiva'}, si ricarica con un riposo "
                    f"{'breve' if ability.restoration_type == RestorationType.SHORT_REST else 'lungo'}</i>")
     keyboard = [
         [
@@ -1340,7 +1340,7 @@ async def character_abilities_menu_query_handler(update: Update, context: Contex
         return ABILITIES_MENU
 
     message_str = ("Usa /stop per tornare al menu\n"
-                   "Ecco la lista delle abilità")
+                   "Ecco la lista delle azioni")
     reply_markup = generate_abilities_list_keyboard(ability_page)
     await query.edit_message_text(message_str, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
 
@@ -1352,7 +1352,7 @@ async def character_ability_visualization_query_handler(update: Update, context:
     if data == ABILITY_EDIT_CALLBACK_DATA:
 
         await query.answer()
-        await query.edit_message_text("Inviami l'abilità inserendo il nome, descrizione e livello separati da un #\n\n"
+        await query.edit_message_text("Inviami l'azione inserendo il nome, descrizione e livello separati da un #\n\n"
                                       "<b>Esempio:</b> <code>nome#bella descrizione#2</code>\n\n",
                                       parse_mode=ParseMode.HTML)
 
@@ -1365,7 +1365,7 @@ async def character_ability_visualization_query_handler(update: Update, context:
                 InlineKeyboardButton("No", callback_data='n')
             ]
         ]
-        await query.edit_message_text("Sicuro di voler cancellare l'abilità?",
+        await query.edit_message_text("Sicuro di voler cancellare l'azione?",
                                       reply_markup=InlineKeyboardMarkup(keyboard))
 
     elif data == ABILITY_BACK_MENU_CALLBACK_DATA:
@@ -1375,7 +1375,7 @@ async def character_ability_visualization_query_handler(update: Update, context:
             context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_INLINE_PAGE_INDEX_KEY]]
 
         message_str = ("Usa /stop per tornare al menu\n"
-                       "Ecco la lista delle abilità")
+                       "Ecco la lista delle azione")
         reply_markup = generate_abilities_list_keyboard(ability_page)
         await query.edit_message_text(message_str, reply_markup=reply_markup)
 
@@ -1387,7 +1387,7 @@ async def character_ability_visualization_query_handler(update: Update, context:
         ability: Ability = context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_ABILITY_KEY]
 
         if ability.uses == 0:
-            await query.answer("Non hai più utilizzi per questa abilità!", show_alert=True)
+            await query.answer("Non hai più utilizzi per questa azione!", show_alert=True)
             return ABILITY_VISUALIZATION
 
         await query.answer()
@@ -1419,7 +1419,7 @@ async def character_ability_new_query_handler(update: Update, context: ContextTy
     await query.answer()
 
     await query.edit_message_text(
-        "Inviami l'abilità inserendo il nome, descrizione e numero utilizzi per tipo di riposo separati da un #\n\n"
+        "Inviami l'azione inserendo il nome, descrizione e numero utilizzi per tipo di riposo separati da un #\n\n"
         "<b>Esempio:</b> <code>nome#bella descrizione#2</code>",
         parse_mode=ParseMode.HTML
     )
@@ -1437,8 +1437,8 @@ async def character_ability_text_handler(update: Update, context: ContextTypes.D
         await send_and_save_message(
             update,
             context,
-            "🔴 Inserisci l'abilità utilizzando il formato richiesto!\n\n"
-            "Invia di nuovo l'abilità o usa /stop per terminare\n\n"
+            "🔴 Inserisci l'azione utilizzando il formato richiesto!\n\n"
+            "Invia di nuovo l'azione o usa /stop per terminare\n\n"
             "<b>Esempio:</b> <code>nome#bella descrizione#2</code>",
             parse_mode=ParseMode.HTML
         )
@@ -1450,8 +1450,8 @@ async def character_ability_text_handler(update: Update, context: ContextTypes.D
         await send_and_save_message(
             update,
             context,
-            "🔴 Inserisci l'abilità utilizzando il formato richiesto!\n\n"
-            "Invia di nuovo l'abilità o usa /stop per terminare\n\n"
+            "🔴 Inserisci l'azione utilizzando il formato richiesto!\n\n"
+            "Invia di nuovo l'azione o usa /stop per terminare\n\n"
             "<b>Esempio:</b> <code>nome#bella descrizione#2</code>",
             parse_mode=ParseMode.HTML
         )
@@ -1466,7 +1466,7 @@ async def character_ability_text_handler(update: Update, context: ContextTypes.D
     await send_and_save_message(
         update,
         context,
-        "Scegli se l'abilità è passiva o se si ricarica con un riposo lungo o corto\n"
+        "Scegli se l'azione è passiva o se si ricarica con un riposo lungo o corto\n"
         "Usa /stop per terminare", reply_markup=reply_markup
     )
 
@@ -1514,13 +1514,13 @@ async def character_ability_insert_query_handler(update: Update, context: Contex
         await send_and_save_message(
             update,
             context,
-            "🔴 Hai già appreso questa abilità!\n\n"
-            "Invia un'altra abilità o usa /stop per terminare"
+            "🔴 Hai già appreso questa azione!\n\n"
+            "Invia un'altra azione o usa /stop per terminare"
         )
         return ABILITY_LEARN
 
     character.learn_ability(ability)
-    await send_and_save_message(update, context, "Abilità appresa con successo! ✅")
+    await send_and_save_message(update, context, "azione appresa con successo! ✅")
 
     return await create_abilities_menu(character, update, context)
 
@@ -1535,8 +1535,8 @@ async def character_ability_edit_handler(update: Update, context: ContextTypes.D
         await send_and_save_message(
             update,
             context,
-            "🔴 Inserisci l'abilità utilizzando il formato richiesto!\n\n"
-            "Invia di nuovo l'abilità o usa /stop per terminare\n\n"
+            "🔴 Inserisci l'azione utilizzando il formato richiesto!\n\n"
+            "Invia di nuovo l'azione o usa /stop per terminare\n\n"
             "<b>Esempio:</b> <code>nome#bella descrizione#2</code>",
             parse_mode=ParseMode.HTML
         )
@@ -1548,8 +1548,8 @@ async def character_ability_edit_handler(update: Update, context: ContextTypes.D
         await send_and_save_message(
             update,
             context,
-            "🔴 Inserisci l'abilità utilizzando il formato richiesto!\n\n"
-            "Invia di nuovo l'abilità o usa /stop per terminare\n\n"
+            "🔴 Inserisci l'azione utilizzando il formato richiesto!\n\n"
+            "Invia di nuovo l'azione o usa /stop per terminare\n\n"
             "<b>Esempio:</b> <code>nome#bella descrizione#2</code>",
             parse_mode=ParseMode.HTML
         )
@@ -1565,7 +1565,7 @@ async def character_ability_edit_handler(update: Update, context: ContextTypes.D
             ability.max_uses = int(ability_max_uses)
             break
 
-    await send_and_save_message(update, context, "Abilità modificata con successo!")
+    await send_and_save_message(update, context, "azione modificata con successo!")
 
     return await create_abilities_menu(character, update, context)
 
@@ -1584,7 +1584,7 @@ async def character_ability_delete_query_handler(update: Update, context: Contex
         await send_and_save_message(
             update,
             context,
-            f"Hai una buona memoria, ti ricordi ancora l'abilità {ability_to_forget.name}"
+            f"Hai una buona memoria, ti ricordi ancora l'azione {ability_to_forget.name}"
         )
 
     return await create_abilities_menu(character, update, context)
@@ -2362,7 +2362,7 @@ async def character_short_rest_warning_query_handler(update: Update, context: Co
 
     message_str = (
         "<b>Stai per effettuare un riposo breve!</b>\n\n"
-        "Questo comporta il ripristino di quelle abilità che lo prevedono in caso di riposo breve.\n"
+        "Questo comporta il ripristino di quelle azione che lo prevedono in caso di riposo breve.\n"
         "Per ora non ricarica gli slot incantesimo che prevedono di ricaricarsi con il riposo breve come quelli del Warlock.\n\n"
         "Vuoi procedere? Usa /stop per annullare"
     )
