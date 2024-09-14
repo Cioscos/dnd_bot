@@ -1,6 +1,7 @@
 import logging
 import random
 import re
+from collections import defaultdict
 from typing import List, Tuple, Dict
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, CallbackQuery
@@ -444,18 +445,36 @@ async def create_spells_menu(character: Character, update: Update, context: Cont
 
     else:
 
-        message_str += ("Usa /stop per tornare al menu\n"
-                        "Ecco la lista delle abilità")
+        message_str += "Usa /stop per tornare al menu\n"
 
     spells = character.spells
-    spells_pages = chunk_list(spells, 10)
 
-    context.user_data[CHARACTERS_CREATOR_KEY][INLINE_PAGES_KEY] = spells_pages
+    # Group spells by level
+    level_to_spells = defaultdict(list)
+    for spell in spells:
+        level_to_spells[spell.level.value].append(spell)
+
+    # Create pages as a list of tuples (level, spells of that level)
+    levels = sorted(level_to_spells.keys())
+    pages = []
+    for level in levels:
+        pages.append((level, level_to_spells[level]))
+
+    # Save pages in user context
+    context.user_data[CHARACTERS_CREATOR_KEY][INLINE_PAGES_KEY] = pages
     context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_INLINE_PAGE_INDEX_KEY] = 0
-    current_page = spells_pages[context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_INLINE_PAGE_INDEX_KEY]]
 
-    reply_markup = generate_spells_list_keyboard(current_page)
+    # Get the current page
+    current_page_index = context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_INLINE_PAGE_INDEX_KEY]
+    current_page = pages[current_page_index]
+    level, spells_in_page = current_page
+
+    message_str += f"Ecco la lista delle abilità di livello {level}"
+
+    # Generates the keyboard for spells on the current page
+    reply_markup = generate_spells_list_keyboard(spells_in_page)
     await send_and_save_message(update, context, message_str, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
+
     return SPELLS_MENU
 
 
@@ -1060,15 +1079,38 @@ async def character_spells_menu_query_handler(update: Update, context: ContextTy
     query = update.callback_query
     data = query.data
 
+    pages = context.user_data[CHARACTERS_CREATOR_KEY][INLINE_PAGES_KEY]
+    current_page_index = context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_INLINE_PAGE_INDEX_KEY]
+
     if data == "prev_page":
-        if context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_INLINE_PAGE_INDEX_KEY] == 0:
+        if current_page_index == 0:
             await query.answer("Sei alla prima pagina!", show_alert=True)
         else:
             context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_INLINE_PAGE_INDEX_KEY] -= 1
+            current_page_index -= 1
+            # Refresh current page
+            current_page = pages[current_page_index]
+            level, spells_in_page = current_page
+            message_str = ("Usa /stop per tornare al menu\n"
+                           f"Ecco la lista degli incantesimi di livello {level}")
+            reply_markup = generate_spells_list_keyboard(spells_in_page)
+            await query.edit_message_text(message_str, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
         return SPELLS_MENU
 
     elif data == "next_page":
-        context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_INLINE_PAGE_INDEX_KEY] += 1
+        if current_page_index >= len(pages) - 1:
+            await query.answer("Non ci sono altre pagine!", show_alert=True)
+        else:
+            context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_INLINE_PAGE_INDEX_KEY] += 1
+            current_page_index += 1  # Aggiorna l'indice locale
+            # Aggiorna la pagina corrente
+            current_page = pages[current_page_index]
+            level, spells_in_page = current_page
+            message_str = ("Usa /stop per tornare al menu\n"
+                           f"Ecco la lista degli incantesimi di livello {level}")
+            reply_markup = generate_spells_list_keyboard(spells_in_page)
+            await query.edit_message_text(message_str, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
+        return SPELLS_MENU
 
     elif data == SPELL_LEARN_CALLBACK_DATA:
         return await character_spell_new_query_handler(update, context)
@@ -1079,28 +1121,17 @@ async def character_spells_menu_query_handler(update: Update, context: ContextTy
         character: Character = context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_CHARACTER_KEY]
         spell: Spell = next((spell for spell in character.spells if spell.name == spell_name), None)
 
+        if spell is None:
+            await query.answer("Incantesimo non trovato.", show_alert=True)
+            return SPELLS_MENU
+
         message_str, reply_markup = create_spell_menu(spell)
         await query.edit_message_text(message_str, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
 
-        # Save the current spell in the userdata
+        # Salva l'incantesimo corrente nei dati utente
         context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_SPELL_KEY] = spell
 
         return SPELL_VISUALIZATION
-
-    # Retrieves other spells
-    try:
-        spells_page = context.user_data[CHARACTERS_CREATOR_KEY][INLINE_PAGES_KEY][
-            context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_INLINE_PAGE_INDEX_KEY]
-        ]
-    except IndexError:
-        await query.answer("Non ci sono altre pagine!", show_alert=True)
-        context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_INLINE_PAGE_INDEX_KEY] -= 1
-        return SPELLS_MENU
-
-    message_str = ("Usa /stop per tornare al menu\n"
-                   "Ecco la lista degli incantesimi")
-    reply_markup = generate_spells_list_keyboard(spells_page)
-    await query.edit_message_text(message_str, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
 
 
 async def character_spell_visualization_query_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -1110,10 +1141,11 @@ async def character_spell_visualization_query_handler(update: Update, context: C
     if data == SPELL_EDIT_CALLBACK_DATA:
 
         await query.answer()
-        await query.edit_message_text("Inviami l'incantesimo inserendo il nome, descrizione e livello "
-                                      "separati da un #\n\n"
-                                      "<b>Esempio:</b> <code>Palla di fuoco#Unico incantesimo dei maghi#3</code>\n\n",
-                                      parse_mode=ParseMode.HTML)
+        await query.edit_message_text(
+            "Inviami l'incantesimo inserendo il nome, descrizione e livello separati da un #\n\n"
+            "<b>Esempio:</b> <code>Palla di fuoco#Unico incantesimo dei maghi#3</code>\n\n",
+            parse_mode=ParseMode.HTML
+        )
 
     elif data == SPELL_DELETE_CALLBACK_DATA:
 
@@ -1124,19 +1156,32 @@ async def character_spell_visualization_query_handler(update: Update, context: C
                 InlineKeyboardButton("No", callback_data='n')
             ]
         ]
-        await query.edit_message_text("Sicuro di voler cancellare l'incantesimo?",
-                                      reply_markup=InlineKeyboardMarkup(keyboard))
+        await query.edit_message_text(
+            "Sicuro di voler cancellare l'incantesimo?",
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
 
     elif data == SPELL_BACK_MENU_CALLBACK_DATA:
 
         await query.answer()
-        spells_page = context.user_data[CHARACTERS_CREATOR_KEY][INLINE_PAGES_KEY][
-            context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_INLINE_PAGE_INDEX_KEY]]
 
-        message_str = ("Usa /stop per tornare al menu\n"
-                       "Ecco la lista degli incantesimi")
-        reply_markup = generate_spells_list_keyboard(spells_page)
-        await query.edit_message_text(message_str, reply_markup=reply_markup)
+        # Retrieve current pages and index
+        pages = context.user_data[CHARACTERS_CREATOR_KEY][INLINE_PAGES_KEY]
+        current_page_index = context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_INLINE_PAGE_INDEX_KEY]
+
+        try:
+            current_page = pages[current_page_index]
+            level, spells_in_page = current_page
+        except IndexError:
+            await query.answer("Errore nel recuperare la pagina corrente.", show_alert=True)
+            return SPELLS_MENU
+
+        message_str = (
+            "Usa /stop per tornare al menu\n"
+            f"Ecco la lista degli incantesimi di livello {level}"
+        )
+        reply_markup = generate_spells_list_keyboard(spells_in_page, True)
+        await query.edit_message_text(message_str, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
 
         return SPELLS_MENU
 
@@ -1146,10 +1191,10 @@ async def character_spell_visualization_query_handler(update: Update, context: C
         spell: Spell = context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_SPELL_KEY]
         character: Character = context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_CHARACTER_KEY]
 
-        # generate inline keyboard with spell slots available
+        # Generate inline keyboard with available spell slots
         message_str, reply_markup = create_spell_slots_menu_for_spell(character, spell)
 
-        await query.edit_message_text(message_str, reply_markup=reply_markup)
+        await query.edit_message_text(message_str, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
 
     return SPELL_ACTIONS
 
