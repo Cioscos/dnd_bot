@@ -61,7 +61,7 @@ from character_creator import character_creator_start_handler, character_creatio
     NEGATIVE_CHARACTER_DELETION_CALLBACK_DATA, SPELL_USE_CALLBACK_DATA, character_spell_use_query_handler, \
     SPELL_USAGE_BACK_MENU_CALLBACK_DATA, character_bag_ask_item_overwrite_quantity_query_handler, BAG_ITEM_OVERWRITE, \
     character_ask_item_overwrite_quantity, SETTINGS_CALLBACK_DATA, character_creator_settings, SETTINGS_MENU_STATE, \
-    character_creator_settings_callback_handler
+    character_creator_settings_callback_handler, SPELL_LEVEL_MENU, character_spells_by_level_query_handler
 from class_submenus import class_submenus_query_handler, class_spells_menu_buttons_query_handler, \
     class_search_spells_text_handler, class_reading_spells_menu_buttons_query_handler, \
     class_spell_visualization_buttons_query_handler, class_resources_submenu_text_handler, CLASS_SPELLS_SUBMENU, \
@@ -466,9 +466,13 @@ def main() -> None:
                                      pattern=fr"^{ABILITY_LEARN_CALLBACK_DATA}$"),
                 MessageHandler(filters.TEXT & ~filters.COMMAND, character_ability_text_handler)
             ],
+            SPELL_LEVEL_MENU: [
+                CallbackQueryHandler(character_spells_by_level_query_handler,
+                                     pattern=fr"^{SPELL_USAGE_BACK_MENU_CALLBACK_DATA}|{SPELL_LEARN_CALLBACK_DATA}|spell_of_level\|\d+$")
+            ],
             SPELLS_MENU: [
                 CallbackQueryHandler(character_spells_menu_query_handler,
-                                     pattern=fr"^(spell_name\|.+|prev_page|next_page|{SPELL_LEARN_CALLBACK_DATA})$")
+                                     pattern=fr"^({SPELL_USAGE_BACK_MENU_CALLBACK_DATA}|spell_name\|.+|prev_page|next_page|{SPELL_LEARN_CALLBACK_DATA})$")
             ],
             SPELL_VISUALIZATION: [
                 CallbackQueryHandler(character_spell_visualization_query_handler,
@@ -523,14 +527,14 @@ def main() -> None:
                                      pattern=fr"^(d\d+\|[+-]|{ROLL_DICE_CALLBACK_DATA}|{ROLL_DICE_DELETE_HISTORY_CALLBACK_DATA})$")
             ],
             SETTINGS_MENU_STATE: [
-                CallbackQueryHandler(character_creator_settings_callback_handler)
+                CallbackQueryHandler(character_creator_settings_callback_handler, pattern=r'^setting\|.+$')
             ]
         },
         fallbacks=[
             CommandHandler("stop", character_creator_stop_submenu),
             CallbackQueryHandler(character_generic_main_menu_query_handler)
         ],
-        name='character_creator_handler_v13',
+        name='character_creator_handler_v14',
         persistent=True
     )
 

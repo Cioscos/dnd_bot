@@ -42,6 +42,7 @@ CHARACTER_CREATOR_VERSION = "3.0.0"
  ABILITY_ACTIONS,
  ABILITY_LEARN,
  SPELLS_MENU,
+ SPELL_LEVEL_MENU,
  SPELL_VISUALIZATION,
  SPELL_ACTIONS,
  SPELL_LEARN,
@@ -56,7 +57,7 @@ CHARACTER_CREATOR_VERSION = "3.0.0"
  LONG_REST,
  SHORT_REST,
  DICE_ACTION,
- SETTINGS_MENU_STATE) = map(int, range(14, 48))
+ SETTINGS_MENU_STATE) = map(int, range(14, 49))
 
 STOPPING = 99
 
@@ -454,7 +455,8 @@ def create_spell_menu(spell: Spell) -> Tuple[str, InlineKeyboardMarkup]:
     return message_str, InlineKeyboardMarkup(keyboard)
 
 
-async def create_spells_menu(character: Character, update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+async def create_spells_menu(character: Character, update: Update, context: ContextTypes.DEFAULT_TYPE,
+                             edit_mode: bool = False) -> int:
     message_str = f"<b>Gestione spells</b>\n\n"
     if not character.spells:
 
@@ -463,8 +465,12 @@ async def create_spells_menu(character: Character, update: Update, context: Cont
             [InlineKeyboardButton("Impara nuovo incantesimo", callback_data=SPELL_LEARN_CALLBACK_DATA)]
         ]
 
-        await send_and_save_message(update, context, message_str, reply_markup=InlineKeyboardMarkup(keyboard),
-                                    parse_mode=ParseMode.HTML)
+        if edit_mode:
+            await update.effective_message.edit_text(message_str, reply_markup=InlineKeyboardMarkup(keyboard),
+                                                     parse_mode=ParseMode.HTML)
+        else:
+            await send_and_save_message(update, context, message_str, reply_markup=InlineKeyboardMarkup(keyboard),
+                                        parse_mode=ParseMode.HTML)
 
         return SPELL_LEARN
 
@@ -494,13 +500,80 @@ async def create_spells_menu(character: Character, update: Update, context: Cont
     current_page = pages[current_page_index]
     level, spells_in_page = current_page
 
-    message_str += f"Ecco la lista delle abilità di livello {level}"
+    message_str += f"Ecco la lista degli incantesimi di livello {level}"
 
     # Generates the keyboard for spells on the current page
     reply_markup = generate_spells_list_keyboard(spells_in_page)
-    await send_and_save_message(update, context, message_str, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
+    if edit_mode:
+        await update.effective_message.edit_text(message_str, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
+    else:
+        await send_and_save_message(update, context, message_str, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
 
     return SPELLS_MENU
+
+
+async def create_spell_levels_menu(character: Character, update: Update, context: ContextTypes.DEFAULT_TYPE,
+                                   edit_mode: bool = False) -> int:
+    message_str = f"<b>Gestione spells</b>\n\n"
+
+    if not character.spells:
+        message_str += "Non conosci ancora nessun incantesimo ‍🤷‍♂️"
+        keyboard = [
+            [InlineKeyboardButton("Impara nuovo incantesimo", callback_data=SPELL_LEARN_CALLBACK_DATA)]
+        ]
+
+        if edit_mode:
+            await update.effective_message.edit_text(message_str, reply_markup=InlineKeyboardMarkup(keyboard),
+                                                     parse_mode=ParseMode.HTML)
+        else:
+            await send_and_save_message(update, context, message_str, reply_markup=InlineKeyboardMarkup(keyboard),
+                                        parse_mode=ParseMode.HTML)
+
+        return SPELL_LEARN
+
+    else:
+
+        message_str += "Usa /stop per tornare al menu\n"
+
+    spells = character.spells
+    buttons = []
+
+    # Group spells by their level
+    spells_by_level = {}
+    # generate keyboared with spell level
+
+    for spell in spells:
+        spells_by_level.setdefault(spell.level.value, []).append(spell)
+
+    # Iterate over the available spell levels (from 1 to 9)
+    for level in SpellLevel:
+        spell_level = level.value
+
+        # Check if there is at least one spell of this level
+        if spell_level in spells_by_level:
+            # Check if slots are available for this level
+            spell_slot = character.spell_slots.get(spell_level)
+            if spell_slot:
+                if spell_slot.slots_remaining() > 0:
+                    button_text = f"Level {spell_level}"
+                else:
+                    button_text = f"Level {spell_level} ❌"
+
+                buttons.append(
+                    InlineKeyboardButton(button_text, callback_data=f"spell_of_level|{spell_level}")
+                )
+
+    # Return the keyboard with buttons in rows
+    keyboard = [[button] for button in buttons]
+    keyboard.append([InlineKeyboardButton("Impara nuovo incantesimo", callback_data=SPELL_LEARN_CALLBACK_DATA)])
+    keyboard = InlineKeyboardMarkup(keyboard)
+
+    if edit_mode:
+        await update.effective_message.edit_text(message_str, reply_markup=keyboard, parse_mode=ParseMode.HTML)
+    else:
+        await send_and_save_message(update, context, message_str, reply_markup=keyboard, parse_mode=ParseMode.HTML)
+
+    return SPELL_LEVEL_MENU
 
 
 async def create_abilities_menu(character: Character, update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -1131,7 +1204,36 @@ async def character_spells_query_handler(update: Update, context: ContextTypes.D
 
     character: Character = context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_CHARACTER_KEY]
 
-    return await create_spells_menu(character, update, context)
+    user_settings = context.user_data[CHARACTERS_CREATOR_KEY].get(USER_SETTINGS_KEY, {})
+    spell_management_preference = user_settings.get('spell_management', 'paginate_by_level')
+
+    if spell_management_preference == 'paginate_by_level':
+        return await create_spell_levels_menu(character, update, context)
+    else:
+        return await create_spells_menu(character, update, context)
+
+
+async def character_spells_by_level_query_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    query = update.callback_query
+    await query.answer()
+
+    data = query.data
+
+    if data == SPELL_LEARN_CALLBACK_DATA:
+        return await character_spell_new_query_handler(update, context)
+
+    _, spell_level = data.split('|', maxsplit=1)
+    spell_level = int(spell_level)
+
+    character: Character = context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_CHARACTER_KEY]
+    spells_of_selected_level = [spell for spell in character.spells if spell.level.value == spell_level]
+    message_str = f"Ecco la lista degli incantesimi di livello {spell_level}"
+
+    # Generates the keyboard for spells on the current page
+    reply_markup = generate_spells_list_keyboard(spells_of_selected_level, draw_navigation_buttons=False)
+    await query.edit_message_text(message_str, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
+
+    return SPELLS_MENU
 
 
 async def character_spells_menu_query_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -1172,7 +1274,20 @@ async def character_spells_menu_query_handler(update: Update, context: ContextTy
         return SPELLS_MENU
 
     elif data == SPELL_LEARN_CALLBACK_DATA:
+
+        await query.answer()
         return await character_spell_new_query_handler(update, context)
+
+    elif data == SPELL_USAGE_BACK_MENU_CALLBACK_DATA:
+
+        await query.answer()
+        user_settings = context.user_data[CHARACTERS_CREATOR_KEY].get(USER_SETTINGS_KEY, {})
+        spell_management_preference = user_settings.get('spell_management', 'paginate_by_level')
+        character: Character = context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_CHARACTER_KEY]
+        if spell_management_preference == 'paginate_by_level':
+            return await create_spell_levels_menu(character, update, context, edit_mode=True)
+        else:
+            return await create_spells_menu(character, update, context, edit_mode=True)
 
     else:
         await query.answer()
@@ -2737,7 +2852,8 @@ async def character_generic_main_menu_query_handler(update: Update, context: Con
         fr"^{HIT_POINTS_CALLBACK_DATA}$": character_hit_points_query_handler,
         fr"^{LONG_REST_WARNING_CALLBACK_DATA}$": character_long_rest_warning_query_handler,
         fr"^{SHORT_REST_WARNING_CALLBACK_DATA}$": character_short_rest_warning_query_handler,
-        fr"^{ROLL_DICE_MENU_CALLBACK_DATA}$": dice_handler
+        fr"^{ROLL_DICE_MENU_CALLBACK_DATA}$": dice_handler,
+        fr"^{SETTINGS_CALLBACK_DATA}$": character_creator_settings
     }
 
     for regex, func in MAINMENU_CALLBACKDATA_TO_CALLBACK.items():
