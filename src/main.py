@@ -60,7 +60,8 @@ from character_creator import character_creator_start_handler, character_creatio
     ABILITY_LEARN_CALLBACK_DATA, AFFERMATIVE_CHARACTER_DELETION_CALLBACK_DATA, \
     NEGATIVE_CHARACTER_DELETION_CALLBACK_DATA, SPELL_USE_CALLBACK_DATA, character_spell_use_query_handler, \
     SPELL_USAGE_BACK_MENU_CALLBACK_DATA, character_bag_ask_item_overwrite_quantity_query_handler, BAG_ITEM_OVERWRITE, \
-    character_ask_item_overwrite_quantity, SETTINGS_CALLBACK_DATA, character_creator_settings
+    character_ask_item_overwrite_quantity, SETTINGS_CALLBACK_DATA, character_creator_settings, SETTINGS_MENU_STATE, \
+    character_creator_settings_callback_handler
 from class_submenus import class_submenus_query_handler, class_spells_menu_buttons_query_handler, \
     class_search_spells_text_handler, class_reading_spells_menu_buttons_query_handler, \
     class_spell_visualization_buttons_query_handler, class_resources_submenu_text_handler, CLASS_SPELLS_SUBMENU, \
@@ -520,13 +521,16 @@ def main() -> None:
             DICE_ACTION: [
                 CallbackQueryHandler(dice_actions_query_handler,
                                      pattern=fr"^(d\d+\|[+-]|{ROLL_DICE_CALLBACK_DATA}|{ROLL_DICE_DELETE_HISTORY_CALLBACK_DATA})$")
+            ],
+            SETTINGS_MENU_STATE: [
+                CallbackQueryHandler(character_creator_settings_callback_handler)
             ]
         },
         fallbacks=[
             CommandHandler("stop", character_creator_stop_submenu),
             CallbackQueryHandler(character_generic_main_menu_query_handler)
         ],
-        name='character_creator_handler_v12',
+        name='character_creator_handler_v13',
         persistent=True
     )
 
