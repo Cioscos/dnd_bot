@@ -4,6 +4,7 @@ import re
 from collections import defaultdict
 from typing import List, Tuple, Dict
 
+import telegram
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, CallbackQuery
 from telegram.constants import ParseMode, ChatType
 from telegram.error import TelegramError
@@ -54,7 +55,8 @@ CHARACTER_CREATOR_VERSION = "3.0.0"
  HIT_POINTS_REGISTRATION,
  LONG_REST,
  SHORT_REST,
- DICE_ACTION) = map(int, range(14, 47))
+ DICE_ACTION,
+ SETTINGS_MENU_STATE) = map(int, range(14, 48))
 
 STOPPING = 99
 
@@ -85,6 +87,9 @@ SPELL_SLOTS = 'spell_slots'
 DICE = 'dice'
 DICE_MESSAGES = 'dice_messages'
 ACTIVE_CONV = 'active_conv'
+# keys for settings
+USER_SETTINGS_KEY = 'user_settings'
+SPELL_MANAGEMENT_KEY = 'spell_management'
 
 # character main menu callback keys
 BAG_CALLBACK_DATA = 'bag'
@@ -137,6 +142,12 @@ ROLL_DICE_CALLBACK_DATA = "roll_dice"
 ROLL_DICE_DELETE_HISTORY_CALLBACK_DATA = "roll_dice_history_delete"
 SETTINGS_CALLBACK_DATA = "settings"
 
+# Setting related callback
+SETTING_SPELL_MANAGEMENT_CALLBACK_DATA = 'setting_spell_management'
+# Spells management
+SPELL_MANAGEMENT_PAGINATE_BY_LEVEL = 'paginate_by_level'
+SPELL_MANAGEMENT_SELECT_LEVEL_DIRECTLY = 'select_level_directly'
+
 STARTING_DICE = {
     'd4': 0,
     'd6': 0,
@@ -155,6 +166,19 @@ ROLLS_MAP = {
     'd12': 12,
     'd20': 20
 }
+
+# Definition of settings and their options
+SETTINGS = [
+    {
+        'key': 'spell_management',
+        'title': 'Gestione delle spell',
+        'description': 'Seleziona la modalità di gestione delle spell:',
+        'options': [
+            {'value': 'paginate_by_level', 'text': 'Paginazione per livello spell'},
+            {'value': 'select_level_directly', 'text': 'Selezione diretta del livello spell'}
+        ]
+    }
+]
 
 
 async def send_and_save_message(update: Update, context: ContextTypes.DEFAULT_TYPE, text: str, **kwargs):
@@ -561,6 +585,40 @@ MM MM  O   O  R   R   T   O   O
 M M M  O   O  RRRR    T   O   O
 M   M  O   O  R  R    T   O   O
 M   M   OOO   R   R   T    OOO</code>"""
+
+
+def generate_settings_menu_single_message(user_settings):
+    message_lines = []
+    keyboard_buttons = []
+
+    for setting in SETTINGS:
+        key = setting['key']
+        title = setting['title']
+        description = setting['description']
+        options = setting['options']
+
+        # Ottieni la selezione corrente dell'utente
+        current_value = user_settings.get(key, options[0]['value'])
+
+        # Aggiungi il titolo e la descrizione al messaggio
+        message_lines.append(f"<b>{title}</b>\n{description}")
+
+        # Crea i pulsanti delle opzioni
+        option_buttons = []
+        for option in options:
+            option_text = option['text']
+            if option['value'] == current_value:
+                option_text = '✅ ' + option_text
+
+            callback_data = f'setting|{key}|{option["value"]}'
+            option_buttons.append(InlineKeyboardButton(option_text, callback_data=callback_data))
+
+        keyboard_buttons.append(option_buttons)
+
+    message_text = '\n\n'.join(message_lines)
+    keyboard = InlineKeyboardMarkup(keyboard_buttons)
+
+    return message_text, keyboard
 
 
 async def character_creator_stop_submenu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -2594,7 +2652,68 @@ async def dice_actions_query_handler(update: Update, context: ContextTypes.DEFAU
 
 
 async def character_creator_settings(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    pass
+    query = update.callback_query
+    await query.answer()
+    # Inizializza le impostazioni utente se non presenti
+    if USER_SETTINGS_KEY not in context.user_data[CHARACTERS_CREATOR_KEY]:
+        context.user_data[CHARACTERS_CREATOR_KEY][USER_SETTINGS_KEY] = {}
+
+    user_settings = context.user_data[CHARACTERS_CREATOR_KEY][USER_SETTINGS_KEY]
+
+    # Genera il messaggio e la tastiera per le impostazioni
+    message_text, keyboard = generate_settings_menu_single_message(user_settings)
+
+    # Invia il messaggio con il menu delle impostazioni
+    await send_and_save_message(
+        update,
+        context,
+        message_text,
+        reply_markup=keyboard,
+        parse_mode=ParseMode.HTML
+    )
+
+    return SETTINGS_MENU_STATE
+
+
+async def character_creator_settings_callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    query = update.callback_query
+    data = query.data
+
+    # Formato atteso: 'setting|key|value'
+    if data.startswith('setting|'):
+        _, setting_key, selected_value = data.split('|')
+
+        # Aggiorna le impostazioni dell'utente
+        if USER_SETTINGS_KEY not in context.user_data:
+            context.user_data[CHARACTERS_CREATOR_KEY][USER_SETTINGS_KEY] = {}
+        context.user_data[CHARACTERS_CREATOR_KEY][USER_SETTINGS_KEY][setting_key] = selected_value
+
+        # Rispondi alla query
+        await query.answer()
+
+        # Rigenera il messaggio e la tastiera delle impostazioni
+        user_settings = context.user_data[CHARACTERS_CREATOR_KEY][USER_SETTINGS_KEY]
+        message_text, keyboard = generate_settings_menu_single_message(user_settings)
+
+        # Modifica il messaggio originale utilizzando query.edit_message_text
+        try:
+            await query.edit_message_text(
+                text=message_text,
+                reply_markup=keyboard,
+                parse_mode=ParseMode.HTML
+            )
+        except telegram.error.BadRequest as e:
+            # Gestisci errori nell'editing del messaggio
+            print(f"Errore nell'editing del messaggio: {e}")
+            await query.answer('Non è stato possibile aggiornare le impostazioni.', show_alert=True)
+
+        # Ritorna allo stato del menu delle impostazioni
+        return SETTINGS_MENU_STATE
+
+    else:
+        # Gestisci callback data non riconosciuti
+        await query.answer('Opzione non riconosciuta.', show_alert=True)
+        return SETTINGS_MENU_STATE
 
 
 async def character_generic_main_menu_query_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
