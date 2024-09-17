@@ -167,7 +167,6 @@ class Character:
         if a:
             a.toggle_activate_ability()
 
-
     def forget_ability(self, ability_name: str):
         """Removes an ability from the character's abilities list by name."""
         self.abilities = [ability for ability in self.abilities if ability.name != ability_name]

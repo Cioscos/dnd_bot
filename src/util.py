@@ -241,7 +241,8 @@ def generate_spells_list_keyboard(spells: List[Spell],
         navigation_buttons = [InlineKeyboardButton("⬅️ Precedente", callback_data="prev_page"),
                               InlineKeyboardButton("Successiva ➡️", callback_data="next_page")]
         keyboard.append(navigation_buttons)
-        keyboard.append([InlineKeyboardButton("Impara nuova spell", callback_data=SPELL_LEARN_CALLBACK_DATA)])
+    keyboard.append([InlineKeyboardButton("Impara nuova spell", callback_data=SPELL_LEARN_CALLBACK_DATA)])
+    keyboard.append([InlineKeyboardButton('Indietro 🔙', callback_data='spell_usage_back_menu')])
 
     return InlineKeyboardMarkup(keyboard)
 

@@ -1,8 +1,11 @@
+import asyncio
 import logging
 import random
 import re
+from collections import defaultdict
 from typing import List, Tuple, Dict
 
+import telegram
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, CallbackQuery
 from telegram.constants import ParseMode, ChatType
 from telegram.error import TelegramError
@@ -40,6 +43,7 @@ CHARACTER_CREATOR_VERSION = "3.0.0"
  ABILITY_ACTIONS,
  ABILITY_LEARN,
  SPELLS_MENU,
+ SPELL_LEVEL_MENU,
  SPELL_VISUALIZATION,
  SPELL_ACTIONS,
  SPELL_LEARN,
@@ -53,7 +57,8 @@ CHARACTER_CREATOR_VERSION = "3.0.0"
  HIT_POINTS_REGISTRATION,
  LONG_REST,
  SHORT_REST,
- DICE_ACTION) = map(int, range(14, 47))
+ DICE_ACTION,
+ SETTINGS_MENU_STATE) = map(int, range(14, 49))
 
 STOPPING = 99
 
@@ -84,6 +89,9 @@ SPELL_SLOTS = 'spell_slots'
 DICE = 'dice'
 DICE_MESSAGES = 'dice_messages'
 ACTIVE_CONV = 'active_conv'
+# keys for settings
+USER_SETTINGS_KEY = 'user_settings'
+SPELL_MANAGEMENT_KEY = 'spell_management'
 
 # character main menu callback keys
 BAG_CALLBACK_DATA = 'bag'
@@ -134,6 +142,13 @@ SHORT_REST_CALLBACK_DATA = "short_rest"
 ROLL_DICE_MENU_CALLBACK_DATA = "roll_dice_menu"
 ROLL_DICE_CALLBACK_DATA = "roll_dice"
 ROLL_DICE_DELETE_HISTORY_CALLBACK_DATA = "roll_dice_history_delete"
+SETTINGS_CALLBACK_DATA = "settings"
+
+# Setting related callback
+SETTING_SPELL_MANAGEMENT_CALLBACK_DATA = 'setting_spell_management'
+# Spells management
+SPELL_MANAGEMENT_PAGINATE_BY_LEVEL = 'paginate_by_level'
+SPELL_MANAGEMENT_SELECT_LEVEL_DIRECTLY = 'select_level_directly'
 
 STARTING_DICE = {
     'd4': 0,
@@ -153,6 +168,19 @@ ROLLS_MAP = {
     'd12': 12,
     'd20': 20
 }
+
+# Definition of settings and their options
+SETTINGS = [
+    {
+        'key': 'spell_management',
+        'title': 'Gestione delle spell',
+        'description': 'Seleziona la modalità di gestione delle spell:',
+        'options': [
+            {'value': 'paginate_by_level', 'text': 'Paginazione per livello spell'},
+            {'value': 'select_level_directly', 'text': 'Selezione diretta del livello spell'}
+        ]
+    }
+]
 
 
 async def send_and_save_message(update: Update, context: ContextTypes.DEFAULT_TYPE, text: str, **kwargs):
@@ -212,6 +240,7 @@ def create_main_menu_message(character: Character) -> Tuple[str, InlineKeyboardM
             InlineKeyboardButton('🍻 Riposo breve', callback_data=SHORT_REST_WARNING_CALLBACK_DATA)
         ],
         [InlineKeyboardButton('🎲 Lancia Dado', callback_data=ROLL_DICE_MENU_CALLBACK_DATA)],
+        [InlineKeyboardButton('⚙️ Impostazioni', callback_data=SETTINGS_CALLBACK_DATA)],
         [InlineKeyboardButton('🗑️ Elimina personaggio', callback_data=DELETE_CHARACTER_CALLBACK_DATA)]
     ]
 
@@ -305,7 +334,8 @@ def create_feature_points_messages(feature_points: Dict[str, int]) -> Dict[str, 
 
 def create_spell_slots_menu(context: ContextTypes.DEFAULT_TYPE):
     character: Character = context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_CHARACTER_KEY]
-    message_str = f"Seleziona i pulsanti con gli slot liberi 🟦 per utilizzare uno slot del livello corrispondente.\n\n"
+    message_str = (f"Seleziona i pulsanti con gli slot liberi 🟦 per utilizzare uno slot del livello corrispondente.\n\n"
+                   f"Usa /stop per terminare o un bottone del menù principale per cambiare funzione")
     keyboard = []
     if not character.spell_slots:
 
@@ -347,7 +377,9 @@ def create_spell_slots_menu(context: ContextTypes.DEFAULT_TYPE):
 
 def create_spell_slots_menu_for_spell(character: Character, spell: Spell) -> Tuple[str, InlineKeyboardMarkup]:
     keyboard = []
-    message_str = "Seleziona i pulsanti con gli slot liberi 🟦 per utilizzare un incantesimo del livello corrispondente al livello dello slot utilizzato.\n\n"
+    message_str = (
+        "Seleziona i pulsanti con gli slot liberi 🟦 per utilizzare un incantesimo del livello corrispondente al livello dello slot utilizzato.\n\n"
+        "Usa /stop per terminare o un bottone del menù principale per cambiare funzione")
 
     if not character.spell_slots:
 
@@ -385,7 +417,8 @@ def create_bag_menu(character: Character) -> Tuple[str, InlineKeyboardMarkup]:
     message_str = (
         f"<b>Oggetti nella borsa</b>\n"
         f"<b>Peso trasportabile massimo</b> {character.carry_capacity}Lb\n\n"
-        f"{''.join(f'<code>• Pz {str(item.quantity).ljust(max_quantity_length)}</code>   <code>{item.name}</code>\n' for item in character.bag) if character.bag else 'Lo zaino è ancora vuoto'}"
+        f"{''.join(f'<code>• Pz {str(item.quantity).ljust(max_quantity_length)}</code>   <code>{item.name}</code>\n' for item in character.bag) if character.bag else 'Lo zaino è ancora vuoto'}\n\n"
+        f"Usa /stop per terminare o un bottone del menù principale per cambiare funzione"
     )
 
     # Create the keyboard with action buttons
@@ -400,7 +433,7 @@ def create_bag_menu(character: Character) -> Tuple[str, InlineKeyboardMarkup]:
 def create_item_menu(item: Item) -> Tuple[str, InlineKeyboardMarkup]:
     message_str = (f"<b>{item.name:<{50}}</b>{item.quantity}Pz\n\n"
                    f"<b>Descrizione</b>\n{item.description}\n\n"
-                   f"Premi /stop per terminare\n\n")
+                   f"Usa /stop per terminare o un bottone del menù principale per cambiare funzione\n\n")
 
     keyboard = [
         [
@@ -416,7 +449,8 @@ def create_item_menu(item: Item) -> Tuple[str, InlineKeyboardMarkup]:
 
 def create_spell_menu(spell: Spell) -> Tuple[str, InlineKeyboardMarkup]:
     message_str = (f"<b>{spell.name:<{50}}</b>L{spell.level.value}\n\n"
-                   f"<b>Descrizione</b>\n{spell.description}")
+                   f"<b>Descrizione</b>\n{spell.description}\n\n"
+                   f"Usa /stop per terminare o un bottone del menù principale per cambiare funzione")
     keyboard = [
         [InlineKeyboardButton("Usa", callback_data=SPELL_USE_CALLBACK_DATA)],
         [InlineKeyboardButton("Modifica", callback_data=SPELL_EDIT_CALLBACK_DATA),
@@ -427,40 +461,129 @@ def create_spell_menu(spell: Spell) -> Tuple[str, InlineKeyboardMarkup]:
     return message_str, InlineKeyboardMarkup(keyboard)
 
 
-async def create_spells_menu(character: Character, update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    message_str = f"<b>Gestione spells</b>\n\n"
+async def create_spells_menu(character: Character, update: Update, context: ContextTypes.DEFAULT_TYPE,
+                             edit_mode: bool = False) -> int:
+    message_str = f"<b>Gestione spells</b>\nUsa /stop per terminare o un bottone del menù principale per cambiare funzione\n\n"
     if not character.spells:
 
         message_str += "Non conosci ancora nessun incantesimo ‍🤷‍♂️"
         keyboard = [
             [InlineKeyboardButton("Impara nuovo incantesimo", callback_data=SPELL_LEARN_CALLBACK_DATA)]
         ]
-        await update.effective_message.reply_text(message_str, reply_markup=InlineKeyboardMarkup(keyboard),
-                                                  parse_mode=ParseMode.HTML)
-        await send_and_save_message(update, context, message_str, reply_markup=InlineKeyboardMarkup(keyboard),
-                                    parse_mode=ParseMode.HTML)
+
+        if edit_mode:
+            await update.effective_message.edit_text(message_str, reply_markup=InlineKeyboardMarkup(keyboard),
+                                                     parse_mode=ParseMode.HTML)
+        else:
+            await send_and_save_message(update, context, message_str, reply_markup=InlineKeyboardMarkup(keyboard),
+                                        parse_mode=ParseMode.HTML)
 
         return SPELL_LEARN
 
     else:
 
-        message_str += ("Usa /stop per tornare al menu\n"
-                        "Ecco la lista delle abilità")
+        message_str += "Usa /stop per terminare o un bottone del menù principale per cambiare funzione\n"
 
     spells = character.spells
-    spells_pages = chunk_list(spells, 10)
 
-    context.user_data[CHARACTERS_CREATOR_KEY][INLINE_PAGES_KEY] = spells_pages
+    # Group spells by level
+    level_to_spells = defaultdict(list)
+    for spell in spells:
+        level_to_spells[spell.level.value].append(spell)
+
+    # Create pages as a list of tuples (level, spells of that level)
+    levels = sorted(level_to_spells.keys())
+    pages = []
+    for level in levels:
+        pages.append((level, level_to_spells[level]))
+
+    # Save pages in user context
+    context.user_data[CHARACTERS_CREATOR_KEY][INLINE_PAGES_KEY] = pages
     context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_INLINE_PAGE_INDEX_KEY] = 0
-    current_page = spells_pages[context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_INLINE_PAGE_INDEX_KEY]]
 
-    reply_markup = generate_spells_list_keyboard(current_page)
-    await send_and_save_message(update, context, message_str, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
+    # Get the current page
+    current_page_index = context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_INLINE_PAGE_INDEX_KEY]
+    current_page = pages[current_page_index]
+    level, spells_in_page = current_page
+
+    message_str += f"Ecco la lista degli incantesimi di livello {level}"
+
+    # Generates the keyboard for spells on the current page
+    reply_markup = generate_spells_list_keyboard(spells_in_page)
+    if edit_mode:
+        await update.effective_message.edit_text(message_str, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
+    else:
+        await send_and_save_message(update, context, message_str, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
+
     return SPELLS_MENU
 
 
+async def create_spell_levels_menu(character: Character, update: Update, context: ContextTypes.DEFAULT_TYPE,
+                                   edit_mode: bool = False) -> int:
+    message_str = f"<b>Gestione spells</b>\nUsa /stop per terminare o un bottone del menù principale per cambiare funzione\n\n"
+
+    if not character.spells:
+        message_str += "Non conosci ancora nessun incantesimo ‍🤷‍♂️"
+        keyboard = [
+            [InlineKeyboardButton("Impara nuovo incantesimo", callback_data=SPELL_LEARN_CALLBACK_DATA)]
+        ]
+
+        if edit_mode:
+            await update.effective_message.edit_text(message_str, reply_markup=InlineKeyboardMarkup(keyboard),
+                                                     parse_mode=ParseMode.HTML)
+        else:
+            await send_and_save_message(update, context, message_str, reply_markup=InlineKeyboardMarkup(keyboard),
+                                        parse_mode=ParseMode.HTML)
+
+        return SPELL_LEARN
+
+    else:
+
+        message_str += "Usa /stop per terminare o un bottone del menù principale per cambiare funzione\n"
+
+    spells = character.spells
+    buttons = []
+
+    # Group spells by their level
+    spells_by_level = {}
+    # generate keyboared with spell level
+
+    for spell in spells:
+        spells_by_level.setdefault(spell.level.value, []).append(spell)
+
+    # Iterate over the available spell levels (from 1 to 9)
+    for level in SpellLevel:
+        spell_level = level.value
+
+        # Check if there is at least one spell of this level
+        if spell_level in spells_by_level:
+            # Check if slots are available for this level
+            spell_slot = character.spell_slots.get(spell_level)
+            if spell_slot:
+                if spell_slot.slots_remaining() > 0:
+                    button_text = f"Level {spell_level}"
+                else:
+                    button_text = f"Level {spell_level} ❌"
+
+                buttons.append(
+                    InlineKeyboardButton(button_text, callback_data=f"spell_of_level|{spell_level}")
+                )
+
+    # Return the keyboard with buttons in rows
+    keyboard = [[button] for button in buttons]
+    keyboard.append([InlineKeyboardButton("Impara nuovo incantesimo", callback_data=SPELL_LEARN_CALLBACK_DATA)])
+    keyboard = InlineKeyboardMarkup(keyboard)
+
+    if edit_mode:
+        await update.effective_message.edit_text(message_str, reply_markup=keyboard, parse_mode=ParseMode.HTML)
+    else:
+        await send_and_save_message(update, context, message_str, reply_markup=keyboard, parse_mode=ParseMode.HTML)
+
+    return SPELL_LEVEL_MENU
+
+
 async def create_abilities_menu(character: Character, update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    message_str = f"<b>Gestione abilità</b>\n\n"
+    message_str = f"<b>Gestione abilità</b>\nUsa /stop per terminare o un bottone del menù principale per cambiare funzione\n\n"
     if not character.abilities:
 
         message_str += "Non hai ancora nessuna azione 🤷‍♂️"
@@ -473,7 +596,7 @@ async def create_abilities_menu(character: Character, update: Update, context: C
         return ABILITY_LEARN
 
     else:
-        message_str += ("Usa /stop per tornare al menu\n"
+        message_str += ("Usa /stop per terminare o un bottone del menù principale per cambiare funzione\n"
                         "Ecco la lista delle azioni")
 
     abilities = character.abilities
@@ -496,6 +619,7 @@ def create_ability_menu(ability: Ability) -> Tuple[str, InlineKeyboardMarkup]:
                    f"<b>Usi</b> {ability.uses}x\n\n"
                    f"<i>Azione {'passiva' if ability.is_passive else 'attiva'}, si ricarica con un riposo "
                    f"{'breve' if ability.restoration_type == RestorationType.SHORT_REST else 'lungo'}</i>")
+    message_str += '\n\nUsa /stop per terminare o un bottone del menù principale per cambiare funzione'
     keyboard = [
         [
             InlineKeyboardButton("Modifica", callback_data=ABILITY_EDIT_CALLBACK_DATA),
@@ -513,6 +637,45 @@ def create_ability_menu(ability: Ability) -> Tuple[str, InlineKeyboardMarkup]:
     keyboard.append([InlineKeyboardButton("Indietro 🔙", callback_data=ABILITY_BACK_MENU_CALLBACK_DATA)])
 
     return message_str, InlineKeyboardMarkup(keyboard)
+
+
+def create_dice_keyboard(selected_dice: Dict[str, int]) -> InlineKeyboardMarkup:
+    keyboard = [
+        [
+            InlineKeyboardButton(f"{selected_dice['d4']} D4", callback_data=f"d4|+"),
+            InlineKeyboardButton(f"{selected_dice['d6']} D6", callback_data=f"d6|+"),
+            InlineKeyboardButton(f"{selected_dice['d8']} D8", callback_data=f"d8|+")
+        ],
+        [
+            InlineKeyboardButton(f"-", callback_data=f"d4|-"),
+            InlineKeyboardButton(f"-", callback_data=f"d6|-"),
+            InlineKeyboardButton(f"-", callback_data=f"d8|-")
+        ],
+        [
+            InlineKeyboardButton(f"{selected_dice['d10']} D10", callback_data=f"d10|+"),
+            InlineKeyboardButton(f"{selected_dice['d12']} D12", callback_data=f"d12|+"),
+            InlineKeyboardButton(f"{selected_dice['d100']} D100", callback_data=f"d100|+")
+        ],
+        [
+            InlineKeyboardButton(f"-", callback_data=f"d10|-"),
+            InlineKeyboardButton(f"-", callback_data=f"d12|-"),
+            InlineKeyboardButton(f"-", callback_data=f"d100|-")
+        ],
+        [
+            InlineKeyboardButton(f"{selected_dice['d20']} D20", callback_data=f"d20|+")
+        ],
+        [
+            InlineKeyboardButton(f"-", callback_data=f"d20|-"),
+        ]
+    ]
+
+    roll_text = 'Seleziona un dado' if sum(
+        selected_dice.values()) == 0 else f'Lancia {', '.join([f'{roll_to_do}{die}' for die, roll_to_do in selected_dice.items() if roll_to_do > 0])}'
+    keyboard.append([InlineKeyboardButton(roll_text, callback_data=ROLL_DICE_CALLBACK_DATA)])
+    keyboard.append(
+        [InlineKeyboardButton(f"Cancella cronologia", callback_data=ROLL_DICE_DELETE_HISTORY_CALLBACK_DATA)])
+
+    return InlineKeyboardMarkup(keyboard)
 
 
 def create_skull_asciart() -> str:
@@ -541,6 +704,40 @@ MM MM  O   O  R   R   T   O   O
 M M M  O   O  RRRR    T   O   O
 M   M  O   O  R  R    T   O   O
 M   M   OOO   R   R   T    OOO</code>"""
+
+
+def generate_settings_menu_single_message(user_settings):
+    message_lines = []
+    keyboard_buttons = []
+
+    for setting in SETTINGS:
+        key = setting['key']
+        title = setting['title']
+        description = setting['description']
+        options = setting['options']
+
+        # Ottieni la selezione corrente dell'utente
+        current_value = user_settings.get(key, options[0]['value'])
+
+        # Aggiungi il titolo e la descrizione al messaggio
+        message_lines.append(f"<b>{title}</b>\n{description}")
+
+        # Crea i pulsanti delle opzioni
+        option_buttons = []
+        for option in options:
+            option_text = option['text']
+            if option['value'] == current_value:
+                option_text = '✅ ' + option_text
+
+            callback_data = f'setting|{key}|{option["value"]}'
+            option_buttons.append(InlineKeyboardButton(option_text, callback_data=callback_data))
+
+        keyboard_buttons.append(option_buttons)
+
+    message_text = '\n\n'.join(message_lines)
+    keyboard = InlineKeyboardMarkup(keyboard_buttons)
+
+    return message_text, keyboard
 
 
 async def character_creator_stop_submenu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -629,8 +826,8 @@ async def character_creator_start_handler(update: Update, context: ContextTypes.
 
     # Check if the user is already in another conversation
     if context.user_data.get(ACTIVE_CONV) == 'wiki':
-        await send_and_save_message(update, context,
-                                    "Usare /stop per uscire dalla wiki prima di usare la gestione dei personaggi.",
+        await update.effective_message.reply_text(
+            "Usare /stop per uscire dalla wiki prima di usare la gestione dei personaggi.",
                                     parse_mode=ParseMode.HTML)
         return ConversationHandler.END
 
@@ -639,15 +836,14 @@ async def character_creator_start_handler(update: Update, context: ContextTypes.
     # Check for BOT_DATA_CHAT_IDS initialization
     if BOT_DATA_CHAT_IDS not in context.bot_data or update.effective_chat.id not in context.bot_data.get(
             BOT_DATA_CHAT_IDS, []):
-        await send_and_save_message(update, context,
-                                    "La prima volta devi interagire con il bot usando il comando /start",
+        await update.effective_message.reply_text("La prima volta devi interagire con il bot usando il comando /start",
                                     parse_mode=ParseMode.HTML)
         return ConversationHandler.END
 
     # check if the function is called in a group or not
     if update.effective_chat.type != ChatType.PRIVATE:
-        await send_and_save_message(update, context,
-                                    "La funzione di gestione del personaggio può essere usata solo in privato!\n"
+        await update.effective_message.reply_text(
+            "La funzione di gestione del personaggio può essere usata solo in privato!\n"
                                     "Ritorno al menù principale...",
                                     parse_mode=ParseMode.HTML)
         return ConversationHandler.END
@@ -661,15 +857,15 @@ async def character_creator_start_handler(update: Update, context: ContextTypes.
     # check if the user has already some characters created
     if CHARACTERS_KEY not in context.user_data[CHARACTERS_CREATOR_KEY] or not context.user_data[CHARACTERS_CREATOR_KEY][
         CHARACTERS_KEY]:
-        message_str += (f"{update.effective_user.name} sembra che non hai inserito ancora nessun personaggio!\n"
+        message_str += (f"{update.effective_user.name} sembra che non hai inserito ancora nessun personaggio!\n\n"
                         f"Usa il comando /newCharacter per crearne uno nuovo o /stop per terminare la conversazione.")
 
-        await send_and_save_message(update, context, message_str, parse_mode=ParseMode.HTML)
+        await update.effective_message.reply_text(message_str, parse_mode=ParseMode.HTML)
         return CHARACTER_CREATION
 
     else:
         characters: List[Character] = context.user_data[CHARACTERS_CREATOR_KEY][CHARACTERS_KEY]
-        message_str += "Seleziona uno dei personaggi da gestire o creane no nuovo con /newCharacter:"
+        message_str += "Seleziona uno dei personaggi da gestire o creane uno nuovo con /newCharacter:"
         keyboard = []
 
         for character in characters:
@@ -701,9 +897,7 @@ async def character_creation_handler(update: Update, context: ContextTypes.DEFAU
     character = Character()
     context.user_data[CHARACTERS_CREATOR_KEY][TEMP_CHARACTER_KEY] = character
 
-    await send_and_save_message(
-        update,
-        context,
+    await update.effective_message.reply_text(
         "Qual'è il nome del personaggio?\nRispondi a questo messaggio o premi /stop per terminare"
     )
 
@@ -715,10 +909,7 @@ async def character_name_handler(update: Update, context: ContextTypes.DEFAULT_T
 
     # check if the character already exists
     if any(character.name == name for character in context.user_data[CHARACTERS_CREATOR_KEY].get(CHARACTERS_KEY, [])):
-        await send_and_save_message(
-            update,
-            context,
-            "🔴 Esiste già un personaggio con lo stesso nome! 🔴\n"
+        await update.effective_message.reply_text("🔴 Esiste già un personaggio con lo stesso nome! 🔴\n"
             "Inserisci un altro nome o premi /stop per terminare"
         )
         return NAME_SELECTION
@@ -726,9 +917,7 @@ async def character_name_handler(update: Update, context: ContextTypes.DEFAULT_T
     character = context.user_data[CHARACTERS_CREATOR_KEY][TEMP_CHARACTER_KEY]
     character.name = name
 
-    await send_and_save_message(
-        update,
-        context,
+    await update.effective_message.reply_text(
         "Qual'è la razza del personaggio?\nRispondi a questo messaggio o premi /stop per terminare"
     )
 
@@ -741,9 +930,7 @@ async def character_race_handler(update: Update, context: ContextTypes.DEFAULT_T
     character = context.user_data[CHARACTERS_CREATOR_KEY][TEMP_CHARACTER_KEY]
     character.race = race
 
-    await send_and_save_message(
-        update,
-        context,
+    await update.effective_message.reply_text(
         "Qual'è il genere del personaggio?\nRispondi a questo messaggio o premi /stop per terminare\n\n"
         "Esempio: Maschio"
     )
@@ -757,9 +944,7 @@ async def character_gender_handler(update: Update, context: ContextTypes.DEFAULT
     character = context.user_data[CHARACTERS_CREATOR_KEY][TEMP_CHARACTER_KEY]
     character.gender = gender
 
-    await send_and_save_message(
-        update,
-        context,
+    await update.effective_message.reply_text(
         "Qual'è la classe del personaggio?\nRispondi a questo messaggio o premi /stop per terminare"
     )
 
@@ -772,9 +957,7 @@ async def character_class_handler(update: Update, context: ContextTypes.DEFAULT_
     character: Character = context.user_data[CHARACTERS_CREATOR_KEY][TEMP_CHARACTER_KEY]
     character.multi_class.add_class(class_)
 
-    await send_and_save_message(
-        update,
-        context,
+    await update.effective_message.reply_text(
         "Quanti punti vita ha il tuo personaggio?\nRispondi a questo messaggio o premi /stop per terminare"
     )
 
@@ -793,7 +976,6 @@ async def character_hit_points_handler(update: Update, context: ContextTypes.DEF
     context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_CHARACTER_KEY] = character
 
     msg, reply_markup = create_main_menu_message(character)
-
     await update.effective_message.reply_text(msg, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
 
     return FUNCTION_SELECTION
@@ -824,8 +1006,8 @@ async def character_bag_new_object_query_handler(update: Update, context: Contex
     message_str = (
         f"Rispondi con il nome dell'oggetto, quantità, descrizione e peso!\n\n"
         f"<b>Esempio:</b> <code>Pozione di guarigione superiore#2#Mi cura 8d4 + 8 di vita#1</code>\n"
-        f"Il peso è opzionale!\n"
-        f"Premi /stop per terminare"
+        f"Il peso è opzionale!\n\n"
+        f"Usa /stop per terminare o un bottone del menù principale per cambiare funzione"
     )
 
     await query.edit_message_text(message_str, parse_mode=ParseMode.HTML)
@@ -895,7 +1077,7 @@ async def character_bag_item_insert(update: Update, context: ContextTypes.DEFAUL
             "Oggetto inserito con successo! ✅\n\n"
             f"{f'Puoi ancora trasportare {available_space} lb' if available_space > 0 else 'Psss... ora hai lo zaino pieno!'}"
         )
-        await send_and_save_message(update, context, success_message)
+        await update.effective_message.reply_text(success_message)
 
     # Send the bag main menu
     message_str, reply_markup = create_bag_menu(character)
@@ -910,7 +1092,7 @@ async def character_bag_edit_object_query_handler(update: Update, context: Conte
 
     message_str = (
         f"Rispondi con il nome dell'oggetto!\n"
-        f"Premi /stop per terminare\n\n"
+        f"Usa /stop per terminare o un bottone del menù principale per cambiare funzione\n\n"
         f"<b>Esempio:</b> <code>Pozione di guarigione superiore</code>\n"
     )
 
@@ -930,7 +1112,7 @@ async def character_bag_item_edit_handler(update: Update, context: ContextTypes.
         await send_and_save_message(
             update,
             context,
-            "🔴 Oggetto non trovato! Prova di nuovo o premi /stop 🔴"
+            "🔴 Oggetto non trovato! Prova di nuovo o usa /stop per terminare o un bottone del menù principale per cambiare funzione 🔴"
         )
         return BAG_ITEM_EDIT
 
@@ -991,10 +1173,10 @@ async def character_bag_item_delete_all_handler(update: Update, context: Context
     context.user_data[CHARACTERS_CREATOR_KEY].pop(CURRENT_ITEM_KEY, None)
 
     message_str = "Oggetto rimosso con successo! ✅"
-    await send_and_save_message(update, context, message_str, parse_mode=ParseMode.HTML)
+    await update.effective_message.reply_text(message_str)
 
     message_str, reply_markup = create_bag_menu(character)
-    await send_and_save_message(update, context, message_str, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
+    await update.effective_message.reply_text(message_str, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
 
     return BAG_MANAGEMENT
 
@@ -1004,7 +1186,8 @@ async def character_bag_ask_item_overwrite_quantity_query_handler(update: Update
     query = update.callback_query
     await query.answer()
 
-    await query.edit_message_text("Inviami la quntità da sovrascrivere")
+    await query.edit_message_text(
+        "Inviami la quntità da sovrascrivere\n\nUsa /stop per terminare o un bottone del menù principale per cambiare funzione")
 
     return BAG_ITEM_OVERWRITE
 
@@ -1017,7 +1200,8 @@ async def character_ask_item_overwrite_quantity(update: Update, context: Context
         item_quantity = int(text)
     except ValueError:
         await send_and_save_message(update, context, "La quantità inserita non è un numero!\n\n"
-                                                     "Inserisci una quantità corretta o usa /stop per terminare")
+                                                     "Inserisci una quantità corretta o usa /stop per terminare "
+                                                     "o un bottone del menù principale per cambiare funzione")
         return BAG_ITEM_OVERWRITE
 
     item_name = context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_ITEM_KEY]
@@ -1053,25 +1237,91 @@ async def character_spells_query_handler(update: Update, context: ContextTypes.D
 
     character: Character = context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_CHARACTER_KEY]
 
-    return await create_spells_menu(character, update, context)
+    user_settings = context.user_data[CHARACTERS_CREATOR_KEY].get(USER_SETTINGS_KEY, {})
+    spell_management_preference = user_settings.get('spell_management', 'paginate_by_level')
+
+    if spell_management_preference == 'paginate_by_level':
+        return await create_spell_levels_menu(character, update, context)
+    else:
+        return await create_spells_menu(character, update, context)
+
+
+async def character_spells_by_level_query_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    query = update.callback_query
+    await query.answer()
+
+    data = query.data
+
+    if data == SPELL_LEARN_CALLBACK_DATA:
+        return await character_spell_new_query_handler(update, context)
+
+    _, spell_level = data.split('|', maxsplit=1)
+    spell_level = int(spell_level)
+
+    character: Character = context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_CHARACTER_KEY]
+    spells_of_selected_level = [spell for spell in character.spells if spell.level.value == spell_level]
+    message_str = (f"Ecco la lista degli incantesimi di livello {spell_level}\n\n"
+                   f"Usa /stop per terminare o un bottone del menù principale per cambiare funzione")
+
+    # Generates the keyboard for spells on the current page
+    reply_markup = generate_spells_list_keyboard(spells_of_selected_level, draw_navigation_buttons=False)
+    await query.edit_message_text(message_str, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
+
+    return SPELLS_MENU
 
 
 async def character_spells_menu_query_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     query = update.callback_query
     data = query.data
 
+    pages = context.user_data[CHARACTERS_CREATOR_KEY][INLINE_PAGES_KEY]
+    current_page_index = context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_INLINE_PAGE_INDEX_KEY]
+
     if data == "prev_page":
-        if context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_INLINE_PAGE_INDEX_KEY] == 0:
+        if current_page_index == 0:
             await query.answer("Sei alla prima pagina!", show_alert=True)
         else:
             context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_INLINE_PAGE_INDEX_KEY] -= 1
+            current_page_index -= 1
+            # Refresh current page
+            current_page = pages[current_page_index]
+            level, spells_in_page = current_page
+            message_str = ("Usa /stop per terminare o un bottone del menù principale per cambiare funzione\n"
+                           f"Ecco la lista degli incantesimi di livello {level}")
+            reply_markup = generate_spells_list_keyboard(spells_in_page)
+            await query.edit_message_text(message_str, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
         return SPELLS_MENU
 
     elif data == "next_page":
-        context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_INLINE_PAGE_INDEX_KEY] += 1
+        if current_page_index >= len(pages) - 1:
+            await query.answer("Non ci sono altre pagine!", show_alert=True)
+        else:
+            context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_INLINE_PAGE_INDEX_KEY] += 1
+            current_page_index += 1  # Aggiorna l'indice locale
+            # Aggiorna la pagina corrente
+            current_page = pages[current_page_index]
+            level, spells_in_page = current_page
+            message_str = ("Usa /stop per terminare o un bottone del menù principale per cambiare funzione\n"
+                           f"Ecco la lista degli incantesimi di livello {level}")
+            reply_markup = generate_spells_list_keyboard(spells_in_page)
+            await query.edit_message_text(message_str, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
+        return SPELLS_MENU
 
     elif data == SPELL_LEARN_CALLBACK_DATA:
+
+        await query.answer()
         return await character_spell_new_query_handler(update, context)
+
+    elif data == SPELL_USAGE_BACK_MENU_CALLBACK_DATA:
+
+        await query.answer()
+        user_settings = context.user_data[CHARACTERS_CREATOR_KEY].get(USER_SETTINGS_KEY, {})
+        spell_management_preference = user_settings.get('spell_management', 'paginate_by_level')
+        character: Character = context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_CHARACTER_KEY]
+        if spell_management_preference == 'paginate_by_level':
+            return await create_spell_levels_menu(character, update, context, edit_mode=True)
+        else:
+            return await create_spells_menu(character, update, context, edit_mode=True)
 
     else:
         await query.answer()
@@ -1079,28 +1329,17 @@ async def character_spells_menu_query_handler(update: Update, context: ContextTy
         character: Character = context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_CHARACTER_KEY]
         spell: Spell = next((spell for spell in character.spells if spell.name == spell_name), None)
 
+        if spell is None:
+            await query.answer("Incantesimo non trovato.", show_alert=True)
+            return SPELLS_MENU
+
         message_str, reply_markup = create_spell_menu(spell)
         await query.edit_message_text(message_str, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
 
-        # Save the current spell in the userdata
+        # Salva l'incantesimo corrente nei dati utente
         context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_SPELL_KEY] = spell
 
         return SPELL_VISUALIZATION
-
-    # Retrieves other spells
-    try:
-        spells_page = context.user_data[CHARACTERS_CREATOR_KEY][INLINE_PAGES_KEY][
-            context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_INLINE_PAGE_INDEX_KEY]
-        ]
-    except IndexError:
-        await query.answer("Non ci sono altre pagine!", show_alert=True)
-        context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_INLINE_PAGE_INDEX_KEY] -= 1
-        return SPELLS_MENU
-
-    message_str = ("Usa /stop per tornare al menu\n"
-                   "Ecco la lista degli incantesimi")
-    reply_markup = generate_spells_list_keyboard(spells_page)
-    await query.edit_message_text(message_str, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
 
 
 async def character_spell_visualization_query_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -1110,10 +1349,12 @@ async def character_spell_visualization_query_handler(update: Update, context: C
     if data == SPELL_EDIT_CALLBACK_DATA:
 
         await query.answer()
-        await query.edit_message_text("Inviami l'incantesimo inserendo il nome, descrizione e livello "
-                                      "separati da un #\n\n"
-                                      "<b>Esempio:</b> <code>Palla di fuoco#Unico incantesimo dei maghi#3</code>\n\n",
-                                      parse_mode=ParseMode.HTML)
+        await query.edit_message_text(
+            "Inviami l'incantesimo inserendo il nome, descrizione e livello separati da un #\n\n"
+            "<b>Esempio:</b> <code>Palla di fuoco#Unico incantesimo dei maghi#3</code>\n\n"
+            "Usa /stop per terminare o un bottone del menù principale per cambiare funzione",
+            parse_mode=ParseMode.HTML
+        )
 
     elif data == SPELL_DELETE_CALLBACK_DATA:
 
@@ -1124,19 +1365,33 @@ async def character_spell_visualization_query_handler(update: Update, context: C
                 InlineKeyboardButton("No", callback_data='n')
             ]
         ]
-        await query.edit_message_text("Sicuro di voler cancellare l'incantesimo?",
-                                      reply_markup=InlineKeyboardMarkup(keyboard))
+        await query.edit_message_text(
+            "Sicuro di voler cancellare l'incantesimo\n\n"
+            "Usa /stop per terminare o un bottone del menù principale per cambiare funzione?",
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
 
     elif data == SPELL_BACK_MENU_CALLBACK_DATA:
 
         await query.answer()
-        spells_page = context.user_data[CHARACTERS_CREATOR_KEY][INLINE_PAGES_KEY][
-            context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_INLINE_PAGE_INDEX_KEY]]
 
-        message_str = ("Usa /stop per tornare al menu\n"
-                       "Ecco la lista degli incantesimi")
-        reply_markup = generate_spells_list_keyboard(spells_page)
-        await query.edit_message_text(message_str, reply_markup=reply_markup)
+        # Retrieve current pages and index
+        pages = context.user_data[CHARACTERS_CREATOR_KEY][INLINE_PAGES_KEY]
+        current_page_index = context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_INLINE_PAGE_INDEX_KEY]
+
+        try:
+            current_page = pages[current_page_index]
+            level, spells_in_page = current_page
+        except IndexError:
+            await query.answer("Errore nel recuperare la pagina corrente.", show_alert=True)
+            return SPELLS_MENU
+
+        message_str = (
+            "Usa /stop per terminare o un bottone del menù principale per cambiare funzione\n"
+            f"Ecco la lista degli incantesimi di livello {level}"
+        )
+        reply_markup = generate_spells_list_keyboard(spells_in_page, True)
+        await query.edit_message_text(message_str, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
 
         return SPELLS_MENU
 
@@ -1146,10 +1401,10 @@ async def character_spell_visualization_query_handler(update: Update, context: C
         spell: Spell = context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_SPELL_KEY]
         character: Character = context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_CHARACTER_KEY]
 
-        # generate inline keyboard with spell slots available
+        # Generate inline keyboard with available spell slots
         message_str, reply_markup = create_spell_slots_menu_for_spell(character, spell)
 
-        await query.edit_message_text(message_str, reply_markup=reply_markup)
+        await query.edit_message_text(message_str, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
 
     return SPELL_ACTIONS
 
@@ -1163,7 +1418,8 @@ async def character_spell_new_query_handler(update: Update, context: ContextType
         context,
         "Inviami l'incantesimo inserendo il nome, descrizione e livello "
         "separati da un #\n\n"
-        "<b>Esempio:</b> <code>Palla di fuoco#Unico incantesimo dei maghi#3</code>\n\n",
+        "<b>Esempio:</b> <code>Palla di fuoco#Unico incantesimo dei maghi#3</code>\n\n"
+        "Usa /stop per terminare o un bottone del menù principale per cambiare funzione",
         parse_mode=ParseMode.HTML
     )
 
@@ -1181,7 +1437,7 @@ async def character_spell_learn_handler(update: Update, context: ContextTypes.DE
             update,
             context,
             "🔴 Hai inserito i dati in un formato non valido!\n\n"
-            "Invia di nuovo l'incantesimo o usa /stop per terminare"
+            "Invia di nuovo l'incantesimo o usa /stop per terminare o un bottone del menù principale per cambiare funzione"
         )
         return SPELL_ACTIONS
 
@@ -1190,7 +1446,7 @@ async def character_spell_learn_handler(update: Update, context: ContextTypes.DE
             update,
             context,
             "🔴 Hai inserito i dati in un formato non valido!\n\n"
-            "Invia di nuovo l'incantesimo o usa /stop per terminare"
+            "Invia di nuovo l'incantesimo o usa /stop per terminare o un bottone del menù principale per cambiare funzione"
         )
         return SPELL_ACTIONS
 
@@ -1202,7 +1458,7 @@ async def character_spell_learn_handler(update: Update, context: ContextTypes.DE
             update,
             context,
             "🔴 Hai già appreso questa spell!\n\n"
-            "Invia un altro incantesimo o usa /stop per terminare"
+            "Invia un altro incantesimo o usa /stop per terminare o un bottone del menù principale per cambiare funzione"
         )
         return SPELL_ACTIONS
 
@@ -1211,7 +1467,7 @@ async def character_spell_learn_handler(update: Update, context: ContextTypes.DE
                                     context,
                                     f"🔴 Questo incantesimo è di livello troppo alto!\n\n"
                                     f"Sblocca prima almeno uno slot di livello {spell.level.value} per impararlo.\n"
-                                    f"Invia un altro incantesimo o usa /stop per terminare")
+                                    f"Invia un altro incantesimo o usa /stop per terminare o un bottone del menù principale per cambiare funzione")
         return SPELL_ACTIONS
 
     character.learn_spell(spell)
@@ -1231,7 +1487,7 @@ async def character_spell_edit_handler(update: Update, context: ContextTypes.DEF
             update,
             context,
             "🔴 Hai inserito i dati in un formato non valido!\n\n"
-            "Invia di nuovo l'incantesimo o usa /stop per terminare"
+            "Invia di nuovo l'incantesimo o usa /stop per terminare o un bottone del menù principale per cambiare funzione"
         )
         return SPELL_ACTIONS
 
@@ -1240,7 +1496,7 @@ async def character_spell_edit_handler(update: Update, context: ContextTypes.DEF
             update,
             context,
             "🔴 Hai inserito i dati in un formato non valido!\n\n"
-            "Invia di nuovo l'incantesimo o usa /stop per terminare"
+            "Invia di nuovo l'incantesimo o usa /stop per terminare o un bottone del menù principale per cambiare funzione"
         )
         return SPELL_ACTIONS
 
@@ -1357,7 +1613,7 @@ async def character_abilities_menu_query_handler(update: Update, context: Contex
         context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_INLINE_PAGE_INDEX_KEY] -= 1
         return ABILITIES_MENU
 
-    message_str = ("Usa /stop per tornare al menu\n"
+    message_str = ("Usa /stop per terminare o un bottone del menù principale per cambiare funzione\n"
                    "Ecco la lista delle azioni")
     reply_markup = generate_abilities_list_keyboard(ability_page)
     await query.edit_message_text(message_str, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
@@ -1371,7 +1627,8 @@ async def character_ability_visualization_query_handler(update: Update, context:
 
         await query.answer()
         await query.edit_message_text("Inviami l'azione inserendo il nome, descrizione e livello separati da un #\n\n"
-                                      "<b>Esempio:</b> <code>nome#bella descrizione#2</code>\n\n",
+                                      "<b>Esempio:</b> <code>nome#bella descrizione#2</code>\n\n"
+                                      "Usa /stop per terminare o un bottone del menù principale per cambiare funzione",
                                       parse_mode=ParseMode.HTML)
 
     elif data == ABILITY_DELETE_CALLBACK_DATA:
@@ -1383,7 +1640,8 @@ async def character_ability_visualization_query_handler(update: Update, context:
                 InlineKeyboardButton("No", callback_data='n')
             ]
         ]
-        await query.edit_message_text("Sicuro di voler cancellare l'azione?",
+        await query.edit_message_text("Sicuro di voler cancellare l'azione?\n\n"
+                                      "Usa /stop per terminare o un bottone del menù principale per cambiare funzione",
                                       reply_markup=InlineKeyboardMarkup(keyboard))
 
     elif data == ABILITY_BACK_MENU_CALLBACK_DATA:
@@ -1392,7 +1650,7 @@ async def character_ability_visualization_query_handler(update: Update, context:
         ability_page = context.user_data[CHARACTERS_CREATOR_KEY][INLINE_PAGES_KEY][
             context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_INLINE_PAGE_INDEX_KEY]]
 
-        message_str = ("Usa /stop per tornare al menu\n"
+        message_str = ("Usa /stop per terminare o un bottone del menù principale per cambiare funzione\n\n"
                        "Ecco la lista delle azione")
         reply_markup = generate_abilities_list_keyboard(ability_page)
         await query.edit_message_text(message_str, reply_markup=reply_markup)
@@ -1438,7 +1696,8 @@ async def character_ability_new_query_handler(update: Update, context: ContextTy
 
     await query.edit_message_text(
         "Inviami l'azione inserendo il nome, descrizione e numero utilizzi per tipo di riposo separati da un #\n\n"
-        "<b>Esempio:</b> <code>nome#bella descrizione#2</code>",
+        "<b>Esempio:</b> <code>nome#bella descrizione#2</code>\n\n"
+        "Usa /stop per terminare o un bottone del menù principale per cambiare funzione",
         parse_mode=ParseMode.HTML
     )
 
@@ -1456,7 +1715,7 @@ async def character_ability_text_handler(update: Update, context: ContextTypes.D
             update,
             context,
             "🔴 Inserisci l'azione utilizzando il formato richiesto!\n\n"
-            "Invia di nuovo l'azione o usa /stop per terminare\n\n"
+            "Invia di nuovo l'azione o usa /stop per terminare o un bottone del menù principale per cambiare funzione\n\n"
             "<b>Esempio:</b> <code>nome#bella descrizione#2</code>",
             parse_mode=ParseMode.HTML
         )
@@ -1469,7 +1728,7 @@ async def character_ability_text_handler(update: Update, context: ContextTypes.D
             update,
             context,
             "🔴 Inserisci l'azione utilizzando il formato richiesto!\n\n"
-            "Invia di nuovo l'azione o usa /stop per terminare\n\n"
+            "Invia di nuovo l'azione o usa /stop per terminare o un bottone del menù principale per cambiare funzione\n\n"
             "<b>Esempio:</b> <code>nome#bella descrizione#2</code>",
             parse_mode=ParseMode.HTML
         )
@@ -1485,7 +1744,7 @@ async def character_ability_text_handler(update: Update, context: ContextTypes.D
         update,
         context,
         "Scegli se l'azione è passiva o se si ricarica con un riposo lungo o corto\n"
-        "Usa /stop per terminare", reply_markup=reply_markup
+        "Usa /stop per terminare o un bottone del menù principale per cambiare funzione", reply_markup=reply_markup
     )
 
     return ABILITY_LEARN
@@ -1533,12 +1792,12 @@ async def character_ability_insert_query_handler(update: Update, context: Contex
             update,
             context,
             "🔴 Hai già appreso questa azione!\n\n"
-            "Invia un'altra azione o usa /stop per terminare"
+            "Invia un'altra azione o usa /stop per terminare o un bottone del menù principale per cambiare funzione"
         )
         return ABILITY_LEARN
 
     character.learn_ability(ability)
-    await send_and_save_message(update, context, "azione appresa con successo! ✅")
+    await send_and_save_message(update, context, "Azione appresa con successo! ✅")
 
     return await create_abilities_menu(character, update, context)
 
@@ -1554,7 +1813,7 @@ async def character_ability_edit_handler(update: Update, context: ContextTypes.D
             update,
             context,
             "🔴 Inserisci l'azione utilizzando il formato richiesto!\n\n"
-            "Invia di nuovo l'azione o usa /stop per terminare\n\n"
+            "Invia di nuovo l'azione o usa /stop per terminare o un bottone del menù principale per cambiare funzione\n\n"
             "<b>Esempio:</b> <code>nome#bella descrizione#2</code>",
             parse_mode=ParseMode.HTML
         )
@@ -1567,7 +1826,7 @@ async def character_ability_edit_handler(update: Update, context: ContextTypes.D
             update,
             context,
             "🔴 Inserisci l'azione utilizzando il formato richiesto!\n\n"
-            "Invia di nuovo l'azione o usa /stop per terminare\n\n"
+            "Invia di nuovo l'azione o usa /stop per terminare o un bottone del menù principale per cambiare funzione\n\n"
             "<b>Esempio:</b> <code>nome#bella descrizione#2</code>",
             parse_mode=ParseMode.HTML
         )
@@ -1583,7 +1842,7 @@ async def character_ability_edit_handler(update: Update, context: ContextTypes.D
             ability.max_uses = int(ability_max_uses)
             break
 
-    await send_and_save_message(update, context, "azione modificata con successo!")
+    await send_and_save_message(update, context, "Azione modificata con successo!")
 
     return await create_abilities_menu(character, update, context)
 
@@ -1616,8 +1875,8 @@ async def character_feature_point_query_handler(update: Update, context: Context
 
     message_str = (
         "<b>Gestione punti caratteristica</b>\n\n"
-        "Inserisci i punti caratteristica come meglio desideri.\n"
-        "Usa /stop per terminare"
+        "Inserisci i punti caratteristica come meglio desideri.\n\n"
+        "Usa /stop per terminare o un bottone del menù principale per cambiare funzione"
     )
     await send_and_save_message(update, context, message_str, parse_mode=ParseMode.HTML)
 
@@ -1676,7 +1935,8 @@ async def character_change_level_query_handler(update: Update, context: ContextT
         ]
         keyboard = InlineKeyboardMarkup(buttons)
         await send_and_save_message(
-            update, context, "Scegli quale classe livellare in positivo o negativo:", reply_markup=keyboard
+            update, context, "Usa /stop per terminare o un bottone del menù principale per cambiare funzione\n\n"
+                             "Scegli quale classe livellare in positivo o negativo:", reply_markup=keyboard
         )
     else:
         # If only one class, level up/down automatically
@@ -1751,7 +2011,8 @@ async def character_multiclassing_add_class_query_handler(update: Update, contex
 
     message_str = (
         "Mandami il nome della classe da aggiungere e il livello separati da un #\n\n"
-        "Esempio: <code>Guerriero#3</code>"
+        "Esempio: <code>Guerriero#3</code>\n\n"
+        "Usa /stop per terminare o un bottone del menù principale per cambiare funzione"
     )
 
     await send_and_save_message(update, context, message_str, parse_mode=ParseMode.HTML)
@@ -1770,7 +2031,7 @@ async def character_multiclassing_add_class_answer_handler(update: Update, conte
             update,
             context,
             "🔴 Hai inviato il messaggio in un formato sbagliato!\n\n"
-            "Invialo come classe#livello"
+            "Invialo come classe#livello o usa /stop per terminare o un bottone del menù principale per cambiare funzione"
         )
         return MULTICLASSING_ACTIONS
 
@@ -1779,7 +2040,7 @@ async def character_multiclassing_add_class_answer_handler(update: Update, conte
             update,
             context,
             "🔴 Hai inviato il messaggio in un formato sbagliato!\n\n"
-            "Invialo come classe#livello"
+            "Invialo come classe#livello o usa /stop per terminare o un bottone del menù principale per cambiare funzione"
         )
         return MULTICLASSING_ACTIONS
 
@@ -1817,7 +2078,8 @@ async def character_multiclassing_remove_class_query_handler(update: Update, con
     await send_and_save_message(
         update,
         context,
-        "Che classe vuoi rimuovere?",
+        "Che classe vuoi rimuovere?\n\n"
+        "Usa /stop per terminare o un bottone del menù principale per cambiare funzione",
         reply_markup=InlineKeyboardMarkup(keyboard)
     )
 
@@ -1947,10 +2209,7 @@ async def character_deleting_answer_query_handler(update: Update, context: Conte
 
         context.user_data[CHARACTERS_CREATOR_KEY].pop(CURRENT_CHARACTER_KEY, None)
 
-        await send_and_save_message(
-            update,
-            context,
-            "Personaggio eliminato con successo ✅\n\n"
+        await update.effective_message.reply_text("Personaggio eliminato con successo ✅\n\n"
             "Usa il comando /start per avviare una nuova conversazione!\n"
             "Oppure invia direttamente i comandi /wiki o /character"
         )
@@ -2025,7 +2284,8 @@ async def character_spells_slots_add_query_handler(update: Update, context: Cont
 
     message_str = ("Inserisci quanti slot inserire e di che livello in questo modo:\n\n"
                    "<code>numero slot#livello</code>\n\n"
-                   "<b>Esempio:</b> 4#1 (4 slot di livello 1)")
+                   "<b>Esempio:</b> 4#1 (4 slot di livello 1)\n\n"
+                   "Usa /stop per terminare o un bottone del menù principale per cambiare funzione")
 
     await query.edit_message_text(message_str, parse_mode=ParseMode.HTML)
 
@@ -2042,7 +2302,8 @@ async def character_spell_slot_add_answer_query_handler(update: Update, context:
         await send_and_save_message(
             update,
             context,
-            f"🔴 Formato sbagliato prova di nuovo!\n\nCorretto: 5#5 Usato: {data}"
+            f"🔴 Formato sbagliato prova di nuovo!\n\nCorretto: 5#5 Usato: {data}\n\n"
+            f"Usa /stop per terminare o un bottone del menù principale per cambiare funzione"
         )
         return SPELL_SLOT_ADDING
 
@@ -2050,13 +2311,15 @@ async def character_spell_slot_add_answer_query_handler(update: Update, context:
         await send_and_save_message(
             update,
             context,
-            f"🔴 Formato sbagliato prova di nuovo!\n\nCorretto: 5#5 Usato: {data}"
+            f"🔴 Formato sbagliato prova di nuovo!\n\nCorretto: 5#5 Usato: {data}\n\n"
+            f"Usa /stop per terminare o un bottone del menù principale per cambiare funzione"
         )
         return SPELL_SLOT_ADDING
 
-    if int(slot_number) > 9:
+    if int(slot_level) > 9:
         await send_and_save_message(
-            update, context, "🔴 Non puoi inserire uno slot di livello superiore al 9! 🔴"
+            update, context, "🔴 Non puoi inserire uno slot di livello superiore al 9! 🔴\n\n"
+                             "Usa /stop per terminare o un bottone del menù principale per cambiare funzione"
         )
         return SPELL_SLOT_ADDING
 
@@ -2064,7 +2327,7 @@ async def character_spell_slot_add_answer_query_handler(update: Update, context:
 
     if slot_level in character.spell_slots:
         await send_and_save_message(
-            update, context, f"Slot di livello {slot_level} già presente, andrai a sostituire"
+            update, context, f"Slot di livello {slot_level} già presente, andrai a sostituire la quantità già esistente"
         )
 
     spell_slot = SpellSlot(int(slot_level), int(slot_number))
@@ -2086,7 +2349,8 @@ async def character_spells_slots_remove_query_handler(update: Update, context: C
 
     message_str = ("Inserisci quanti slot rimuovere e di che livello in questo modo:\n\n"
                    "<code>numero slot#livello</code>\n\n"
-                   "<b>Esempio:</b> 4#1 (4 slot di livello 1)")
+                   "<b>Esempio:</b> 4#1 (4 slot di livello 1)\n\n"
+                   "Usa /stop per terminare o un bottone del menù principale per cambiare funzione")
 
     await query.edit_message_text(message_str, parse_mode=ParseMode.HTML)
 
@@ -2103,7 +2367,8 @@ async def character_spell_slot_remove_answer_query_handler(update: Update, conte
         await send_and_save_message(
             update,
             context,
-            f"🔴 Formato sbagliato prova di nuovo!\n\nCorretto: 5#5 Usato: {data}"
+            f"🔴 Formato sbagliato prova di nuovo!\n\nCorretto: 5#5 Usato: {data}\n\n"
+            f"Usa /stop per terminare o un bottone del menù principale per cambiare funzione"
         )
         return SPELL_SLOT_REMOVING
 
@@ -2111,7 +2376,8 @@ async def character_spell_slot_remove_answer_query_handler(update: Update, conte
         await send_and_save_message(
             update,
             context,
-            f"🔴 Formato sbagliato prova di nuovo!\n\nCorretto: 5#5 Usato: {data}"
+            f"🔴 Formato sbagliato prova di nuovo!\n\nCorretto: 5#5 Usato: {data}\n\n"
+            f"Usa /stop per terminare o un bottone del menù principale per cambiare funzione"
         )
         return SPELL_SLOT_REMOVING
 
@@ -2124,7 +2390,7 @@ async def character_spell_slot_remove_answer_query_handler(update: Update, conte
             update,
             context,
             f"Slot di livello {slot_level} non presente!\n\n"
-            "Manda un nuovo messaggio con lo slot di livello corretto o annulla con /stop"
+            "Manda un nuovo messaggio con lo slot di livello corretto o Usa /stop per terminare o un bottone del menù principale per cambiare funzione"
         )
         return SPELL_SLOT_REMOVING
 
@@ -2191,7 +2457,8 @@ async def character_damage_query_handler(update: Update, context: ContextTypes.D
     query = update.callback_query
     await query.answer()
 
-    await send_and_save_message(update, context, "Quanti danni hai subito?")
+    await send_and_save_message(update, context, "Quanti danni hai subito?\n\n"
+                                                 "Usa /stop per terminare o un bottone del menù principale per cambiare funzione")
 
     return DAMAGE_REGISTRATION
 
@@ -2200,7 +2467,8 @@ async def character_damage_registration_handler(update: Update, context: Context
     damage = update.effective_message.text
 
     if not damage or damage.isalpha():
-        await send_and_save_message(update, context, "🔴 Inserisci un numero non una parola!")
+        await send_and_save_message(update, context, "🔴 Inserisci un numero non una parola!\n\n"
+                                                     "Usa /stop per terminare o un bottone del menù principale per cambiare funzione")
         return DAMAGE_REGISTRATION
 
     character: Character = context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_CHARACTER_KEY]
@@ -2212,10 +2480,14 @@ async def character_damage_registration_handler(update: Update, context: Context
     character.current_hit_points -= int(damage)
 
     you_died_str = f"{damage} danni subiti!\n\n\n"
+    character_died = False
     if character.current_hit_points <= -character.hit_points:
         you_died_str += create_skull_asciart()
+        character_died = False
 
     await send_and_save_message(update, context, you_died_str, parse_mode=ParseMode.HTML)
+    if character_died:
+        await asyncio.sleep(3)
 
     msg, reply_markup = create_main_menu_message(character)
     await update.effective_message.reply_text(msg, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
@@ -2227,7 +2499,8 @@ async def character_healing_query_handler(update: Update, context: ContextTypes.
     query = update.callback_query
     await query.answer()
 
-    await send_and_save_message(update, context, "Di quanto ti vuoi curare?")
+    await send_and_save_message(update, context, "Di quanto ti vuoi curare?\n\n"
+                                                 "Usa /stop per terminare o un bottone del menù principale per cambiare funzione")
 
     return HEALING_REGISTRATION
 
@@ -2237,12 +2510,14 @@ async def character_healing_value_check_or_registration_handler(update: Update,
     healing = update.effective_message.text
 
     if not healing or not healing.isdigit():
-        await send_and_save_message(update, context, "🔴 Inserisci un numero non una parola!")
+        await send_and_save_message(update, context, "🔴 Inserisci un numero non una parola!\n\n"
+                                                     "Usa /stop per terminare o un bottone del menù principale per cambiare funzione")
         return HEALING_REGISTRATION
     healing = int(healing)
 
     if healing <= 0:
-        await send_and_save_message(update, context, "🔴 Inserisci un valore superiore a 0!")
+        await send_and_save_message(update, context, "🔴 Inserisci un valore superiore a 0!\n\n"
+                                                     "Usa /stop per terminare o un bottone del menù principale per cambiare funzione")
         return HEALING_REGISTRATION
 
     character: Character = context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_CHARACTER_KEY]
@@ -2256,7 +2531,8 @@ async def character_healing_value_check_or_registration_handler(update: Update,
             context,
             f"Se ti curi di {healing} punti ferita, aggiungerai "
             f"{(character.current_hit_points + healing) - character.hit_points} punti ferita temporanei.\n\n"
-            "Vuoi aggiungere i punti ferita temporanei?",
+            "Vuoi aggiungere i punti ferita temporanei?\n\n"
+            "Usa /stop per terminare o un bottone del menù principale per cambiare funzione",
             reply_markup=InlineKeyboardMarkup(keyboard)
         )
 
@@ -2268,7 +2544,13 @@ async def character_healing_value_check_or_registration_handler(update: Update,
         character.current_hit_points = int(character.current_hit_points)
     character.current_hit_points += healing
 
-    await send_and_save_message(update, context, f"Sei stato curato di {healing} PF!")
+    # flavour message
+    message_str = ''
+    if healing > 50:
+        message_str = '<b>Diamine! Qualche divinità ti ha voluto proprio bene!</b>\n\n'
+
+    message_str += f"Sei stato curato di {healing} PF!"
+    await update.effective_message.reply_text(message_str, parse_mode=ParseMode.HTML)
 
     msg, reply_markup = create_main_menu_message(character)
     await update.effective_message.reply_text(msg, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
@@ -2286,12 +2568,12 @@ async def character_over_healing_registration_query_handler(update: Update, cont
     if data == 'y':
 
         character.current_hit_points += int(healing)
-        await send_and_save_message(update, context, f"Sei stato curato di {healing} PF!\n"
+        await update.effective_message.reply_text(f"Sei stato curato di {healing} PF!\n"
                                                      f"{(character.current_hit_points + healing) - character.hit_points} punti ferita temporanei aggiunti!")
 
     elif data == 'n':
         character.current_hit_points = character.hit_points
-        await send_and_save_message(update, context, f"Sei stato curato di {healing} PF!")
+        await update.effective_message.reply_text(f"Sei stato curato di {healing} PF!")
 
     context.user_data[CHARACTERS_CREATOR_KEY].pop(TEMP_HEALING_KEY, None)
     msg, reply_markup = create_main_menu_message(character)
@@ -2309,8 +2591,9 @@ async def character_hit_points_query_handler(update: Update, context: ContextTyp
     await send_and_save_message(
         update,
         context,
-        f"Quanti sono ora i punti ferita di {character.name}?\n\n"
-        f"N.B. I punti ferita attuali saranno ripristinati al massimo!"
+        f"Quanti sono ora i punti ferita di {character.name}?\n"
+        f"N.B. I punti ferita attuali saranno ripristinati al massimo!\n\n"
+        f"Usa /stop per terminare o un bottone del menù principale per cambiare funzione"
     )
 
     return HIT_POINTS_REGISTRATION
@@ -2320,7 +2603,8 @@ async def character_hit_points_registration_handler(update: Update, context: Con
     hit_points = update.effective_message.text
 
     if not hit_points or hit_points.isalpha():
-        await send_and_save_message(update, context, "🔴 Inserisci un numero non una parola!")
+        await send_and_save_message(update, context, "🔴 Inserisci un numero non una parola!\n\n"
+                                                     "Usa /stop per terminare o un bottone del menù principale per cambiare funzione")
         return HIT_POINTS_REGISTRATION
 
     character: Character = context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_CHARACTER_KEY]
@@ -2333,7 +2617,7 @@ async def character_hit_points_registration_handler(update: Update, context: Con
 
     character.hit_points = character.current_hit_points = int(hit_points)
 
-    await send_and_save_message(update, context, f"Punti ferita aumentati a {hit_points}!")
+    await update.effective_message.reply_text(f"Punti ferita aumentati a {hit_points}!")
 
     msg, reply_markup = create_main_menu_message(character)
     await update.effective_message.reply_text(msg, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
@@ -2350,7 +2634,7 @@ async def character_long_rest_warning_query_handler(update: Update, context: Con
         "Questo comporta:\n"
         "- Ripristino dei punti ferita\n"
         "- Ripristino slot incantesimo\n\n"
-        "Vuoi procedere? Usa /stop per annullare"
+        "Vuoi procedere? Usa /stop per terminare o un bottone del menù principale per cambiare funzione"
     )
     keyboard = [[InlineKeyboardButton("Riposa", callback_data=LONG_REST_CALLBACK_DATA)]]
 
@@ -2382,7 +2666,7 @@ async def character_short_rest_warning_query_handler(update: Update, context: Co
         "<b>Stai per effettuare un riposo breve!</b>\n\n"
         "Questo comporta il ripristino di quelle azione che lo prevedono in caso di riposo breve.\n"
         "Per ora non ricarica gli slot incantesimo che prevedono di ricaricarsi con il riposo breve come quelli del Warlock.\n\n"
-        "Vuoi procedere? Usa /stop per annullare"
+        "Vuoi procedere? Usa /stop per terminare o un bottone del menù principale per cambiare funzione"
     )
     keyboard = [[InlineKeyboardButton("Riposa", callback_data=SHORT_REST_CALLBACK_DATA)]]
 
@@ -2406,50 +2690,12 @@ async def character_short_rest_query_handler(update: Update, context: ContextTyp
     return FUNCTION_SELECTION
 
 
-def create_dice_keyboard(selected_dice: Dict[str, int]) -> InlineKeyboardMarkup:
-    keyboard = [
-        [
-            InlineKeyboardButton(f"{selected_dice['d4']} D4", callback_data=f"d4|+"),
-            InlineKeyboardButton(f"{selected_dice['d6']} D6", callback_data=f"d6|+"),
-            InlineKeyboardButton(f"{selected_dice['d8']} D8", callback_data=f"d8|+")
-        ],
-        [
-            InlineKeyboardButton(f"-", callback_data=f"d4|-"),
-            InlineKeyboardButton(f"-", callback_data=f"d6|-"),
-            InlineKeyboardButton(f"-", callback_data=f"d8|-")
-        ],
-        [
-            InlineKeyboardButton(f"{selected_dice['d10']} D10", callback_data=f"d10|+"),
-            InlineKeyboardButton(f"{selected_dice['d12']} D12", callback_data=f"d12|+"),
-            InlineKeyboardButton(f"{selected_dice['d100']} D100", callback_data=f"d100|+")
-        ],
-        [
-            InlineKeyboardButton(f"-", callback_data=f"d10|-"),
-            InlineKeyboardButton(f"-", callback_data=f"d12|-"),
-            InlineKeyboardButton(f"-", callback_data=f"d100|-")
-        ],
-        [
-            InlineKeyboardButton(f"{selected_dice['d20']} D20", callback_data=f"d20|+")
-        ],
-        [
-            InlineKeyboardButton(f"-", callback_data=f"d20|-"),
-        ]
-    ]
-
-    roll_text = 'Seleziona un dado' if sum(
-        selected_dice.values()) == 0 else f'Lancia {', '.join([f'{roll_to_do}{die}' for die, roll_to_do in selected_dice.items() if roll_to_do > 0])}'
-    keyboard.append([InlineKeyboardButton(roll_text, callback_data=ROLL_DICE_CALLBACK_DATA)])
-    keyboard.append(
-        [InlineKeyboardButton(f"Cancella cronologia", callback_data=ROLL_DICE_DELETE_HISTORY_CALLBACK_DATA)])
-
-    return InlineKeyboardMarkup(keyboard)
-
-
 async def send_dice_menu(update: Update, context: ContextTypes.DEFAULT_TYPE, is_edit: bool = True):
     character: Character = context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_CHARACTER_KEY]
     roll_history = character.get_rolls_history()
     message_str = (
-        f"<b>Gestione tiri di dado</b>\n\n"
+        f"<b>Gestione tiri di dado</b>\n"
+        "Usa /stop per terminare o un bottone del menù principale per cambiare funzione\n"
         f"<code>{roll_history if roll_history != '' else 'Cronologia lanci vuota!\n\n'}</code>"
         "Seleziona quanti dadi vuoi tirare:\n\n"
     )
@@ -2547,6 +2793,71 @@ async def dice_actions_query_handler(update: Update, context: ContextTypes.DEFAU
     return DICE_ACTION
 
 
+async def character_creator_settings(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    query = update.callback_query
+    await query.answer()
+    # Inizializza le impostazioni utente se non presenti
+    if USER_SETTINGS_KEY not in context.user_data[CHARACTERS_CREATOR_KEY]:
+        context.user_data[CHARACTERS_CREATOR_KEY][USER_SETTINGS_KEY] = {}
+
+    user_settings = context.user_data[CHARACTERS_CREATOR_KEY][USER_SETTINGS_KEY]
+
+    # Genera il messaggio e la tastiera per le impostazioni
+    message_text, keyboard = generate_settings_menu_single_message(user_settings)
+
+    # Invia il messaggio con il menu delle impostazioni
+    await send_and_save_message(
+        update,
+        context,
+        message_text,
+        reply_markup=keyboard,
+        parse_mode=ParseMode.HTML
+    )
+
+    return SETTINGS_MENU_STATE
+
+
+async def character_creator_settings_callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    query = update.callback_query
+    data = query.data
+
+    # Formato atteso: 'setting|key|value'
+    if data.startswith('setting|'):
+        _, setting_key, selected_value = data.split('|')
+
+        # Aggiorna le impostazioni dell'utente
+        if USER_SETTINGS_KEY not in context.user_data:
+            context.user_data[CHARACTERS_CREATOR_KEY][USER_SETTINGS_KEY] = {}
+        context.user_data[CHARACTERS_CREATOR_KEY][USER_SETTINGS_KEY][setting_key] = selected_value
+
+        # Rispondi alla query
+        await query.answer()
+
+        # Rigenera il messaggio e la tastiera delle impostazioni
+        user_settings = context.user_data[CHARACTERS_CREATOR_KEY][USER_SETTINGS_KEY]
+        message_text, keyboard = generate_settings_menu_single_message(user_settings)
+
+        # Modifica il messaggio originale utilizzando query.edit_message_text
+        try:
+            await query.edit_message_text(
+                text=message_text,
+                reply_markup=keyboard,
+                parse_mode=ParseMode.HTML
+            )
+        except telegram.error.BadRequest as e:
+            # Gestisci errori nell'editing del messaggio
+            print(f"Errore nell'editing del messaggio: {e}")
+            await query.answer('Non è stato possibile aggiornare le impostazioni.', show_alert=True)
+
+        # Ritorna allo stato del menu delle impostazioni
+        return SETTINGS_MENU_STATE
+
+    else:
+        # Gestisci callback data non riconosciuti
+        await query.answer('Opzione non riconosciuta.', show_alert=True)
+        return SETTINGS_MENU_STATE
+
+
 async def character_generic_main_menu_query_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     query = update.callback_query
     await query.answer()
@@ -2568,7 +2879,8 @@ async def character_generic_main_menu_query_handler(update: Update, context: Con
         fr"^{HIT_POINTS_CALLBACK_DATA}$": character_hit_points_query_handler,
         fr"^{LONG_REST_WARNING_CALLBACK_DATA}$": character_long_rest_warning_query_handler,
         fr"^{SHORT_REST_WARNING_CALLBACK_DATA}$": character_short_rest_warning_query_handler,
-        fr"^{ROLL_DICE_MENU_CALLBACK_DATA}$": dice_handler
+        fr"^{ROLL_DICE_MENU_CALLBACK_DATA}$": dice_handler,
+        fr"^{SETTINGS_CALLBACK_DATA}$": character_creator_settings
     }
 
     for regex, func in MAINMENU_CALLBACKDATA_TO_CALLBACK.items():
