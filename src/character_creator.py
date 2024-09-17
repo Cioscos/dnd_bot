@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import random
 import re
@@ -333,7 +334,8 @@ def create_feature_points_messages(feature_points: Dict[str, int]) -> Dict[str, 
 
 def create_spell_slots_menu(context: ContextTypes.DEFAULT_TYPE):
     character: Character = context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_CHARACTER_KEY]
-    message_str = f"Seleziona i pulsanti con gli slot liberi 🟦 per utilizzare uno slot del livello corrispondente.\n\n"
+    message_str = (f"Seleziona i pulsanti con gli slot liberi 🟦 per utilizzare uno slot del livello corrispondente.\n\n"
+                   f"Usa /stop per terminare o un bottone del menù principale per cambiare funzione")
     keyboard = []
     if not character.spell_slots:
 
@@ -375,7 +377,9 @@ def create_spell_slots_menu(context: ContextTypes.DEFAULT_TYPE):
 
 def create_spell_slots_menu_for_spell(character: Character, spell: Spell) -> Tuple[str, InlineKeyboardMarkup]:
     keyboard = []
-    message_str = "Seleziona i pulsanti con gli slot liberi 🟦 per utilizzare un incantesimo del livello corrispondente al livello dello slot utilizzato.\n\n"
+    message_str = (
+        "Seleziona i pulsanti con gli slot liberi 🟦 per utilizzare un incantesimo del livello corrispondente al livello dello slot utilizzato.\n\n"
+        "Usa /stop per terminare o un bottone del menù principale per cambiare funzione")
 
     if not character.spell_slots:
 
@@ -413,7 +417,8 @@ def create_bag_menu(character: Character) -> Tuple[str, InlineKeyboardMarkup]:
     message_str = (
         f"<b>Oggetti nella borsa</b>\n"
         f"<b>Peso trasportabile massimo</b> {character.carry_capacity}Lb\n\n"
-        f"{''.join(f'<code>• Pz {str(item.quantity).ljust(max_quantity_length)}</code>   <code>{item.name}</code>\n' for item in character.bag) if character.bag else 'Lo zaino è ancora vuoto'}"
+        f"{''.join(f'<code>• Pz {str(item.quantity).ljust(max_quantity_length)}</code>   <code>{item.name}</code>\n' for item in character.bag) if character.bag else 'Lo zaino è ancora vuoto'}\n\n"
+        f"Usa /stop per terminare o un bottone del menù principale per cambiare funzione"
     )
 
     # Create the keyboard with action buttons
@@ -428,7 +433,7 @@ def create_bag_menu(character: Character) -> Tuple[str, InlineKeyboardMarkup]:
 def create_item_menu(item: Item) -> Tuple[str, InlineKeyboardMarkup]:
     message_str = (f"<b>{item.name:<{50}}</b>{item.quantity}Pz\n\n"
                    f"<b>Descrizione</b>\n{item.description}\n\n"
-                   f"Premi /stop per terminare\n\n")
+                   f"Usa /stop per terminare o un bottone del menù principale per cambiare funzione\n\n")
 
     keyboard = [
         [
@@ -444,7 +449,8 @@ def create_item_menu(item: Item) -> Tuple[str, InlineKeyboardMarkup]:
 
 def create_spell_menu(spell: Spell) -> Tuple[str, InlineKeyboardMarkup]:
     message_str = (f"<b>{spell.name:<{50}}</b>L{spell.level.value}\n\n"
-                   f"<b>Descrizione</b>\n{spell.description}")
+                   f"<b>Descrizione</b>\n{spell.description}\n\n"
+                   f"Usa /stop per terminare o un bottone del menù principale per cambiare funzione")
     keyboard = [
         [InlineKeyboardButton("Usa", callback_data=SPELL_USE_CALLBACK_DATA)],
         [InlineKeyboardButton("Modifica", callback_data=SPELL_EDIT_CALLBACK_DATA),
@@ -633,6 +639,45 @@ def create_ability_menu(ability: Ability) -> Tuple[str, InlineKeyboardMarkup]:
     return message_str, InlineKeyboardMarkup(keyboard)
 
 
+def create_dice_keyboard(selected_dice: Dict[str, int]) -> InlineKeyboardMarkup:
+    keyboard = [
+        [
+            InlineKeyboardButton(f"{selected_dice['d4']} D4", callback_data=f"d4|+"),
+            InlineKeyboardButton(f"{selected_dice['d6']} D6", callback_data=f"d6|+"),
+            InlineKeyboardButton(f"{selected_dice['d8']} D8", callback_data=f"d8|+")
+        ],
+        [
+            InlineKeyboardButton(f"-", callback_data=f"d4|-"),
+            InlineKeyboardButton(f"-", callback_data=f"d6|-"),
+            InlineKeyboardButton(f"-", callback_data=f"d8|-")
+        ],
+        [
+            InlineKeyboardButton(f"{selected_dice['d10']} D10", callback_data=f"d10|+"),
+            InlineKeyboardButton(f"{selected_dice['d12']} D12", callback_data=f"d12|+"),
+            InlineKeyboardButton(f"{selected_dice['d100']} D100", callback_data=f"d100|+")
+        ],
+        [
+            InlineKeyboardButton(f"-", callback_data=f"d10|-"),
+            InlineKeyboardButton(f"-", callback_data=f"d12|-"),
+            InlineKeyboardButton(f"-", callback_data=f"d100|-")
+        ],
+        [
+            InlineKeyboardButton(f"{selected_dice['d20']} D20", callback_data=f"d20|+")
+        ],
+        [
+            InlineKeyboardButton(f"-", callback_data=f"d20|-"),
+        ]
+    ]
+
+    roll_text = 'Seleziona un dado' if sum(
+        selected_dice.values()) == 0 else f'Lancia {', '.join([f'{roll_to_do}{die}' for die, roll_to_do in selected_dice.items() if roll_to_do > 0])}'
+    keyboard.append([InlineKeyboardButton(roll_text, callback_data=ROLL_DICE_CALLBACK_DATA)])
+    keyboard.append(
+        [InlineKeyboardButton(f"Cancella cronologia", callback_data=ROLL_DICE_DELETE_HISTORY_CALLBACK_DATA)])
+
+    return InlineKeyboardMarkup(keyboard)
+
+
 def create_skull_asciart() -> str:
     return r"""<code>
            ______
@@ -781,8 +826,8 @@ async def character_creator_start_handler(update: Update, context: ContextTypes.
 
     # Check if the user is already in another conversation
     if context.user_data.get(ACTIVE_CONV) == 'wiki':
-        await send_and_save_message(update, context,
-                                    "Usare /stop per uscire dalla wiki prima di usare la gestione dei personaggi.",
+        await update.effective_message.reply_text(
+            "Usare /stop per uscire dalla wiki prima di usare la gestione dei personaggi.",
                                     parse_mode=ParseMode.HTML)
         return ConversationHandler.END
 
@@ -791,15 +836,14 @@ async def character_creator_start_handler(update: Update, context: ContextTypes.
     # Check for BOT_DATA_CHAT_IDS initialization
     if BOT_DATA_CHAT_IDS not in context.bot_data or update.effective_chat.id not in context.bot_data.get(
             BOT_DATA_CHAT_IDS, []):
-        await send_and_save_message(update, context,
-                                    "La prima volta devi interagire con il bot usando il comando /start",
+        await update.effective_message.reply_text("La prima volta devi interagire con il bot usando il comando /start",
                                     parse_mode=ParseMode.HTML)
         return ConversationHandler.END
 
     # check if the function is called in a group or not
     if update.effective_chat.type != ChatType.PRIVATE:
-        await send_and_save_message(update, context,
-                                    "La funzione di gestione del personaggio può essere usata solo in privato!\n"
+        await update.effective_message.reply_text(
+            "La funzione di gestione del personaggio può essere usata solo in privato!\n"
                                     "Ritorno al menù principale...",
                                     parse_mode=ParseMode.HTML)
         return ConversationHandler.END
@@ -816,7 +860,7 @@ async def character_creator_start_handler(update: Update, context: ContextTypes.
         message_str += (f"{update.effective_user.name} sembra che non hai inserito ancora nessun personaggio!\n\n"
                         f"Usa il comando /newCharacter per crearne uno nuovo o /stop per terminare la conversazione.")
 
-        await send_and_save_message(update, context, message_str, parse_mode=ParseMode.HTML)
+        await update.effective_message.reply_text(message_str, parse_mode=ParseMode.HTML)
         return CHARACTER_CREATION
 
     else:
@@ -853,9 +897,7 @@ async def character_creation_handler(update: Update, context: ContextTypes.DEFAU
     character = Character()
     context.user_data[CHARACTERS_CREATOR_KEY][TEMP_CHARACTER_KEY] = character
 
-    await send_and_save_message(
-        update,
-        context,
+    await update.effective_message.reply_text(
         "Qual'è il nome del personaggio?\nRispondi a questo messaggio o premi /stop per terminare"
     )
 
@@ -867,10 +909,7 @@ async def character_name_handler(update: Update, context: ContextTypes.DEFAULT_T
 
     # check if the character already exists
     if any(character.name == name for character in context.user_data[CHARACTERS_CREATOR_KEY].get(CHARACTERS_KEY, [])):
-        await send_and_save_message(
-            update,
-            context,
-            "🔴 Esiste già un personaggio con lo stesso nome! 🔴\n"
+        await update.effective_message.reply_text("🔴 Esiste già un personaggio con lo stesso nome! 🔴\n"
             "Inserisci un altro nome o premi /stop per terminare"
         )
         return NAME_SELECTION
@@ -878,9 +917,7 @@ async def character_name_handler(update: Update, context: ContextTypes.DEFAULT_T
     character = context.user_data[CHARACTERS_CREATOR_KEY][TEMP_CHARACTER_KEY]
     character.name = name
 
-    await send_and_save_message(
-        update,
-        context,
+    await update.effective_message.reply_text(
         "Qual'è la razza del personaggio?\nRispondi a questo messaggio o premi /stop per terminare"
     )
 
@@ -893,9 +930,7 @@ async def character_race_handler(update: Update, context: ContextTypes.DEFAULT_T
     character = context.user_data[CHARACTERS_CREATOR_KEY][TEMP_CHARACTER_KEY]
     character.race = race
 
-    await send_and_save_message(
-        update,
-        context,
+    await update.effective_message.reply_text(
         "Qual'è il genere del personaggio?\nRispondi a questo messaggio o premi /stop per terminare\n\n"
         "Esempio: Maschio"
     )
@@ -909,9 +944,7 @@ async def character_gender_handler(update: Update, context: ContextTypes.DEFAULT
     character = context.user_data[CHARACTERS_CREATOR_KEY][TEMP_CHARACTER_KEY]
     character.gender = gender
 
-    await send_and_save_message(
-        update,
-        context,
+    await update.effective_message.reply_text(
         "Qual'è la classe del personaggio?\nRispondi a questo messaggio o premi /stop per terminare"
     )
 
@@ -924,9 +957,7 @@ async def character_class_handler(update: Update, context: ContextTypes.DEFAULT_
     character: Character = context.user_data[CHARACTERS_CREATOR_KEY][TEMP_CHARACTER_KEY]
     character.multi_class.add_class(class_)
 
-    await send_and_save_message(
-        update,
-        context,
+    await update.effective_message.reply_text(
         "Quanti punti vita ha il tuo personaggio?\nRispondi a questo messaggio o premi /stop per terminare"
     )
 
@@ -945,7 +976,6 @@ async def character_hit_points_handler(update: Update, context: ContextTypes.DEF
     context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_CHARACTER_KEY] = character
 
     msg, reply_markup = create_main_menu_message(character)
-
     await update.effective_message.reply_text(msg, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
 
     return FUNCTION_SELECTION
@@ -1047,7 +1077,7 @@ async def character_bag_item_insert(update: Update, context: ContextTypes.DEFAUL
             "Oggetto inserito con successo! ✅\n\n"
             f"{f'Puoi ancora trasportare {available_space} lb' if available_space > 0 else 'Psss... ora hai lo zaino pieno!'}"
         )
-        await send_and_save_message(update, context, success_message)
+        await update.effective_message.reply_text(success_message)
 
     # Send the bag main menu
     message_str, reply_markup = create_bag_menu(character)
@@ -1143,10 +1173,10 @@ async def character_bag_item_delete_all_handler(update: Update, context: Context
     context.user_data[CHARACTERS_CREATOR_KEY].pop(CURRENT_ITEM_KEY, None)
 
     message_str = "Oggetto rimosso con successo! ✅"
-    await send_and_save_message(update, context, message_str, parse_mode=ParseMode.HTML)
+    await update.effective_message.reply_text(message_str)
 
     message_str, reply_markup = create_bag_menu(character)
-    await send_and_save_message(update, context, message_str, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
+    await update.effective_message.reply_text(message_str, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
 
     return BAG_MANAGEMENT
 
@@ -2179,10 +2209,7 @@ async def character_deleting_answer_query_handler(update: Update, context: Conte
 
         context.user_data[CHARACTERS_CREATOR_KEY].pop(CURRENT_CHARACTER_KEY, None)
 
-        await send_and_save_message(
-            update,
-            context,
-            "Personaggio eliminato con successo ✅\n\n"
+        await update.effective_message.reply_text("Personaggio eliminato con successo ✅\n\n"
             "Usa il comando /start per avviare una nuova conversazione!\n"
             "Oppure invia direttamente i comandi /wiki o /character"
         )
@@ -2453,10 +2480,14 @@ async def character_damage_registration_handler(update: Update, context: Context
     character.current_hit_points -= int(damage)
 
     you_died_str = f"{damage} danni subiti!\n\n\n"
+    character_died = False
     if character.current_hit_points <= -character.hit_points:
         you_died_str += create_skull_asciart()
+        character_died = False
 
     await send_and_save_message(update, context, you_died_str, parse_mode=ParseMode.HTML)
+    if character_died:
+        await asyncio.sleep(3)
 
     msg, reply_markup = create_main_menu_message(character)
     await update.effective_message.reply_text(msg, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
@@ -2537,12 +2568,12 @@ async def character_over_healing_registration_query_handler(update: Update, cont
     if data == 'y':
 
         character.current_hit_points += int(healing)
-        await send_and_save_message(update, context, f"Sei stato curato di {healing} PF!\n"
+        await update.effective_message.reply_text(f"Sei stato curato di {healing} PF!\n"
                                                      f"{(character.current_hit_points + healing) - character.hit_points} punti ferita temporanei aggiunti!")
 
     elif data == 'n':
         character.current_hit_points = character.hit_points
-        await send_and_save_message(update, context, f"Sei stato curato di {healing} PF!")
+        await update.effective_message.reply_text(f"Sei stato curato di {healing} PF!")
 
     context.user_data[CHARACTERS_CREATOR_KEY].pop(TEMP_HEALING_KEY, None)
     msg, reply_markup = create_main_menu_message(character)
@@ -2657,45 +2688,6 @@ async def character_short_rest_query_handler(update: Update, context: ContextTyp
     await query.edit_message_text(msg, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
 
     return FUNCTION_SELECTION
-
-
-def create_dice_keyboard(selected_dice: Dict[str, int]) -> InlineKeyboardMarkup:
-    keyboard = [
-        [
-            InlineKeyboardButton(f"{selected_dice['d4']} D4", callback_data=f"d4|+"),
-            InlineKeyboardButton(f"{selected_dice['d6']} D6", callback_data=f"d6|+"),
-            InlineKeyboardButton(f"{selected_dice['d8']} D8", callback_data=f"d8|+")
-        ],
-        [
-            InlineKeyboardButton(f"-", callback_data=f"d4|-"),
-            InlineKeyboardButton(f"-", callback_data=f"d6|-"),
-            InlineKeyboardButton(f"-", callback_data=f"d8|-")
-        ],
-        [
-            InlineKeyboardButton(f"{selected_dice['d10']} D10", callback_data=f"d10|+"),
-            InlineKeyboardButton(f"{selected_dice['d12']} D12", callback_data=f"d12|+"),
-            InlineKeyboardButton(f"{selected_dice['d100']} D100", callback_data=f"d100|+")
-        ],
-        [
-            InlineKeyboardButton(f"-", callback_data=f"d10|-"),
-            InlineKeyboardButton(f"-", callback_data=f"d12|-"),
-            InlineKeyboardButton(f"-", callback_data=f"d100|-")
-        ],
-        [
-            InlineKeyboardButton(f"{selected_dice['d20']} D20", callback_data=f"d20|+")
-        ],
-        [
-            InlineKeyboardButton(f"-", callback_data=f"d20|-"),
-        ]
-    ]
-
-    roll_text = 'Seleziona un dado' if sum(
-        selected_dice.values()) == 0 else f'Lancia {', '.join([f'{roll_to_do}{die}' for die, roll_to_do in selected_dice.items() if roll_to_do > 0])}'
-    keyboard.append([InlineKeyboardButton(roll_text, callback_data=ROLL_DICE_CALLBACK_DATA)])
-    keyboard.append(
-        [InlineKeyboardButton(f"Cancella cronologia", callback_data=ROLL_DICE_DELETE_HISTORY_CALLBACK_DATA)])
-
-    return InlineKeyboardMarkup(keyboard)
 
 
 async def send_dice_menu(update: Update, context: ContextTypes.DEFAULT_TYPE, is_edit: bool = True):
