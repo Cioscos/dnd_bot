@@ -716,7 +716,7 @@ M   M   OOO   R   R   T    OOO</code>"""
 
 def create_notes_menu(character: Character) -> Tuple[str, InlineKeyboardMarkup]:
     message_str = "<b>Note dell'avventura</b>\n\n"
-    keyboard = [[InlineKeyboardButton('Inserisci nuova nota', callback_data=INSERT_NEW_NOTE_CALLBACK_DATA)]]
+    keyboard = []
 
     if not character.notes:
         message_str += "Non ci sono ancora delle note memorizzate 🤷‍♂️"
@@ -728,6 +728,8 @@ def create_notes_menu(character: Character) -> Tuple[str, InlineKeyboardMarkup]:
 
         for title, note in character.notes.items():
             keyboard.append([InlineKeyboardButton(title, callback_data=f"{OPEN_NOTE_CALLBACK_DATA}|{title}")])
+
+    keyboard.append([InlineKeyboardButton('Inserisci nuova nota', callback_data=INSERT_NEW_NOTE_CALLBACK_DATA)])
 
     return message_str, InlineKeyboardMarkup(keyboard)
 
