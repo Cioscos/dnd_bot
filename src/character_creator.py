@@ -93,7 +93,7 @@ ACTIVE_CONV = 'active_conv'
 USER_SETTINGS_KEY = 'user_settings'
 SPELL_MANAGEMENT_KEY = 'spell_management'
 
-# character main menu callback keys
+# character callback keys
 BAG_CALLBACK_DATA = 'bag'
 SPELLS_CALLBACK_DATA = 'spells'
 ABILITIES_CALLBACK_DATA = 'abilities'
@@ -142,6 +142,7 @@ SHORT_REST_CALLBACK_DATA = "short_rest"
 ROLL_DICE_MENU_CALLBACK_DATA = "roll_dice_menu"
 ROLL_DICE_CALLBACK_DATA = "roll_dice"
 ROLL_DICE_DELETE_HISTORY_CALLBACK_DATA = "roll_dice_history_delete"
+NOTES_CALLBACK_DATA = "notes"
 SETTINGS_CALLBACK_DATA = "settings"
 
 # Setting related callback
@@ -240,6 +241,7 @@ def create_main_menu_message(character: Character) -> Tuple[str, InlineKeyboardM
             InlineKeyboardButton('🍻 Riposo breve', callback_data=SHORT_REST_WARNING_CALLBACK_DATA)
         ],
         [InlineKeyboardButton('🎲 Lancia Dado', callback_data=ROLL_DICE_MENU_CALLBACK_DATA)],
+        [InlineKeyboardButton('🗒 Note', callback_data=NOTES_CALLBACK_DATA)],
         [InlineKeyboardButton('⚙️ Impostazioni', callback_data=SETTINGS_CALLBACK_DATA)],
         [InlineKeyboardButton('🗑️ Elimina personaggio', callback_data=DELETE_CHARACTER_CALLBACK_DATA)]
     ]
@@ -2791,6 +2793,10 @@ async def dice_actions_query_handler(update: Update, context: ContextTypes.DEFAU
         await send_dice_menu(update, context, is_edit=True)
 
     return DICE_ACTION
+
+
+async def character_creator_notes_query_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    pass
 
 
 async def character_creator_settings(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
