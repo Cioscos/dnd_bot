@@ -60,11 +60,12 @@ CHARACTER_CREATOR_VERSION = "3.0.0"
  SHORT_REST,
  DICE_ACTION,
  NOTES_MANAGEMENT,
+ NOTE_TEXT_ADD,
  MAPS_MANAGEMENT,
  MAPS_ZONE,
  MAPS_FILES,
  ADD_MAPS_FILES,
- SETTINGS_MENU_STATE) = map(int, range(14, 54))
+ SETTINGS_MENU_STATE) = map(int, range(14, 55))
 
 STOPPING = 99
 
@@ -2887,7 +2888,7 @@ async def character_creator_new_note_query_handler(update: Update, context: Cont
                    "Usa /stop per terminare o un bottone del menù principale per cambiare funzione")
     await query.edit_message_text(message_str, parse_mode=ParseMode.HTML)
 
-    return NOTES_MANAGEMENT
+    return NOTE_TEXT_ADD
 
 
 async def character_creator_open_note_query_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -2935,7 +2936,7 @@ async def character_creator_edit_note_query_handler(update: Update, context: Con
 
     await query.edit_message_text(message_str, parse_mode=ParseMode.HTML)
 
-    return NOTES_MANAGEMENT
+    return NOTE_TEXT_ADD
 
 
 async def character_creator_delete_note_query_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -2965,6 +2966,7 @@ async def character_creator_notes_back_query_handler(update: Update, context: Co
 
 
 async def character_creator_insert_note_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    context.user_data[CHARACTERS_CREATOR_KEY][LAST_MENU_MESSAGES].append(update.effective_message)
     text = update.effective_message.text
     message_splitted = text.split("#")
 
@@ -3266,7 +3268,8 @@ async def character_generic_main_menu_query_handler(update: Update, context: Con
         fr"^{SHORT_REST_WARNING_CALLBACK_DATA}$": character_short_rest_warning_query_handler,
         fr"^{ROLL_DICE_MENU_CALLBACK_DATA}$": dice_handler,
         fr"^{SETTINGS_CALLBACK_DATA}$": character_creator_settings,
-        fr"^{MAPS_CALLBACK_DATA}$": character_creation_maps_query_handler
+        fr"^{MAPS_CALLBACK_DATA}$": character_creation_maps_query_handler,
+        fr"^{NOTES_CALLBACK_DATA}$": character_creator_notes_query_handler
     }
 
     for regex, func in MAINMENU_CALLBACKDATA_TO_CALLBACK.items():

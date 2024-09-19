@@ -71,7 +71,7 @@ from character_creator import character_creator_start_handler, character_creatio
     character_creation_maps_done_command, character_creation_show_maps_query_handler, \
     character_creator_add_map_query_handler, ADD_NEW_MAP_CALLBACK_DATA, character_creation_add_maps_done_command, \
     character_creation_maps_delete_all_query_handler, DELETE_ALL_ZONE_MAPMS_CALLBACK_DATA, \
-    character_creator_delete_single_map_query_handler, DELETE_SINGLE_MAP_CALLBACK_DATA
+    character_creator_delete_single_map_query_handler, DELETE_SINGLE_MAP_CALLBACK_DATA, NOTE_TEXT_ADD
 from class_submenus import class_submenus_query_handler, class_spells_menu_buttons_query_handler, \
     class_search_spells_text_handler, class_reading_spells_menu_buttons_query_handler, \
     class_spell_visualization_buttons_query_handler, class_resources_submenu_text_handler, CLASS_SPELLS_SUBMENU, \
@@ -551,7 +551,9 @@ def main() -> None:
                 CallbackQueryHandler(character_creator_delete_note_query_handler,
                                      pattern=fr"^{DELETE_NOTE_CALLBACK_DATA}\|.+$"),
                 CallbackQueryHandler(character_creator_notes_back_query_handler,
-                                     pattern=fr"^{BACK_BUTTON_CALLBACK_DATA}$"),
+                                     pattern=fr"^{BACK_BUTTON_CALLBACK_DATA}$")
+            ],
+            NOTE_TEXT_ADD: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, character_creator_insert_note_text)
             ],
             MAPS_MANAGEMENT: [
