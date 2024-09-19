@@ -17,7 +17,7 @@ from src.model.character_creator.Item import Item
 from src.model.character_creator.MultiClass import MultiClass
 from src.model.character_creator.Spell import Spell, SpellLevel
 from src.model.character_creator.SpellSlot import SpellSlot
-from src.util import chunk_list, generate_abilities_list_keyboard, generate_spells_list_keyboard
+from src.util import chunk_list, generate_abilities_list_keyboard, generate_spells_list_keyboard, extract_3_words
 
 logger = logging.getLogger(__name__)
 
@@ -58,7 +58,8 @@ CHARACTER_CREATOR_VERSION = "3.0.0"
  LONG_REST,
  SHORT_REST,
  DICE_ACTION,
- SETTINGS_MENU_STATE) = map(int, range(14, 49))
+ NOTES_MANAGEMENT,
+ SETTINGS_MENU_STATE) = map(int, range(14, 50))
 
 STOPPING = 99
 
@@ -94,6 +95,7 @@ USER_SETTINGS_KEY = 'user_settings'
 SPELL_MANAGEMENT_KEY = 'spell_management'
 
 # character callback keys
+BACK_BUTTON_CALLBACK_DATA = "back_button"
 BAG_CALLBACK_DATA = 'bag'
 SPELLS_CALLBACK_DATA = 'spells'
 ABILITIES_CALLBACK_DATA = 'abilities'
@@ -143,6 +145,10 @@ ROLL_DICE_MENU_CALLBACK_DATA = "roll_dice_menu"
 ROLL_DICE_CALLBACK_DATA = "roll_dice"
 ROLL_DICE_DELETE_HISTORY_CALLBACK_DATA = "roll_dice_history_delete"
 NOTES_CALLBACK_DATA = "notes"
+INSERT_NEW_NOTE_CALLBACK_DATA = "insert_new_note"
+OPEN_NOTE_CALLBACK_DATA = "open_note"
+EDIT_NOTE_CALLBACK_DATA = "edit_note"
+DELETE_NOTE_CALLBACK_DATA = "delete_note"
 SETTINGS_CALLBACK_DATA = "settings"
 
 # Setting related callback
@@ -706,6 +712,24 @@ MM MM  O   O  R   R   T   O   O
 M M M  O   O  RRRR    T   O   O
 M   M  O   O  R  R    T   O   O
 M   M   OOO   R   R   T    OOO</code>"""
+
+
+def create_notes_menu(character: Character) -> Tuple[str, InlineKeyboardMarkup]:
+    message_str = "<b>Note dell'avventura</b>\n\n"
+    keyboard = [[InlineKeyboardButton('Inserisci nuova nota', callback_data=INSERT_NEW_NOTE_CALLBACK_DATA)]]
+
+    if not character.notes:
+        message_str += "Non ci sono ancora delle note memorizzate 🤷‍♂️"
+
+    else:
+        message_str += ("Seleziona una nota da visualizzare premendo i pulsanti sottostanti o inseriscine una nuova "
+                        "premendo il pulsante <b><i>\"Inserisci nuova nota\"</i></b>\n\n"
+                        "Usa /stop per terminare o un bottone del menù principale per cambiare funzione")
+
+        for title, note in character.notes.items():
+            keyboard.append([InlineKeyboardButton(title, callback_data=f"{OPEN_NOTE_CALLBACK_DATA}|{title}")])
+
+    return message_str, InlineKeyboardMarkup(keyboard)
 
 
 def generate_settings_menu_single_message(user_settings):
@@ -2796,7 +2820,122 @@ async def dice_actions_query_handler(update: Update, context: ContextTypes.DEFAU
 
 
 async def character_creator_notes_query_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    pass
+    query = update.callback_query
+    await query.answer()
+
+    character: Character = context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_CHARACTER_KEY]
+    message_str, reply_markup = create_notes_menu(character)
+    await send_and_save_message(update, context, message_str, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
+
+    return NOTES_MANAGEMENT
+
+
+async def character_creator_new_note_query_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    query = update.callback_query
+    await query.answer()
+
+    message_str = ("Inserisci la nota usando questo formato:\n"
+                   "<code>Titolo#testo nota</code>\n\n"
+                   "Il titolo della nota non è obbligatorio, puoi inserire anche solo il testo\n\n"
+                   "Usa /stop per terminare o un bottone del menù principale per cambiare funzione")
+    await query.edit_message_text(message_str, parse_mode=ParseMode.HTML)
+
+    return NOTES_MANAGEMENT
+
+
+async def character_creator_open_note_query_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    query = update.callback_query
+    await query.answer()
+    data = query.data
+    title_text = data.split('|')[1]
+
+    character: Character = context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_CHARACTER_KEY]
+    note_title, note_text = next(((title, text) for title, text in character.notes.items() if title == title_text))
+    message_str = (f"Usa /stop per terminare o un bottone del menù principale per cambiare funzione\n\n"
+                   f"<b>{note_title}</b>\n\n"
+                   f"<i>{note_text}</i>")
+
+    keyboard = [
+        [InlineKeyboardButton('Modifica nota', callback_data=f"{EDIT_NOTE_CALLBACK_DATA}|{note_title}")],
+        [InlineKeyboardButton('Elimina nota', callback_data=f"{DELETE_NOTE_CALLBACK_DATA}|{note_title}")],
+        [InlineKeyboardButton('Indietro 🔙', callback_data=f"{BACK_BUTTON_CALLBACK_DATA}")]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    await query.edit_message_text(message_str, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
+
+    return NOTES_MANAGEMENT
+
+
+async def character_creator_edit_note_query_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    query = update.callback_query
+    await query.answer()
+    data = query.data
+    title_text = data.split('|')[1]
+
+    character: Character = context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_CHARACTER_KEY]
+    note_title, note_text = next(((title, text) for title, text in character.notes.items() if title == title_text))
+
+    message_str = (f"Usa /stop per terminare o un bottone del menù principale per cambiare funzione\n\n"
+                   f"Premi una volta sul titolo e sul testo della nota per copiarli:\n"
+                   f"<code>{note_title}</code>\n\n"
+                   f"<code>{note_text}</code>\n\n"
+                   f"Inserisci la nota usando questo formato:\n"
+                   f"<code>Titolo#testo nota</code>\n\n"
+                   f"Il titolo della nota non è obbligatorio, puoi inserire anche solo il testo")
+
+    await query.edit_message_text(message_str, parse_mode=ParseMode.HTML)
+
+    return NOTES_MANAGEMENT
+
+
+async def character_creator_delete_note_query_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    query = update.callback_query
+    data = query.data
+    title_text = data.split('|')[1]
+
+    character: Character = context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_CHARACTER_KEY]
+    character.notes.pop(title_text, None)
+
+    await query.answer('Nota eliminata con successo ✅', show_alert=True)
+    message_str, reply_markup = create_notes_menu(character)
+    await send_and_save_message(update, context, message_str, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
+
+    return NOTES_MANAGEMENT
+
+
+async def character_creator_notes_back_query_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    query = update.callback_query
+    await query.answer()
+
+    character: Character = context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_CHARACTER_KEY]
+    message_str, reply_markup = create_notes_menu(character)
+    await query.edit_message_text(message_str, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
+
+    return NOTES_MANAGEMENT
+
+
+async def character_creator_insert_note_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    text = update.effective_message.text
+    message_splitted = text.split("#")
+
+    character: Character = context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_CHARACTER_KEY]
+    if len(message_splitted) == 1:
+        note_title = extract_3_words(message_splitted[0])
+        note_text = message_splitted[0]
+    else:
+        note_title = message_splitted[0]
+        note_text = message_splitted[1]
+
+    # manage insertion or edit
+    if note_title in character.notes:
+        character.notes.pop(note_title, None)
+    character.notes[note_title] = note_text
+
+    await send_and_save_message(update, context, "Nota salvata con successo! ✅")
+    message_str, reply_markup = create_notes_menu(character)
+    await send_and_save_message(update, context, message_str, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
+
+    return NOTES_MANAGEMENT
 
 
 async def character_creator_settings(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:

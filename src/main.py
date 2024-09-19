@@ -62,7 +62,10 @@ from character_creator import character_creator_start_handler, character_creatio
     SPELL_USAGE_BACK_MENU_CALLBACK_DATA, character_bag_ask_item_overwrite_quantity_query_handler, BAG_ITEM_OVERWRITE, \
     character_ask_item_overwrite_quantity, SETTINGS_CALLBACK_DATA, character_creator_settings, SETTINGS_MENU_STATE, \
     character_creator_settings_callback_handler, SPELL_LEVEL_MENU, character_spells_by_level_query_handler, \
-    character_creator_notes_query_handler
+    character_creator_notes_query_handler, character_creator_new_note_query_handler, INSERT_NEW_NOTE_CALLBACK_DATA, \
+    character_creator_open_note_query_handler, character_creator_insert_note_text, \
+    character_creator_edit_note_query_handler, EDIT_NOTE_CALLBACK_DATA, character_creator_delete_note_query_handler, \
+    DELETE_NOTE_CALLBACK_DATA, BACK_BUTTON_CALLBACK_DATA, character_creator_notes_back_query_handler
 from class_submenus import class_submenus_query_handler, class_spells_menu_buttons_query_handler, \
     class_search_spells_text_handler, class_reading_spells_menu_buttons_query_handler, \
     class_spell_visualization_buttons_query_handler, class_resources_submenu_text_handler, CLASS_SPELLS_SUBMENU, \
@@ -76,7 +79,8 @@ from src.character_creator import character_bag_query_handler, character_selecti
     SPELL_LEARN, MULTICLASSING_ACTIONS, MULTICLASSING_REMOVE_CALLBACK_DATA, SPELL_SLOT_ADDING, SPELL_SLOT_REMOVING, \
     DAMAGE_REGISTRATION, HEALING_REGISTRATION, HIT_POINTS_REGISTRATION, LONG_REST, DICE_ACTION, \
     ABILITY_IS_PASSIVE_CALLBACK_DATA, ABILITY_RESTORATION_TYPE_CALLBACK_DATA, ABILITY_INSERT_CALLBACK_DATA, SHORT_REST, \
-    character_short_rest_query_handler, SHORT_REST_CALLBACK_DATA, SHORT_REST_WARNING_CALLBACK_DATA, NOTES_CALLBACK_DATA
+    character_short_rest_query_handler, SHORT_REST_CALLBACK_DATA, SHORT_REST_WARNING_CALLBACK_DATA, NOTES_CALLBACK_DATA, \
+    NOTES_MANAGEMENT, OPEN_NOTE_CALLBACK_DATA
 from wiki import wiki_main_menu_handler, main_menu_buttons_query_handler, details_menu_buttons_query_handler, \
     ITEM_DETAILS_MENU, WIKI_MAIN_MENU
 
@@ -281,7 +285,8 @@ def main() -> None:
                    .token(keyring_get('Telegram'))
                    .post_init(post_init_callback)
                    .post_stop(post_stop_callback)
-                   .persistence(persistence)).build()
+                   .persistence(persistence)
+                   .arbitrary_callback_data(True).build())
 
     application.add_error_handler(error_handler)
 
@@ -527,6 +532,19 @@ def main() -> None:
             DICE_ACTION: [
                 CallbackQueryHandler(dice_actions_query_handler,
                                      pattern=fr"^(d\d+\|[+-]|{ROLL_DICE_CALLBACK_DATA}|{ROLL_DICE_DELETE_HISTORY_CALLBACK_DATA})$")
+            ],
+            NOTES_MANAGEMENT: [
+                CallbackQueryHandler(character_creator_new_note_query_handler,
+                                     pattern=fr"^{INSERT_NEW_NOTE_CALLBACK_DATA}$"),
+                CallbackQueryHandler(character_creator_open_note_query_handler,
+                                     pattern=fr"^{OPEN_NOTE_CALLBACK_DATA}\|.+$"),
+                CallbackQueryHandler(character_creator_edit_note_query_handler,
+                                     pattern=fr"^{EDIT_NOTE_CALLBACK_DATA}\|.+$"),
+                CallbackQueryHandler(character_creator_delete_note_query_handler,
+                                     pattern=fr"^{DELETE_NOTE_CALLBACK_DATA}\|.+$"),
+                CallbackQueryHandler(character_creator_notes_back_query_handler,
+                                     pattern=fr"^{BACK_BUTTON_CALLBACK_DATA}$"),
+                MessageHandler(filters.TEXT & ~filters.COMMAND, character_creator_insert_note_text)
             ],
             SETTINGS_MENU_STATE: [
                 CallbackQueryHandler(character_creator_settings_callback_handler, pattern=r'^setting\|.+$')
