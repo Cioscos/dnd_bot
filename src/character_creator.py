@@ -22,7 +22,7 @@ from src.util import chunk_list, generate_abilities_list_keyboard, generate_spel
 
 logger = logging.getLogger(__name__)
 
-CHARACTER_CREATOR_VERSION = "3.0.0"
+CHARACTER_CREATOR_VERSION = "3.2.0"
 
 # states definition
 (CHARACTER_CREATION,
@@ -1090,6 +1090,7 @@ async def character_bag_new_object_query_handler(update: Update, context: Contex
 
 
 async def character_bag_item_insert(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    context.user_data[CHARACTERS_CREATOR_KEY][LAST_MENU_MESSAGES].append(update.effective_message)
     item_info = update.effective_message.text
     context.user_data[CHARACTERS_CREATOR_KEY][LAST_MENU_MESSAGES].append(update.effective_message)
 
@@ -2538,6 +2539,7 @@ async def character_damage_query_handler(update: Update, context: ContextTypes.D
 
 
 async def character_damage_registration_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    context.user_data[CHARACTERS_CREATOR_KEY][LAST_MENU_MESSAGES].append(update.effective_message)
     damage = update.effective_message.text
 
     if not damage or damage.isalpha():
@@ -2581,6 +2583,7 @@ async def character_healing_query_handler(update: Update, context: ContextTypes.
 
 async def character_healing_value_check_or_registration_handler(update: Update,
                                                                 context: ContextTypes.DEFAULT_TYPE) -> int:
+    context.user_data[CHARACTERS_CREATOR_KEY][LAST_MENU_MESSAGES].append(update.effective_message)
     healing = update.effective_message.text
 
     if not healing or not healing.isdigit():
@@ -2674,6 +2677,7 @@ async def character_hit_points_query_handler(update: Update, context: ContextTyp
 
 
 async def character_hit_points_registration_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    context.user_data[CHARACTERS_CREATOR_KEY][LAST_MENU_MESSAGES].append(update.effective_message)
     hit_points = update.effective_message.text
 
     if not hit_points or hit_points.isalpha():
