@@ -98,6 +98,7 @@ ACTIVE_CONV = 'active_conv'
 # keys for maps
 TEMP_ZONE_NAME = 'temp_zone_name'
 TEMP_MAPS_PATHS = 'temp_maps_paths'
+ADD_OR_INSERT_MAPS = 'add_or_insert_maps'
 # keys for settings
 USER_SETTINGS_KEY = 'user_settings'
 SPELL_MANAGEMENT_KEY = 'spell_management'
@@ -1667,8 +1668,8 @@ async def character_abilities_menu_query_handler(update: Update, context: Contex
         character: Character = context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_CHARACTER_KEY]
         ability: Ability = next((ability for ability in character.abilities if ability.name == ability_name), None)
 
-        message_str, reply_keyboard = create_ability_menu(ability)
-        await query.edit_message_text(message_str, reply_markup=reply_keyboard, parse_mode=ParseMode.HTML)
+        message_str, reply_markup = create_ability_menu(ability)
+        await query.edit_message_text(message_str, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
 
         # save the current ability in the userdata
         context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_ABILITY_KEY] = ability
@@ -3051,10 +3052,13 @@ async def character_creator_add_map_query_handler(update: Update, context: Conte
                    f"Mandami la mappa come immagine o file")
     await send_and_save_message(update, context, message_str)
 
+    context.user_data[CHARACTERS_CREATOR_KEY][ADD_OR_INSERT_MAPS] = 'add'
+
     return ADD_MAPS_FILES
 
 
 async def character_creation_add_maps_done_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    context.user_data[CHARACTERS_CREATOR_KEY][LAST_MENU_MESSAGES].append(update.effective_message)
     zone = context.user_data[CHARACTERS_CREATOR_KEY][TEMP_ZONE_NAME]
     files_paths = context.user_data[CHARACTERS_CREATOR_KEY][TEMP_MAPS_PATHS]
 
@@ -3065,8 +3069,8 @@ async def character_creation_add_maps_done_command(update: Update, context: Cont
     context.user_data[CHARACTERS_CREATOR_KEY].pop(TEMP_MAPS_PATHS, None)
 
     await send_and_save_message(update, context, "Mappe aggiunte con successo ✅")
-    message_str, reply_keyboard = create_maps_menu(character)
-    await send_and_save_message(update, context, message_str, reply_keyboard=reply_keyboard)
+    message_str, reply_markup = create_maps_menu(character)
+    await send_and_save_message(update, context, message_str, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
 
     return MAPS_MANAGEMENT
 
@@ -3081,8 +3085,8 @@ async def character_creation_maps_delete_all_query_handler(update: Update, conte
     character.maps.pop(zone, None)
 
     await send_and_save_message(update, context, f"Le mappe della zona {zone} sono state cancellate con successo ✅")
-    message_str, reply_keyboard = create_maps_menu(character)
-    await send_and_save_message(update, context, message_str, reply_keyboard=reply_keyboard)
+    message_str, reply_markup = create_maps_menu(character)
+    await send_and_save_message(update, context, message_str, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
 
 
 async def character_creation_new_maps_query_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -3093,11 +3097,15 @@ async def character_creation_new_maps_query_handler(update: Update, context: Con
                    f"Inviami il nome della zona rappresentata dalle mappe")
     await query.edit_message_text(message_str)
 
+    context.user_data[CHARACTERS_CREATOR_KEY][ADD_OR_INSERT_MAPS] = 'insert'
+
     return MAPS_ZONE
 
 
 async def character_creation_ask_maps_file(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    text = update.effective_message.text
+    message = update.effective_message
+    context.user_data[CHARACTERS_CREATOR_KEY][LAST_MENU_MESSAGES].append(message)
+    text = message.text
     context.user_data[CHARACTERS_CREATOR_KEY][TEMP_ZONE_NAME] = text
 
     message_str = (f"Usa /stop per terminare o un bottone del menù principale per cambiare funzione\n\n"
@@ -3111,7 +3119,9 @@ async def store_map_file_or_photo(file: File, update: Update, context: ContextTy
     # create the folder for the file
     os.makedirs(MAPS_DIR_PATH, exist_ok=True)
     # Download the file on the disk
-    final_file_path = await file.download_to_drive(MAPS_DIR_PATH)
+    file_name = file.file_path.split('/')[-1].split('.')[0]
+    file_ext = file.file_path.split('/')[-1].split('.')[1]
+    final_file_path = await file.download_to_drive(f"{MAPS_DIR_PATH}/{file_name}.{file_ext}")
     # save the file path in a temp location
     if TEMP_MAPS_PATHS not in context.user_data[CHARACTERS_CREATOR_KEY]:
         context.user_data[CHARACTERS_CREATOR_KEY][TEMP_MAPS_PATHS] = []
@@ -3123,11 +3133,15 @@ async def store_map_file_or_photo(file: File, update: Update, context: ContextTy
                    f"del menu principale")
     await send_and_save_message(update, context, message_str)
 
-    return MAPS_FILES
+    if context.user_data[CHARACTERS_CREATOR_KEY][ADD_OR_INSERT_MAPS] == 'insert':
+        return MAPS_FILES
+    else:
+        return ADD_MAPS_FILES
 
 
 async def character_creation_store_map_file(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     message = update.effective_message
+    context.user_data[CHARACTERS_CREATOR_KEY][LAST_MENU_MESSAGES].append(message)
     document = await message.effective_attachment.get_file()
 
     if document.file_size > FileSizeLimit.FILESIZE_DOWNLOAD:
@@ -3140,12 +3154,14 @@ async def character_creation_store_map_file(update: Update, context: ContextType
 
 async def character_creation_store_map_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     message = update.effective_message
+    context.user_data[CHARACTERS_CREATOR_KEY][LAST_MENU_MESSAGES].append(message)
     photo = await message.effective_attachment[-1].get_file()
 
     return await store_map_file_or_photo(photo, update, context)
 
 
 async def character_creation_maps_done_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    context.user_data[CHARACTERS_CREATOR_KEY][LAST_MENU_MESSAGES].append(update.effective_message)
     zone = context.user_data[CHARACTERS_CREATOR_KEY][TEMP_ZONE_NAME]
     files_paths = context.user_data[CHARACTERS_CREATOR_KEY][TEMP_MAPS_PATHS]
 
@@ -3156,8 +3172,8 @@ async def character_creation_maps_done_command(update: Update, context: ContextT
     context.user_data[CHARACTERS_CREATOR_KEY].pop(TEMP_MAPS_PATHS, None)
 
     await send_and_save_message(update, context, "Mappe salvate con successo!")
-    message_str, reply_keyboard = create_maps_menu(character)
-    await send_and_save_message(update, context, message_str, reply_keyboard=reply_keyboard)
+    message_str, reply_markup = create_maps_menu(character)
+    await send_and_save_message(update, context, message_str, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
 
     return MAPS_MANAGEMENT
 
