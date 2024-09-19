@@ -2865,6 +2865,9 @@ async def character_creator_open_note_query_handler(update: Update, context: Con
     reply_markup = InlineKeyboardMarkup(keyboard)
     await query.edit_message_text(message_str, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
 
+    # delete cached query data
+    context.drop_callback_data(query)
+
     return NOTES_MANAGEMENT
 
 
