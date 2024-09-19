@@ -17,7 +17,7 @@ class SpellsSlotMode(Enum):
 
 @dataclass
 class Character:
-    VERSION = 3
+    VERSION = 4
 
     name: Optional[str] = field(default=None)
     race: Optional[str] = field(default=None)
@@ -36,6 +36,7 @@ class Character:
     encumbrance: int = field(default_factory=int)
     rolls_history: Optional[List[Tuple[str, list[int]]]] = field(default_factory=list)
     notes: Dict[str, str] = field(default_factory=dict)
+    maps: Dict[str, List[str]] = field(default_factory=dict)
 
     _version: int = field(default_factory=int)
 
@@ -74,6 +75,10 @@ class Character:
             # Migration for version 3: adding notes
             if not hasattr(self, 'notes'):
                 self.notes = {}
+        if self._version < 4:
+            # Migration for version 4: adding maps
+            if not hasattr(self, 'maps'):
+                self.maps = {}
         # FUTURE MIGRATIONS
 
     def __setstate__(self, state):
