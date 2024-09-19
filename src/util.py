@@ -277,6 +277,14 @@ def format_camel_case_to_title(input_string: str) -> str:
     return formatted_string
 
 
+def extract_3_words(string: str) -> str:
+    words = string.split()
+    if len(words) > 3:
+        return ' '.join(words[:3]) + "..."
+    else:
+        return ' '.join(words) + "..."
+
+
 async def async_graphql_query(endpoint, query, variables=None, headers=None):
     """
     Perform an asynchronous GraphQL query using the gql library.
