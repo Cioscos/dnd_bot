@@ -3148,14 +3148,15 @@ async def store_map_file_or_photo(file: File, update: Update, context: ContextTy
 async def character_creation_store_map_file(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     message = update.effective_message
     context.user_data[CHARACTERS_CREATOR_KEY][LAST_MENU_MESSAGES].append(message)
-    document = await message.effective_attachment.get_file()
+    document = message.effective_attachment
 
     if document.file_size > FileSizeLimit.FILESIZE_DOWNLOAD:
         await send_and_save_message(update, context, "Il file inviato è troppo grande!\n"
                                                      "La dimensione massima è di 20MB")
         return MAPS_FILES
 
-    return await store_map_file_or_photo(document, update, context)
+    file = await document.get_file()
+    return await store_map_file_or_photo(file, update, context)
 
 
 async def character_creation_store_map_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
