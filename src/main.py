@@ -65,7 +65,13 @@ from character_creator import character_creator_start_handler, character_creatio
     character_creator_notes_query_handler, character_creator_new_note_query_handler, INSERT_NEW_NOTE_CALLBACK_DATA, \
     character_creator_open_note_query_handler, character_creator_insert_note_text, \
     character_creator_edit_note_query_handler, EDIT_NOTE_CALLBACK_DATA, character_creator_delete_note_query_handler, \
-    DELETE_NOTE_CALLBACK_DATA, BACK_BUTTON_CALLBACK_DATA, character_creator_notes_back_query_handler
+    DELETE_NOTE_CALLBACK_DATA, BACK_BUTTON_CALLBACK_DATA, character_creator_notes_back_query_handler, \
+    character_creation_maps_query_handler, character_creation_new_maps_query_handler, INSERT_NEW_MAPS_CALLBACK_DATA, \
+    character_creation_ask_maps_file, character_creation_store_map_file, character_creation_store_map_photo, \
+    character_creation_maps_done_command, character_creation_show_maps_query_handler, \
+    character_creator_add_map_query_handler, ADD_NEW_MAP_CALLBACK_DATA, character_creation_add_maps_done_command, \
+    character_creation_maps_delete_all_query_handler, DELETE_ALL_ZONE_MAPMS_CALLBACK_DATA, \
+    character_creator_delete_single_map_query_handler, DELETE_SINGLE_MAP_CALLBACK_DATA
 from class_submenus import class_submenus_query_handler, class_spells_menu_buttons_query_handler, \
     class_search_spells_text_handler, class_reading_spells_menu_buttons_query_handler, \
     class_spell_visualization_buttons_query_handler, class_resources_submenu_text_handler, CLASS_SPELLS_SUBMENU, \
@@ -80,7 +86,8 @@ from src.character_creator import character_bag_query_handler, character_selecti
     DAMAGE_REGISTRATION, HEALING_REGISTRATION, HIT_POINTS_REGISTRATION, LONG_REST, DICE_ACTION, \
     ABILITY_IS_PASSIVE_CALLBACK_DATA, ABILITY_RESTORATION_TYPE_CALLBACK_DATA, ABILITY_INSERT_CALLBACK_DATA, SHORT_REST, \
     character_short_rest_query_handler, SHORT_REST_CALLBACK_DATA, SHORT_REST_WARNING_CALLBACK_DATA, NOTES_CALLBACK_DATA, \
-    NOTES_MANAGEMENT, OPEN_NOTE_CALLBACK_DATA
+    NOTES_MANAGEMENT, OPEN_NOTE_CALLBACK_DATA, MAPS_CALLBACK_DATA, MAPS_MANAGEMENT, MAPS_ZONE, MAPS_FILES, \
+    verify_selected_map_callback_data, ADD_MAPS_FILES
 from wiki import wiki_main_menu_handler, main_menu_buttons_query_handler, details_menu_buttons_query_handler, \
     ITEM_DETAILS_MENU, WIKI_MAIN_MENU
 
@@ -388,6 +395,7 @@ def main() -> None:
                                      pattern=fr"^{ROLL_DICE_MENU_CALLBACK_DATA}$"),
                 CallbackQueryHandler(character_creator_settings, pattern=fr"^{SETTINGS_CALLBACK_DATA}$"),
                 CallbackQueryHandler(character_creator_notes_query_handler, pattern=fr"^{NOTES_CALLBACK_DATA}$"),
+                CallbackQueryHandler(character_creation_maps_query_handler, pattern=fr"^{MAPS_CALLBACK_DATA}$"),
                 CommandHandler('stop', character_creation_stop)
             ],
             DAMAGE_REGISTRATION: [
@@ -546,6 +554,33 @@ def main() -> None:
                                      pattern=fr"^{BACK_BUTTON_CALLBACK_DATA}$"),
                 MessageHandler(filters.TEXT & ~filters.COMMAND, character_creator_insert_note_text)
             ],
+            MAPS_MANAGEMENT: [
+                CallbackQueryHandler(character_creation_new_maps_query_handler,
+                                     pattern=fr"^{INSERT_NEW_MAPS_CALLBACK_DATA}$"),
+                CallbackQueryHandler(character_creation_show_maps_query_handler,
+                                     pattern=verify_selected_map_callback_data),
+                CallbackQueryHandler(character_creator_add_map_query_handler,
+                                     pattern=fr"^{ADD_NEW_MAP_CALLBACK_DATA}\|.+$"),
+                CallbackQueryHandler(character_creation_maps_delete_all_query_handler,
+                                     pattern=fr"^{DELETE_ALL_ZONE_MAPMS_CALLBACK_DATA}\|.+$"),
+                CallbackQueryHandler(character_creator_delete_single_map_query_handler,
+                                     pattern=fr"^{DELETE_SINGLE_MAP_CALLBACK_DATA}\|.+$")
+            ],
+            MAPS_ZONE: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, character_creation_ask_maps_file)
+            ],
+            ADD_MAPS_FILES: [
+                MessageHandler(filters.Document.IMAGE & ~filters.PHOTO & ~filters.TEXT,
+                               character_creation_store_map_file),
+                MessageHandler(filters.PHOTO & ~filters.TEXT, character_creation_store_map_photo),
+                CommandHandler('done', character_creation_add_maps_done_command)
+            ],
+            MAPS_FILES: [
+                MessageHandler(filters.Document.IMAGE & ~filters.PHOTO & ~filters.TEXT,
+                               character_creation_store_map_file),
+                MessageHandler(filters.PHOTO & ~filters.TEXT, character_creation_store_map_photo),
+                CommandHandler('done', character_creation_maps_done_command)
+            ],
             SETTINGS_MENU_STATE: [
                 CallbackQueryHandler(character_creator_settings_callback_handler, pattern=r'^setting\|.+$')
             ]
@@ -554,7 +589,7 @@ def main() -> None:
             CommandHandler("stop", character_creator_stop_submenu),
             CallbackQueryHandler(character_generic_main_menu_query_handler)
         ],
-        name='character_creator_handler_v15',
+        name='character_creator_handler_v16',
         persistent=True
     )
 
