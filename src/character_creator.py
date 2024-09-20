@@ -478,7 +478,8 @@ def create_item_menu(item: Item) -> Tuple[str, InlineKeyboardMarkup]:
 
 
 def create_spell_menu(spell: Spell) -> Tuple[str, InlineKeyboardMarkup]:
-    message_str = (f"<b>{spell.name:<{50}}</b>L{spell.level.value}\n\n"
+    message_str = (f"<b>{spell.name}</b>\n\n"
+                   f"<b>Livello incantesimo:</b> {spell.level.value}\n"
                    f"<b>Descrizione</b>\n{spell.description}\n\n"
                    f"Usa /stop per terminare o un bottone del menù principale per cambiare funzione")
     keyboard = [
@@ -510,10 +511,6 @@ async def create_spells_menu(character: Character, update: Update, context: Cont
 
         return SPELL_LEARN
 
-    else:
-
-        message_str += "Usa /stop per terminare o un bottone del menù principale per cambiare funzione\n"
-
     spells = character.spells
 
     # Group spells by level
@@ -539,7 +536,7 @@ async def create_spells_menu(character: Character, update: Update, context: Cont
     message_str += f"Ecco la lista degli incantesimi di livello {level}"
 
     # Generates the keyboard for spells on the current page
-    reply_markup = generate_spells_list_keyboard(spells_in_page)
+    reply_markup = generate_spells_list_keyboard(spells_in_page, draw_back_button=False)
     if edit_mode:
         await update.effective_message.edit_text(message_str, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
     else:
@@ -550,7 +547,9 @@ async def create_spells_menu(character: Character, update: Update, context: Cont
 
 async def create_spell_levels_menu(character: Character, update: Update, context: ContextTypes.DEFAULT_TYPE,
                                    edit_mode: bool = False) -> int:
-    message_str = f"<b>Gestione spells</b>\nUsa /stop per terminare o un bottone del menù principale per cambiare funzione\n\n"
+    message_str = (
+        f"<b>Gestione spells</b>\nUsa /stop per terminare o un bottone del menù principale per cambiare funzione\n\n"
+        f"❌ Significa che non hai più slot incantesimo disponibili di quel livello")
 
     if not character.spells:
         message_str += "Non conosci ancora nessun incantesimo ‍🤷‍♂️"
@@ -566,10 +565,6 @@ async def create_spell_levels_menu(character: Character, update: Update, context
                                         parse_mode=ParseMode.HTML)
 
         return SPELL_LEARN
-
-    else:
-
-        message_str += "Usa /stop per terminare o un bottone del menù principale per cambiare funzione\n"
 
     spells = character.spells
     buttons = []
@@ -591,9 +586,9 @@ async def create_spell_levels_menu(character: Character, update: Update, context
             spell_slot = character.spell_slots.get(spell_level)
             if spell_slot:
                 if spell_slot.slots_remaining() > 0:
-                    button_text = f"Level {spell_level}"
+                    button_text = f"Livello {spell_level}"
                 else:
-                    button_text = f"Level {spell_level} ❌"
+                    button_text = f"Livello {spell_level} ❌"
 
                 buttons.append(
                     InlineKeyboardButton(button_text, callback_data=f"spell_of_level|{spell_level}")
@@ -780,36 +775,29 @@ def verify_selected_map_callback_data(callback_data: Any) -> bool:
     return True if isinstance(callback_data, tuple) else False
 
 
-def generate_settings_menu_single_message(user_settings):
-    message_lines = []
-    keyboard_buttons = []
+def generate_setting_message(setting, character):
+    key = setting['key']
+    title = setting['title']
+    description = setting['description']
+    options = setting['options']
 
-    for setting in SETTINGS:
-        key = setting['key']
-        title = setting['title']
-        description = setting['description']
-        options = setting['options']
+    # Get the current value from the character's settings
+    current_value = character.settings.get(key, options[0]['value'])
 
-        # Ottieni la selezione corrente dell'utente
-        current_value = user_settings.get(key, options[0]['value'])
+    # Build the message text
+    message_text = f"<b>{title}</b>\n{description}"
 
-        # Aggiungi il titolo e la descrizione al messaggio
-        message_lines.append(f"<b>{title}</b>\n{description}")
+    # Build the keyboard
+    option_buttons = []
+    for option in options:
+        option_text = option['text']
+        if option['value'] == current_value:
+            option_text = '✅ ' + option_text
 
-        # Crea i pulsanti delle opzioni
-        option_buttons = []
-        for option in options:
-            option_text = option['text']
-            if option['value'] == current_value:
-                option_text = '✅ ' + option_text
+        callback_data = f'setting|{key}|{option["value"]}'
+        option_buttons.append([InlineKeyboardButton(option_text, callback_data=callback_data)])
 
-            callback_data = f'setting|{key}|{option["value"]}'
-            option_buttons.append(InlineKeyboardButton(option_text, callback_data=callback_data))
-
-        keyboard_buttons.append(option_buttons)
-
-    message_text = '\n\n'.join(message_lines)
-    keyboard = InlineKeyboardMarkup(keyboard_buttons)
+    keyboard = InlineKeyboardMarkup(option_buttons)
 
     return message_text, keyboard
 
@@ -1311,14 +1299,12 @@ async def character_spells_query_handler(update: Update, context: ContextTypes.D
     await query.answer()
 
     character: Character = context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_CHARACTER_KEY]
-
-    user_settings = context.user_data[CHARACTERS_CREATOR_KEY].get(USER_SETTINGS_KEY, {})
-    spell_management_preference = user_settings.get('spell_management', 'paginate_by_level')
+    spell_management_preference = character.settings.get('spell_management', 'default_value')
 
     if spell_management_preference == 'paginate_by_level':
-        return await create_spell_levels_menu(character, update, context)
-    else:
         return await create_spells_menu(character, update, context)
+    else:
+        return await create_spell_levels_menu(character, update, context)
 
 
 async def character_spells_by_level_query_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -1339,7 +1325,8 @@ async def character_spells_by_level_query_handler(update: Update, context: Conte
                    f"Usa /stop per terminare o un bottone del menù principale per cambiare funzione")
 
     # Generates the keyboard for spells on the current page
-    reply_markup = generate_spells_list_keyboard(spells_of_selected_level, draw_navigation_buttons=False)
+    reply_markup = generate_spells_list_keyboard(spells_of_selected_level, draw_navigation_buttons=False,
+                                                 draw_back_button=True)
     await query.edit_message_text(message_str, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
 
     return SPELLS_MENU
@@ -1363,7 +1350,7 @@ async def character_spells_menu_query_handler(update: Update, context: ContextTy
             level, spells_in_page = current_page
             message_str = ("Usa /stop per terminare o un bottone del menù principale per cambiare funzione\n"
                            f"Ecco la lista degli incantesimi di livello {level}")
-            reply_markup = generate_spells_list_keyboard(spells_in_page)
+            reply_markup = generate_spells_list_keyboard(spells_in_page, draw_back_button=False)
             await query.edit_message_text(message_str, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
         return SPELLS_MENU
 
@@ -1378,7 +1365,7 @@ async def character_spells_menu_query_handler(update: Update, context: ContextTy
             level, spells_in_page = current_page
             message_str = ("Usa /stop per terminare o un bottone del menù principale per cambiare funzione\n"
                            f"Ecco la lista degli incantesimi di livello {level}")
-            reply_markup = generate_spells_list_keyboard(spells_in_page)
+            reply_markup = generate_spells_list_keyboard(spells_in_page, draw_back_button=False)
             await query.edit_message_text(message_str, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
         return SPELLS_MENU
 
@@ -1390,13 +1377,12 @@ async def character_spells_menu_query_handler(update: Update, context: ContextTy
     elif data == SPELL_USAGE_BACK_MENU_CALLBACK_DATA:
 
         await query.answer()
-        user_settings = context.user_data[CHARACTERS_CREATOR_KEY].get(USER_SETTINGS_KEY, {})
-        spell_management_preference = user_settings.get('spell_management', 'paginate_by_level')
         character: Character = context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_CHARACTER_KEY]
+        spell_management_preference = character.settings.get('spell_management', 'default_value')
         if spell_management_preference == 'paginate_by_level':
-            return await create_spell_levels_menu(character, update, context, edit_mode=True)
+            return await create_spells_menu(character, update, context)
         else:
-            return await create_spells_menu(character, update, context, edit_mode=True)
+            return await create_spell_levels_menu(character, update, context)
 
     else:
         await query.answer()
@@ -1424,12 +1410,14 @@ async def character_spell_visualization_query_handler(update: Update, context: C
     if data == SPELL_EDIT_CALLBACK_DATA:
 
         await query.answer()
-        await query.edit_message_text(
-            "Inviami l'incantesimo inserendo il nome, descrizione e livello separati da un #\n\n"
-            "<b>Esempio:</b> <code>Palla di fuoco#Unico incantesimo dei maghi#3</code>\n\n"
-            "Usa /stop per terminare o un bottone del menù principale per cambiare funzione",
-            parse_mode=ParseMode.HTML
-        )
+        spell: Spell = context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_SPELL_KEY]
+        message_str = ("Usa /stop per terminare o un bottone del menù principale per cambiare funzione\n\n"
+                       "Inviami l'incantesimo inserendo il nome, descrizione e livello separati da un #\n\n"
+                       "Premi sul titolo, descrizione e livello per copiarli.\n\n"
+                       f"<b>Nome incantesimo attuale</b>\n<code>{spell.name}</code>\n"
+                       f"<b>Descrizione attuale:</b> <code>{spell.description}</code>\n"
+                       f"<b>Livello attuale:</b> <code>{spell.level.value}</code>")
+        await query.edit_message_text(message_str, parse_mode=ParseMode.HTML)
 
     elif data == SPELL_DELETE_CALLBACK_DATA:
 
@@ -1450,25 +1438,31 @@ async def character_spell_visualization_query_handler(update: Update, context: C
 
         await query.answer()
 
-        # Retrieve current pages and index
-        pages = context.user_data[CHARACTERS_CREATOR_KEY][INLINE_PAGES_KEY]
-        current_page_index = context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_INLINE_PAGE_INDEX_KEY]
+        character: Character = context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_CHARACTER_KEY]
+        spell_management_preference = character.settings.get('spell_management', 'default_value')
+        if spell_management_preference == 'paginate_by_level':
+            # Retrieve current pages and index
+            pages = context.user_data[CHARACTERS_CREATOR_KEY][INLINE_PAGES_KEY]
+            current_page_index = context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_INLINE_PAGE_INDEX_KEY]
 
-        try:
-            current_page = pages[current_page_index]
-            level, spells_in_page = current_page
-        except IndexError:
-            await query.answer("Errore nel recuperare la pagina corrente.", show_alert=True)
+            try:
+                current_page = pages[current_page_index]
+                level, spells_in_page = current_page
+            except IndexError:
+                await query.answer("Errore nel recuperare la pagina corrente.", show_alert=True)
+                return SPELLS_MENU
+
+            message_str = (
+                "Usa /stop per terminare o un bottone del menù principale per cambiare funzione\n"
+                f"Ecco la lista degli incantesimi di livello {level}"
+            )
+            reply_markup = generate_spells_list_keyboard(spells_in_page, True)
+            await query.edit_message_text(message_str, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
+
             return SPELLS_MENU
+        else:
 
-        message_str = (
-            "Usa /stop per terminare o un bottone del menù principale per cambiare funzione\n"
-            f"Ecco la lista degli incantesimi di livello {level}"
-        )
-        reply_markup = generate_spells_list_keyboard(spells_in_page, True)
-        await query.edit_message_text(message_str, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
-
-        return SPELLS_MENU
+            return await create_spell_levels_menu(character, update, context, edit_mode=True)
 
     elif data == SPELL_USE_CALLBACK_DATA:
 
@@ -1548,7 +1542,12 @@ async def character_spell_learn_handler(update: Update, context: ContextTypes.DE
     character.learn_spell(spell)
     await send_and_save_message(update, context, "Incantesimo appreso con successo! ✅")
 
-    return await create_spells_menu(character, update, context)
+    character: Character = context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_CHARACTER_KEY]
+    spell_management_preference = character.settings.get('spell_management', 'default_value')
+    if spell_management_preference == 'paginate_by_level':
+        return await create_spells_menu(character, update, context)
+    else:
+        return await create_spell_levels_menu(character, update, context)
 
 
 async def character_spell_edit_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -1586,8 +1585,10 @@ async def character_spell_edit_handler(update: Update, context: ContextTypes.DEF
             break
 
     await send_and_save_message(update, context, "Incantesimo modificato con successo!")
+    message_str, reply_markup = create_spell_menu(old_spell)
+    await send_and_save_message(update, context, message_str, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
 
-    return await create_spells_menu(character, update, context)
+    return SPELL_VISUALIZATION
 
 
 async def character_spell_delete_query_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -1607,7 +1608,11 @@ async def character_spell_delete_query_handler(update: Update, context: ContextT
             f"Hai una buona memoria, ti ricordi ancora l'incantesimo {spell_to_forget.name}"
         )
 
-    return await create_spells_menu(character, update, context)
+    spell_management_preference = character.settings.get('spell_management', 'default_value')
+    if spell_management_preference == 'paginate_by_level':
+        return await create_spells_menu(character, update, context)
+    else:
+        return await create_spell_levels_menu(character, update, context)
 
 
 async def character_spell_use_query_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -3188,23 +3193,20 @@ async def character_creation_maps_done_command(update: Update, context: ContextT
 async def character_creator_settings(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     query = update.callback_query
     await query.answer()
-    # Inizializza le impostazioni utente se non presenti
-    if USER_SETTINGS_KEY not in context.user_data[CHARACTERS_CREATOR_KEY]:
-        context.user_data[CHARACTERS_CREATOR_KEY][USER_SETTINGS_KEY] = {}
 
-    user_settings = context.user_data[CHARACTERS_CREATOR_KEY][USER_SETTINGS_KEY]
+    character: Character = context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_CHARACTER_KEY]
+    # Send a message for each setting
+    for setting in SETTINGS:
+        message_text, keyboard = generate_setting_message(setting, character)
 
-    # Genera il messaggio e la tastiera per le impostazioni
-    message_text, keyboard = generate_settings_menu_single_message(user_settings)
-
-    # Invia il messaggio con il menu delle impostazioni
-    await send_and_save_message(
-        update,
-        context,
-        message_text,
-        reply_markup=keyboard,
-        parse_mode=ParseMode.HTML
-    )
+        # Send the message
+        await send_and_save_message(
+            update,
+            context,
+            message_text,
+            reply_markup=keyboard,
+            parse_mode=ParseMode.HTML
+        )
 
     return SETTINGS_MENU_STATE
 
@@ -3213,40 +3215,43 @@ async def character_creator_settings_callback_handler(update: Update, context: C
     query = update.callback_query
     data = query.data
 
-    # Formato atteso: 'setting|key|value'
+    # Expected format: 'setting|key|value'
     if data.startswith('setting|'):
         _, setting_key, selected_value = data.split('|')
 
-        # Aggiorna le impostazioni dell'utente
-        if USER_SETTINGS_KEY not in context.user_data:
-            context.user_data[CHARACTERS_CREATOR_KEY][USER_SETTINGS_KEY] = {}
-        context.user_data[CHARACTERS_CREATOR_KEY][USER_SETTINGS_KEY][setting_key] = selected_value
+        character: Character = context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_CHARACTER_KEY]
 
-        # Rispondi alla query
+        # Update the character's settings
+        character.settings[setting_key] = selected_value
+
+        # Answer the query
         await query.answer()
 
-        # Rigenera il messaggio e la tastiera delle impostazioni
-        user_settings = context.user_data[CHARACTERS_CREATOR_KEY][USER_SETTINGS_KEY]
-        message_text, keyboard = generate_settings_menu_single_message(user_settings)
+        # Regenerate the message and keyboard for this setting
+        setting = next((s for s in SETTINGS if s['key'] == setting_key), None)
+        if setting:
+            message_text, keyboard = generate_setting_message(setting, character)
 
-        # Modifica il messaggio originale utilizzando query.edit_message_text
-        try:
-            await query.edit_message_text(
-                text=message_text,
-                reply_markup=keyboard,
-                parse_mode=ParseMode.HTML
-            )
-        except telegram.error.BadRequest as e:
-            # Gestisci errori nell'editing del messaggio
-            print(f"Errore nell'editing del messaggio: {e}")
-            await query.answer('Non è stato possibile aggiornare le impostazioni.', show_alert=True)
+            # Edit the message
+            try:
+                await query.edit_message_text(
+                    text=message_text,
+                    reply_markup=keyboard,
+                    parse_mode=ParseMode.HTML
+                )
+            except telegram.error.BadRequest as e:
+                print(f"Error editing message: {e}")
+                await query.answer('Could not update settings.', show_alert=True)
 
-        # Ritorna allo stato del menu delle impostazioni
-        return SETTINGS_MENU_STATE
+            return SETTINGS_MENU_STATE
+        else:
+            # Handle unknown setting key
+            await query.answer('Unknown setting.', show_alert=True)
+            return SETTINGS_MENU_STATE
 
     else:
-        # Gestisci callback data non riconosciuti
-        await query.answer('Opzione non riconosciuta.', show_alert=True)
+        # Handle unrecognized callback data
+        await query.answer('Option not recognized.', show_alert=True)
         return SETTINGS_MENU_STATE
 
 
@@ -3254,7 +3259,7 @@ async def character_generic_main_menu_query_handler(update: Update, context: Con
     query = update.callback_query
     await query.answer()
 
-    await check_pending_reassignment_for_multiclassing(update, context)
+    await check_pending_reassignment_for_multiclassing_and_wipe_user_data(update, context)
 
     MAINMENU_CALLBACKDATA_TO_CALLBACK = {
         r"^level_(up|down)$": character_change_level_query_handler,
@@ -3289,7 +3294,7 @@ async def character_generic_main_menu_query_handler(update: Update, context: Con
             return await func(update, context)
 
 
-async def check_pending_reassignment_for_multiclassing(update, context):
+async def check_pending_reassignment_for_multiclassing_and_wipe_user_data(update, context):
     # Rollback for multiclass management
     if PENDING_REASSIGNMENT in context.user_data[CHARACTERS_CREATOR_KEY]:
         # Get the pending reassignment information
@@ -3320,3 +3325,6 @@ async def check_pending_reassignment_for_multiclassing(update, context):
         context.user_data[CHARACTERS_CREATOR_KEY].pop(ABILITY_FEATURES_KEY, None)
         context.user_data[CHARACTERS_CREATOR_KEY].pop(TEMP_ABILITY_KEY, None)
         context.user_data[CHARACTERS_CREATOR_KEY].pop(CURRENT_ABILITY_KEY, None)
+        context.user_data[CHARACTERS_CREATOR_KEY].pop(TEMP_ZONE_NAME, None)
+        context.user_data[CHARACTERS_CREATOR_KEY].pop(TEMP_MAPS_PATHS, None)
+        context.user_data[CHARACTERS_CREATOR_KEY].pop(ADD_OR_INSERT_MAPS, None)

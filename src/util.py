@@ -211,7 +211,8 @@ def generate_abilities_list_keyboard(abilities: List[Ability],
 
 
 def generate_spells_list_keyboard(spells: List[Spell],
-                                  draw_navigation_buttons: bool = True) -> InlineKeyboardMarkup:
+                                  draw_navigation_buttons: bool = True,
+                                  draw_back_button: bool = True) -> InlineKeyboardMarkup:
     """
     Generates an inline keyboard markup for the provided list of spells.
 
@@ -242,7 +243,9 @@ def generate_spells_list_keyboard(spells: List[Spell],
                               InlineKeyboardButton("Successiva ➡️", callback_data="next_page")]
         keyboard.append(navigation_buttons)
     keyboard.append([InlineKeyboardButton("Impara nuova spell", callback_data=SPELL_LEARN_CALLBACK_DATA)])
-    keyboard.append([InlineKeyboardButton('Indietro 🔙', callback_data='spell_usage_back_menu')])
+
+    if draw_back_button:
+        keyboard.append([InlineKeyboardButton('Indietro 🔙', callback_data='spell_usage_back_menu')])
 
     return InlineKeyboardMarkup(keyboard)
 
