@@ -187,7 +187,7 @@ def generate_abilities_list_keyboard(abilities: List[Ability],
     keyboard = []
     row = []
     for ability in abilities:
-        button = InlineKeyboardButton(f"{ability.name}{' ✅' if ability.activated else ''}",
+        button = InlineKeyboardButton(f"{'✅ ' if ability.activated else ''}{ability.name}",
                                       callback_data=f"ability_name|{ability.name}")
         row.append(button)
 
@@ -205,7 +205,7 @@ def generate_abilities_list_keyboard(abilities: List[Ability],
                               InlineKeyboardButton("Successiva ➡️", callback_data="next_page")]
         keyboard.append(navigation_buttons)
 
-    keyboard.append([InlineKeyboardButton("Impara nuovo incantesimo", callback_data=SPELL_LEARN_CALLBACK_DATA)])
+    keyboard.append([InlineKeyboardButton("Impara nuova abilità", callback_data=SPELL_LEARN_CALLBACK_DATA)])
 
     return InlineKeyboardMarkup(keyboard)
 
