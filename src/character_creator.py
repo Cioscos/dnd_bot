@@ -620,9 +620,7 @@ async def create_abilities_menu(character: Character, update: Update, context: C
 
         return ABILITY_LEARN
 
-    else:
-        message_str += ("Usa /stop per terminare o un bottone del menù principale per cambiare funzione\n"
-                        "Ecco la lista delle azioni")
+    message_str += "Ecco la lista delle azioni"
 
     abilities = character.abilities
     abilities_pages = chunk_list(abilities, 10)
@@ -1706,10 +1704,13 @@ async def character_ability_visualization_query_handler(update: Update, context:
     if data == ABILITY_EDIT_CALLBACK_DATA:
 
         await query.answer()
-        await query.edit_message_text("Inviami l'azione inserendo il nome, descrizione e livello separati da un #\n\n"
-                                      "<b>Esempio:</b> <code>nome#bella descrizione#2</code>\n\n"
-                                      "Usa /stop per terminare o un bottone del menù principale per cambiare funzione",
-                                      parse_mode=ParseMode.HTML)
+        ability_to_edit: Ability = context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_ABILITY_KEY]
+        message_str = ("Usa /stop per terminare o un bottone del menù principale per cambiare funzione\n\n"
+                       "Inviami l'azione inserendo il nome, descrizione e numero utilizzi separati da un #\n\n"
+                       f"<b>Nome azione da modificare:</b> <code>{ability_to_edit.name}\n\n</code>"
+                       f"<b>Descrizione azione:</b> <code>{ability_to_edit.description}\n\n</code>"
+                       f"<b>Numero utilizzi:</b> <code>{ability_to_edit.max_uses}</code>")
+        await query.edit_message_text(message_str, parse_mode=ParseMode.HTML)
 
     elif data == ABILITY_DELETE_CALLBACK_DATA:
 
@@ -1731,7 +1732,7 @@ async def character_ability_visualization_query_handler(update: Update, context:
             context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_INLINE_PAGE_INDEX_KEY]]
 
         message_str = ("Usa /stop per terminare o un bottone del menù principale per cambiare funzione\n\n"
-                       "Ecco la lista delle azione")
+                       "Ecco la lista delle azioni")
         reply_markup = generate_abilities_list_keyboard(ability_page)
         await query.edit_message_text(message_str, reply_markup=reply_markup)
 
