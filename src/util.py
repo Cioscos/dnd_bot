@@ -205,7 +205,7 @@ def generate_abilities_list_keyboard(abilities: List[Ability],
                               InlineKeyboardButton("Successiva ➡️", callback_data="next_page")]
         keyboard.append(navigation_buttons)
 
-    keyboard.append([InlineKeyboardButton("Impara nuovo incantesimo", callback_data=SPELL_LEARN_CALLBACK_DATA)])
+    keyboard.append([InlineKeyboardButton("Impara nuova abilità", callback_data=SPELL_LEARN_CALLBACK_DATA)])
 
     return InlineKeyboardMarkup(keyboard)
 
