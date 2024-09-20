@@ -455,7 +455,7 @@ def create_bag_menu(character: Character) -> Tuple[str, InlineKeyboardMarkup]:
     keyboard = [[InlineKeyboardButton('Inserisci nuovo oggetto', callback_data=BAG_ITEM_INSERTION_CALLBACK_DATA)]]
 
     if character.bag:
-        keyboard.append([InlineKeyboardButton('Modifica oggetto', callback_data=BAG_ITEM_EDIT)])
+        keyboard.append([InlineKeyboardButton('Modifica oggetto', callback_data=BAG_ITEM_EDIT_CALLBACK_DATA)])
 
     return message_str, InlineKeyboardMarkup(keyboard)
 
@@ -1159,7 +1159,7 @@ async def character_bag_edit_object_query_handler(update: Update, context: Conte
         f"<b>Esempio:</b> <code>Pozione di guarigione superiore</code>\n"
     )
 
-    await query.edit_message_text(message_str, parse_mode=ParseMode.HTML)
+    await send_and_save_message(update, context, message_str, parse_mode=ParseMode.HTML)
 
     return BAG_ITEM_EDIT
 

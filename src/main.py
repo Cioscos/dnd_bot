@@ -430,7 +430,8 @@ def main() -> None:
             BAG_MANAGEMENT: [
                 CallbackQueryHandler(character_bag_new_object_query_handler,
                                      pattern=fr"^{BAG_ITEM_INSERTION_CALLBACK_DATA}$"),
-                CallbackQueryHandler(character_bag_edit_object_query_handler, pattern=fr"^{BAG_ITEM_EDIT}$")
+                CallbackQueryHandler(character_bag_edit_object_query_handler,
+                                     pattern=fr"^{BAG_ITEM_EDIT_CALLBACK_DATA}$")
             ],
             BAG_ITEM_INSERTION: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, character_bag_item_insert)
@@ -591,7 +592,7 @@ def main() -> None:
             CommandHandler("stop", character_creator_stop_submenu),
             CallbackQueryHandler(character_generic_main_menu_query_handler)
         ],
-        name='character_creator_handler_v17',
+        name='character_creator_handler_v18',
         persistent=True
     )
 
