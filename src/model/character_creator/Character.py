@@ -1,6 +1,6 @@
 from dataclasses import field, dataclass
 from enum import Enum
-from typing import List, Optional, Dict, Tuple
+from typing import List, Optional, Dict, Tuple, Any
 
 from src.model.character_creator.Ability import Ability, RestorationType
 from src.model.character_creator.FeaturePoints import FeaturePoints
@@ -17,7 +17,7 @@ class SpellsSlotMode(Enum):
 
 @dataclass
 class Character:
-    VERSION = 2
+    VERSION = 5
 
     name: Optional[str] = field(default=None)
     race: Optional[str] = field(default=None)
@@ -35,6 +35,9 @@ class Character:
     carry_capacity: int = field(default_factory=int)
     encumbrance: int = field(default_factory=int)
     rolls_history: Optional[List[Tuple[str, list[int]]]] = field(default_factory=list)
+    notes: Dict[str, str] = field(default_factory=dict)
+    maps: Dict[str, List[str]] = field(default_factory=dict)
+    settings: Dict[str, Any] = field(default_factory=dict)
 
     _version: int = field(default_factory=int)
 
@@ -64,11 +67,23 @@ class Character:
     def __migrate(self):
         """Migrates the data to the current version of the class."""
         if self._version < 2:
-            # Migrazione per la versione 2: aggiungo il campo rolls_history
+            # Migration for version 2: adding the rolls_history field
             if not hasattr(self, 'rolls_history'):
                 self.rolls_history = []
             # Update version's object
             self._version = 2
+        if self._version < 3:
+            # Migration for version 3: adding notes
+            if not hasattr(self, 'notes'):
+                self.notes = {}
+        if self._version < 4:
+            # Migration for version 4: adding maps
+            if not hasattr(self, 'maps'):
+                self.maps = {}
+        if self._version < 5:
+            # Migration for version 5: adding settings
+            if not hasattr(self, 'settings'):
+                self.settings = {}
         # FUTURE MIGRATIONS
 
     def __setstate__(self, state):

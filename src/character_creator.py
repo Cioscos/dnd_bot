@@ -1,13 +1,14 @@
 import asyncio
 import logging
+import os
 import random
 import re
 from collections import defaultdict
-from typing import List, Tuple, Dict
+from typing import List, Tuple, Dict, Any
 
 import telegram
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, CallbackQuery
-from telegram.constants import ParseMode, ChatType
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, CallbackQuery, File
+from telegram.constants import ParseMode, ChatType, FileSizeLimit
 from telegram.error import TelegramError
 from telegram.ext import ContextTypes, ConversationHandler
 
@@ -17,11 +18,11 @@ from src.model.character_creator.Item import Item
 from src.model.character_creator.MultiClass import MultiClass
 from src.model.character_creator.Spell import Spell, SpellLevel
 from src.model.character_creator.SpellSlot import SpellSlot
-from src.util import chunk_list, generate_abilities_list_keyboard, generate_spells_list_keyboard
+from src.util import chunk_list, generate_abilities_list_keyboard, generate_spells_list_keyboard, extract_3_words
 
 logger = logging.getLogger(__name__)
 
-CHARACTER_CREATOR_VERSION = "3.0.0"
+CHARACTER_CREATOR_VERSION = "3.2.0"
 
 # states definition
 (CHARACTER_CREATION,
@@ -58,7 +59,13 @@ CHARACTER_CREATOR_VERSION = "3.0.0"
  LONG_REST,
  SHORT_REST,
  DICE_ACTION,
- SETTINGS_MENU_STATE) = map(int, range(14, 49))
+ NOTES_MANAGEMENT,
+ NOTE_TEXT_ADD,
+ MAPS_MANAGEMENT,
+ MAPS_ZONE,
+ MAPS_FILES,
+ ADD_MAPS_FILES,
+ SETTINGS_MENU_STATE) = map(int, range(14, 55))
 
 STOPPING = 99
 
@@ -89,11 +96,16 @@ SPELL_SLOTS = 'spell_slots'
 DICE = 'dice'
 DICE_MESSAGES = 'dice_messages'
 ACTIVE_CONV = 'active_conv'
+# keys for maps
+TEMP_ZONE_NAME = 'temp_zone_name'
+TEMP_MAPS_PATHS = 'temp_maps_paths'
+ADD_OR_INSERT_MAPS = 'add_or_insert_maps'
 # keys for settings
 USER_SETTINGS_KEY = 'user_settings'
 SPELL_MANAGEMENT_KEY = 'spell_management'
 
-# character main menu callback keys
+# character callback keys
+BACK_BUTTON_CALLBACK_DATA = "back_button"
 BAG_CALLBACK_DATA = 'bag'
 SPELLS_CALLBACK_DATA = 'spells'
 ABILITIES_CALLBACK_DATA = 'abilities'
@@ -142,6 +154,17 @@ SHORT_REST_CALLBACK_DATA = "short_rest"
 ROLL_DICE_MENU_CALLBACK_DATA = "roll_dice_menu"
 ROLL_DICE_CALLBACK_DATA = "roll_dice"
 ROLL_DICE_DELETE_HISTORY_CALLBACK_DATA = "roll_dice_history_delete"
+NOTES_CALLBACK_DATA = "notes"
+INSERT_NEW_NOTE_CALLBACK_DATA = "insert_new_note"
+OPEN_NOTE_CALLBACK_DATA = "open_note"
+EDIT_NOTE_CALLBACK_DATA = "edit_note"
+DELETE_NOTE_CALLBACK_DATA = "delete_note"
+MAPS_CALLBACK_DATA = "maps"
+SHOW_MAPS_CALLBACK_DATA = "show_maps"
+INSERT_NEW_MAPS_CALLBACK_DATA = "insert_new_maps"
+DELETE_SINGLE_MAP_CALLBACK_DATA = "delete_single_map"
+ADD_NEW_MAP_CALLBACK_DATA = "add_new_map"
+DELETE_ALL_ZONE_MAPMS_CALLBACK_DATA = "delete_all_zone_mapms"
 SETTINGS_CALLBACK_DATA = "settings"
 
 # Setting related callback
@@ -181,6 +204,9 @@ SETTINGS = [
         ]
     }
 ]
+
+FILES_DIR_PATH = 'files/'
+MAPS_DIR_PATH = FILES_DIR_PATH + 'maps'
 
 
 async def send_and_save_message(update: Update, context: ContextTypes.DEFAULT_TYPE, text: str, **kwargs):
@@ -240,6 +266,10 @@ def create_main_menu_message(character: Character) -> Tuple[str, InlineKeyboardM
             InlineKeyboardButton('🍻 Riposo breve', callback_data=SHORT_REST_WARNING_CALLBACK_DATA)
         ],
         [InlineKeyboardButton('🎲 Lancia Dado', callback_data=ROLL_DICE_MENU_CALLBACK_DATA)],
+        [
+            InlineKeyboardButton('🗒 Note', callback_data=NOTES_CALLBACK_DATA),
+            InlineKeyboardButton('🗺 Mappe', callback_data=MAPS_CALLBACK_DATA)
+        ],
         [InlineKeyboardButton('⚙️ Impostazioni', callback_data=SETTINGS_CALLBACK_DATA)],
         [InlineKeyboardButton('🗑️ Elimina personaggio', callback_data=DELETE_CHARACTER_CALLBACK_DATA)]
     ]
@@ -425,7 +455,7 @@ def create_bag_menu(character: Character) -> Tuple[str, InlineKeyboardMarkup]:
     keyboard = [[InlineKeyboardButton('Inserisci nuovo oggetto', callback_data=BAG_ITEM_INSERTION_CALLBACK_DATA)]]
 
     if character.bag:
-        keyboard.append([InlineKeyboardButton('Modifica oggetto', callback_data=BAG_ITEM_EDIT)])
+        keyboard.append([InlineKeyboardButton('Modifica oggetto', callback_data=BAG_ITEM_EDIT_CALLBACK_DATA)])
 
     return message_str, InlineKeyboardMarkup(keyboard)
 
@@ -448,7 +478,8 @@ def create_item_menu(item: Item) -> Tuple[str, InlineKeyboardMarkup]:
 
 
 def create_spell_menu(spell: Spell) -> Tuple[str, InlineKeyboardMarkup]:
-    message_str = (f"<b>{spell.name:<{50}}</b>L{spell.level.value}\n\n"
+    message_str = (f"<b>{spell.name}</b>\n\n"
+                   f"<b>Livello incantesimo:</b> {spell.level.value}\n"
                    f"<b>Descrizione</b>\n{spell.description}\n\n"
                    f"Usa /stop per terminare o un bottone del menù principale per cambiare funzione")
     keyboard = [
@@ -480,10 +511,6 @@ async def create_spells_menu(character: Character, update: Update, context: Cont
 
         return SPELL_LEARN
 
-    else:
-
-        message_str += "Usa /stop per terminare o un bottone del menù principale per cambiare funzione\n"
-
     spells = character.spells
 
     # Group spells by level
@@ -509,7 +536,7 @@ async def create_spells_menu(character: Character, update: Update, context: Cont
     message_str += f"Ecco la lista degli incantesimi di livello {level}"
 
     # Generates the keyboard for spells on the current page
-    reply_markup = generate_spells_list_keyboard(spells_in_page)
+    reply_markup = generate_spells_list_keyboard(spells_in_page, draw_back_button=False)
     if edit_mode:
         await update.effective_message.edit_text(message_str, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
     else:
@@ -520,7 +547,9 @@ async def create_spells_menu(character: Character, update: Update, context: Cont
 
 async def create_spell_levels_menu(character: Character, update: Update, context: ContextTypes.DEFAULT_TYPE,
                                    edit_mode: bool = False) -> int:
-    message_str = f"<b>Gestione spells</b>\nUsa /stop per terminare o un bottone del menù principale per cambiare funzione\n\n"
+    message_str = (
+        f"<b>Gestione spells</b>\nUsa /stop per terminare o un bottone del menù principale per cambiare funzione\n\n"
+        f"❌ Significa che non hai più slot incantesimo disponibili di quel livello")
 
     if not character.spells:
         message_str += "Non conosci ancora nessun incantesimo ‍🤷‍♂️"
@@ -536,10 +565,6 @@ async def create_spell_levels_menu(character: Character, update: Update, context
                                         parse_mode=ParseMode.HTML)
 
         return SPELL_LEARN
-
-    else:
-
-        message_str += "Usa /stop per terminare o un bottone del menù principale per cambiare funzione\n"
 
     spells = character.spells
     buttons = []
@@ -561,9 +586,9 @@ async def create_spell_levels_menu(character: Character, update: Update, context
             spell_slot = character.spell_slots.get(spell_level)
             if spell_slot:
                 if spell_slot.slots_remaining() > 0:
-                    button_text = f"Level {spell_level}"
+                    button_text = f"Livello {spell_level}"
                 else:
-                    button_text = f"Level {spell_level} ❌"
+                    button_text = f"Livello {spell_level} ❌"
 
                 buttons.append(
                     InlineKeyboardButton(button_text, callback_data=f"spell_of_level|{spell_level}")
@@ -595,9 +620,7 @@ async def create_abilities_menu(character: Character, update: Update, context: C
 
         return ABILITY_LEARN
 
-    else:
-        message_str += ("Usa /stop per terminare o un bottone del menù principale per cambiare funzione\n"
-                        "Ecco la lista delle azioni")
+    message_str += "Ecco la lista delle azioni"
 
     abilities = character.abilities
     abilities_pages = chunk_list(abilities, 10)
@@ -706,36 +729,73 @@ M   M  O   O  R  R    T   O   O
 M   M   OOO   R   R   T    OOO</code>"""
 
 
-def generate_settings_menu_single_message(user_settings):
-    message_lines = []
-    keyboard_buttons = []
+def create_notes_menu(character: Character) -> Tuple[str, InlineKeyboardMarkup]:
+    message_str = "<b>Note dell'avventura</b>\n\n"
+    keyboard = []
 
-    for setting in SETTINGS:
-        key = setting['key']
-        title = setting['title']
-        description = setting['description']
-        options = setting['options']
+    if not character.notes:
+        message_str += "Non ci sono ancora delle note memorizzate 🤷‍♂️"
 
-        # Ottieni la selezione corrente dell'utente
-        current_value = user_settings.get(key, options[0]['value'])
+    else:
+        message_str += ("Seleziona una nota da visualizzare premendo i pulsanti sottostanti o inseriscine una nuova "
+                        "premendo il pulsante <b><i>\"Inserisci nuova nota\"</i></b>\n\n"
+                        "Usa /stop per terminare o un bottone del menù principale per cambiare funzione")
 
-        # Aggiungi il titolo e la descrizione al messaggio
-        message_lines.append(f"<b>{title}</b>\n{description}")
+        for title, note in character.notes.items():
+            keyboard.append([InlineKeyboardButton(title, callback_data=f"{OPEN_NOTE_CALLBACK_DATA}|{title}")])
 
-        # Crea i pulsanti delle opzioni
-        option_buttons = []
-        for option in options:
-            option_text = option['text']
-            if option['value'] == current_value:
-                option_text = '✅ ' + option_text
+    keyboard.append([InlineKeyboardButton('Inserisci nuova nota', callback_data=INSERT_NEW_NOTE_CALLBACK_DATA)])
 
-            callback_data = f'setting|{key}|{option["value"]}'
-            option_buttons.append(InlineKeyboardButton(option_text, callback_data=callback_data))
+    return message_str, InlineKeyboardMarkup(keyboard)
 
-        keyboard_buttons.append(option_buttons)
 
-    message_text = '\n\n'.join(message_lines)
-    keyboard = InlineKeyboardMarkup(keyboard_buttons)
+def create_maps_menu(character: Character) -> Tuple[str, InlineKeyboardMarkup]:
+    message_str = "<b>Mappe del mondo</b>\n\n"
+    keyboard = []
+
+    if not character.maps:
+        message_str += "Non ci sono ancora delle mappe memorizzate 🤷‍♂️"
+
+    else:
+        message_str += ("Seleziona una zona da visualizzare premendo i pulsanti sottostanti o inseriscine una nuova "
+                        "premendo il pulsante <b><i>\"Inserisci nuove mappe\"</i></b>\n\n"
+                        "Usa /stop per terminare o un bottone del menù principale per cambiare funzione")
+
+        for zone, maps_paths in character.maps.items():
+            keyboard.append([InlineKeyboardButton(zone, callback_data=(zone, maps_paths))])
+
+    keyboard.append([InlineKeyboardButton('Inserisci nuove mappe', callback_data=INSERT_NEW_MAPS_CALLBACK_DATA)])
+
+    return message_str, InlineKeyboardMarkup(keyboard)
+
+
+def verify_selected_map_callback_data(callback_data: Any) -> bool:
+    return True if isinstance(callback_data, tuple) else False
+
+
+def generate_setting_message(setting, character):
+    key = setting['key']
+    title = setting['title']
+    description = setting['description']
+    options = setting['options']
+
+    # Get the current value from the character's settings
+    current_value = character.settings.get(key, options[0]['value'])
+
+    # Build the message text
+    message_text = f"<b>{title}</b>\n{description}"
+
+    # Build the keyboard
+    option_buttons = []
+    for option in options:
+        option_text = option['text']
+        if option['value'] == current_value:
+            option_text = '✅ ' + option_text
+
+        callback_data = f'setting|{key}|{option["value"]}'
+        option_buttons.append([InlineKeyboardButton(option_text, callback_data=callback_data)])
+
+    keyboard = InlineKeyboardMarkup(option_buttons)
 
     return message_text, keyboard
 
@@ -1016,6 +1076,7 @@ async def character_bag_new_object_query_handler(update: Update, context: Contex
 
 
 async def character_bag_item_insert(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    context.user_data[CHARACTERS_CREATOR_KEY][LAST_MENU_MESSAGES].append(update.effective_message)
     item_info = update.effective_message.text
     context.user_data[CHARACTERS_CREATOR_KEY][LAST_MENU_MESSAGES].append(update.effective_message)
 
@@ -1096,7 +1157,7 @@ async def character_bag_edit_object_query_handler(update: Update, context: Conte
         f"<b>Esempio:</b> <code>Pozione di guarigione superiore</code>\n"
     )
 
-    await query.edit_message_text(message_str, parse_mode=ParseMode.HTML)
+    await send_and_save_message(update, context, message_str, parse_mode=ParseMode.HTML)
 
     return BAG_ITEM_EDIT
 
@@ -1236,14 +1297,12 @@ async def character_spells_query_handler(update: Update, context: ContextTypes.D
     await query.answer()
 
     character: Character = context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_CHARACTER_KEY]
-
-    user_settings = context.user_data[CHARACTERS_CREATOR_KEY].get(USER_SETTINGS_KEY, {})
-    spell_management_preference = user_settings.get('spell_management', 'paginate_by_level')
+    spell_management_preference = character.settings.get('spell_management', 'default_value')
 
     if spell_management_preference == 'paginate_by_level':
-        return await create_spell_levels_menu(character, update, context)
-    else:
         return await create_spells_menu(character, update, context)
+    else:
+        return await create_spell_levels_menu(character, update, context)
 
 
 async def character_spells_by_level_query_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -1264,7 +1323,8 @@ async def character_spells_by_level_query_handler(update: Update, context: Conte
                    f"Usa /stop per terminare o un bottone del menù principale per cambiare funzione")
 
     # Generates the keyboard for spells on the current page
-    reply_markup = generate_spells_list_keyboard(spells_of_selected_level, draw_navigation_buttons=False)
+    reply_markup = generate_spells_list_keyboard(spells_of_selected_level, draw_navigation_buttons=False,
+                                                 draw_back_button=True)
     await query.edit_message_text(message_str, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
 
     return SPELLS_MENU
@@ -1288,7 +1348,7 @@ async def character_spells_menu_query_handler(update: Update, context: ContextTy
             level, spells_in_page = current_page
             message_str = ("Usa /stop per terminare o un bottone del menù principale per cambiare funzione\n"
                            f"Ecco la lista degli incantesimi di livello {level}")
-            reply_markup = generate_spells_list_keyboard(spells_in_page)
+            reply_markup = generate_spells_list_keyboard(spells_in_page, draw_back_button=False)
             await query.edit_message_text(message_str, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
         return SPELLS_MENU
 
@@ -1303,7 +1363,7 @@ async def character_spells_menu_query_handler(update: Update, context: ContextTy
             level, spells_in_page = current_page
             message_str = ("Usa /stop per terminare o un bottone del menù principale per cambiare funzione\n"
                            f"Ecco la lista degli incantesimi di livello {level}")
-            reply_markup = generate_spells_list_keyboard(spells_in_page)
+            reply_markup = generate_spells_list_keyboard(spells_in_page, draw_back_button=False)
             await query.edit_message_text(message_str, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
         return SPELLS_MENU
 
@@ -1315,13 +1375,12 @@ async def character_spells_menu_query_handler(update: Update, context: ContextTy
     elif data == SPELL_USAGE_BACK_MENU_CALLBACK_DATA:
 
         await query.answer()
-        user_settings = context.user_data[CHARACTERS_CREATOR_KEY].get(USER_SETTINGS_KEY, {})
-        spell_management_preference = user_settings.get('spell_management', 'paginate_by_level')
         character: Character = context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_CHARACTER_KEY]
+        spell_management_preference = character.settings.get('spell_management', 'default_value')
         if spell_management_preference == 'paginate_by_level':
-            return await create_spell_levels_menu(character, update, context, edit_mode=True)
+            return await create_spells_menu(character, update, context)
         else:
-            return await create_spells_menu(character, update, context, edit_mode=True)
+            return await create_spell_levels_menu(character, update, context)
 
     else:
         await query.answer()
@@ -1349,12 +1408,14 @@ async def character_spell_visualization_query_handler(update: Update, context: C
     if data == SPELL_EDIT_CALLBACK_DATA:
 
         await query.answer()
-        await query.edit_message_text(
-            "Inviami l'incantesimo inserendo il nome, descrizione e livello separati da un #\n\n"
-            "<b>Esempio:</b> <code>Palla di fuoco#Unico incantesimo dei maghi#3</code>\n\n"
-            "Usa /stop per terminare o un bottone del menù principale per cambiare funzione",
-            parse_mode=ParseMode.HTML
-        )
+        spell: Spell = context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_SPELL_KEY]
+        message_str = ("Usa /stop per terminare o un bottone del menù principale per cambiare funzione\n\n"
+                       "Inviami l'incantesimo inserendo il nome, descrizione e livello separati da un #\n\n"
+                       "Premi sul titolo, descrizione e livello per copiarli.\n\n"
+                       f"<b>Nome incantesimo attuale</b>\n<code>{spell.name}</code>\n"
+                       f"<b>Descrizione attuale:</b> <code>{spell.description}</code>\n"
+                       f"<b>Livello attuale:</b> <code>{spell.level.value}</code>")
+        await query.edit_message_text(message_str, parse_mode=ParseMode.HTML)
 
     elif data == SPELL_DELETE_CALLBACK_DATA:
 
@@ -1375,25 +1436,31 @@ async def character_spell_visualization_query_handler(update: Update, context: C
 
         await query.answer()
 
-        # Retrieve current pages and index
-        pages = context.user_data[CHARACTERS_CREATOR_KEY][INLINE_PAGES_KEY]
-        current_page_index = context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_INLINE_PAGE_INDEX_KEY]
+        character: Character = context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_CHARACTER_KEY]
+        spell_management_preference = character.settings.get('spell_management', 'default_value')
+        if spell_management_preference == 'paginate_by_level':
+            # Retrieve current pages and index
+            pages = context.user_data[CHARACTERS_CREATOR_KEY][INLINE_PAGES_KEY]
+            current_page_index = context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_INLINE_PAGE_INDEX_KEY]
 
-        try:
-            current_page = pages[current_page_index]
-            level, spells_in_page = current_page
-        except IndexError:
-            await query.answer("Errore nel recuperare la pagina corrente.", show_alert=True)
+            try:
+                current_page = pages[current_page_index]
+                level, spells_in_page = current_page
+            except IndexError:
+                await query.answer("Errore nel recuperare la pagina corrente.", show_alert=True)
+                return SPELLS_MENU
+
+            message_str = (
+                "Usa /stop per terminare o un bottone del menù principale per cambiare funzione\n"
+                f"Ecco la lista degli incantesimi di livello {level}"
+            )
+            reply_markup = generate_spells_list_keyboard(spells_in_page, True)
+            await query.edit_message_text(message_str, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
+
             return SPELLS_MENU
+        else:
 
-        message_str = (
-            "Usa /stop per terminare o un bottone del menù principale per cambiare funzione\n"
-            f"Ecco la lista degli incantesimi di livello {level}"
-        )
-        reply_markup = generate_spells_list_keyboard(spells_in_page, True)
-        await query.edit_message_text(message_str, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
-
-        return SPELLS_MENU
+            return await create_spell_levels_menu(character, update, context, edit_mode=True)
 
     elif data == SPELL_USE_CALLBACK_DATA:
 
@@ -1473,7 +1540,12 @@ async def character_spell_learn_handler(update: Update, context: ContextTypes.DE
     character.learn_spell(spell)
     await send_and_save_message(update, context, "Incantesimo appreso con successo! ✅")
 
-    return await create_spells_menu(character, update, context)
+    character: Character = context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_CHARACTER_KEY]
+    spell_management_preference = character.settings.get('spell_management', 'default_value')
+    if spell_management_preference == 'paginate_by_level':
+        return await create_spells_menu(character, update, context)
+    else:
+        return await create_spell_levels_menu(character, update, context)
 
 
 async def character_spell_edit_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -1511,8 +1583,10 @@ async def character_spell_edit_handler(update: Update, context: ContextTypes.DEF
             break
 
     await send_and_save_message(update, context, "Incantesimo modificato con successo!")
+    message_str, reply_markup = create_spell_menu(old_spell)
+    await send_and_save_message(update, context, message_str, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
 
-    return await create_spells_menu(character, update, context)
+    return SPELL_VISUALIZATION
 
 
 async def character_spell_delete_query_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -1532,7 +1606,11 @@ async def character_spell_delete_query_handler(update: Update, context: ContextT
             f"Hai una buona memoria, ti ricordi ancora l'incantesimo {spell_to_forget.name}"
         )
 
-    return await create_spells_menu(character, update, context)
+    spell_management_preference = character.settings.get('spell_management', 'default_value')
+    if spell_management_preference == 'paginate_by_level':
+        return await create_spells_menu(character, update, context)
+    else:
+        return await create_spell_levels_menu(character, update, context)
 
 
 async def character_spell_use_query_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -1595,8 +1673,8 @@ async def character_abilities_menu_query_handler(update: Update, context: Contex
         character: Character = context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_CHARACTER_KEY]
         ability: Ability = next((ability for ability in character.abilities if ability.name == ability_name), None)
 
-        message_str, reply_keyboard = create_ability_menu(ability)
-        await query.edit_message_text(message_str, reply_markup=reply_keyboard, parse_mode=ParseMode.HTML)
+        message_str, reply_markup = create_ability_menu(ability)
+        await query.edit_message_text(message_str, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
 
         # save the current ability in the userdata
         context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_ABILITY_KEY] = ability
@@ -1626,10 +1704,13 @@ async def character_ability_visualization_query_handler(update: Update, context:
     if data == ABILITY_EDIT_CALLBACK_DATA:
 
         await query.answer()
-        await query.edit_message_text("Inviami l'azione inserendo il nome, descrizione e livello separati da un #\n\n"
-                                      "<b>Esempio:</b> <code>nome#bella descrizione#2</code>\n\n"
-                                      "Usa /stop per terminare o un bottone del menù principale per cambiare funzione",
-                                      parse_mode=ParseMode.HTML)
+        ability_to_edit: Ability = context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_ABILITY_KEY]
+        message_str = ("Usa /stop per terminare o un bottone del menù principale per cambiare funzione\n\n"
+                       "Inviami l'azione inserendo il nome, descrizione e numero utilizzi separati da un #\n\n"
+                       f"<b>Nome azione da modificare:</b> <code>{ability_to_edit.name}\n\n</code>"
+                       f"<b>Descrizione azione:</b> <code>{ability_to_edit.description}\n\n</code>"
+                       f"<b>Numero utilizzi:</b> <code>{ability_to_edit.max_uses}</code>")
+        await query.edit_message_text(message_str, parse_mode=ParseMode.HTML)
 
     elif data == ABILITY_DELETE_CALLBACK_DATA:
 
@@ -1651,7 +1732,7 @@ async def character_ability_visualization_query_handler(update: Update, context:
             context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_INLINE_PAGE_INDEX_KEY]]
 
         message_str = ("Usa /stop per terminare o un bottone del menù principale per cambiare funzione\n\n"
-                       "Ecco la lista delle azione")
+                       "Ecco la lista delle azioni")
         reply_markup = generate_abilities_list_keyboard(ability_page)
         await query.edit_message_text(message_str, reply_markup=reply_markup)
 
@@ -2464,6 +2545,7 @@ async def character_damage_query_handler(update: Update, context: ContextTypes.D
 
 
 async def character_damage_registration_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    context.user_data[CHARACTERS_CREATOR_KEY][LAST_MENU_MESSAGES].append(update.effective_message)
     damage = update.effective_message.text
 
     if not damage or damage.isalpha():
@@ -2507,6 +2589,7 @@ async def character_healing_query_handler(update: Update, context: ContextTypes.
 
 async def character_healing_value_check_or_registration_handler(update: Update,
                                                                 context: ContextTypes.DEFAULT_TYPE) -> int:
+    context.user_data[CHARACTERS_CREATOR_KEY][LAST_MENU_MESSAGES].append(update.effective_message)
     healing = update.effective_message.text
 
     if not healing or not healing.isdigit():
@@ -2600,6 +2683,7 @@ async def character_hit_points_query_handler(update: Update, context: ContextTyp
 
 
 async def character_hit_points_registration_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    context.user_data[CHARACTERS_CREATOR_KEY][LAST_MENU_MESSAGES].append(update.effective_message)
     hit_points = update.effective_message.text
 
     if not hit_points or hit_points.isalpha():
@@ -2793,26 +2877,337 @@ async def dice_actions_query_handler(update: Update, context: ContextTypes.DEFAU
     return DICE_ACTION
 
 
+async def character_creator_notes_query_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    query = update.callback_query
+    await query.answer()
+
+    character: Character = context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_CHARACTER_KEY]
+    message_str, reply_markup = create_notes_menu(character)
+    await send_and_save_message(update, context, message_str, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
+
+    return NOTES_MANAGEMENT
+
+
+async def character_creator_new_note_query_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    query = update.callback_query
+    await query.answer()
+
+    message_str = ("Inserisci la nota usando questo formato:\n"
+                   "<code>Titolo#testo nota</code>\n\n"
+                   "Il titolo della nota non è obbligatorio, puoi inserire anche solo il testo\n\n"
+                   "Usa /stop per terminare o un bottone del menù principale per cambiare funzione")
+    await query.edit_message_text(message_str, parse_mode=ParseMode.HTML)
+
+    return NOTE_TEXT_ADD
+
+
+async def character_creator_open_note_query_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    query = update.callback_query
+    await query.answer()
+    data = query.data
+    title_text = data.split('|')[1]
+
+    character: Character = context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_CHARACTER_KEY]
+    note_title, note_text = next(((title, text) for title, text in character.notes.items() if title == title_text))
+    message_str = (f"Usa /stop per terminare o un bottone del menù principale per cambiare funzione\n\n"
+                   f"<b>{note_title}</b>\n\n"
+                   f"<i>{note_text}</i>")
+
+    keyboard = [
+        [InlineKeyboardButton('Modifica nota', callback_data=f"{EDIT_NOTE_CALLBACK_DATA}|{note_title}")],
+        [InlineKeyboardButton('Elimina nota', callback_data=f"{DELETE_NOTE_CALLBACK_DATA}|{note_title}")],
+        [InlineKeyboardButton('Indietro 🔙', callback_data=f"{BACK_BUTTON_CALLBACK_DATA}")]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    await query.edit_message_text(message_str, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
+
+    # delete cached query data
+    context.drop_callback_data(query)
+
+    return NOTES_MANAGEMENT
+
+
+async def character_creator_edit_note_query_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    query = update.callback_query
+    await query.answer()
+    data = query.data
+    title_text = data.split('|')[1]
+
+    character: Character = context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_CHARACTER_KEY]
+    note_title, note_text = next(((title, text) for title, text in character.notes.items() if title == title_text))
+
+    message_str = (f"Usa /stop per terminare o un bottone del menù principale per cambiare funzione\n\n"
+                   f"Premi una volta sul titolo e sul testo della nota per copiarli:\n"
+                   f"<code>{note_title}</code>\n\n"
+                   f"<code>{note_text}</code>\n\n"
+                   f"Inserisci la nota usando questo formato:\n"
+                   f"<code>Titolo#testo nota</code>\n\n"
+                   f"Il titolo della nota non è obbligatorio, puoi inserire anche solo il testo")
+
+    await query.edit_message_text(message_str, parse_mode=ParseMode.HTML)
+
+    return NOTE_TEXT_ADD
+
+
+async def character_creator_delete_note_query_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    query = update.callback_query
+    data = query.data
+    title_text = data.split('|')[1]
+
+    character: Character = context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_CHARACTER_KEY]
+    character.notes.pop(title_text, None)
+
+    await query.answer('Nota eliminata con successo ✅', show_alert=True)
+    message_str, reply_markup = create_notes_menu(character)
+    await send_and_save_message(update, context, message_str, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
+
+    return NOTES_MANAGEMENT
+
+
+async def character_creator_notes_back_query_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    query = update.callback_query
+    await query.answer()
+
+    character: Character = context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_CHARACTER_KEY]
+    message_str, reply_markup = create_notes_menu(character)
+    await query.edit_message_text(message_str, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
+
+    return NOTES_MANAGEMENT
+
+
+async def character_creator_insert_note_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    context.user_data[CHARACTERS_CREATOR_KEY][LAST_MENU_MESSAGES].append(update.effective_message)
+    text = update.effective_message.text
+    message_splitted = text.split("#")
+
+    character: Character = context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_CHARACTER_KEY]
+    if len(message_splitted) == 1:
+        note_title = extract_3_words(message_splitted[0])
+        note_text = message_splitted[0]
+    else:
+        note_title = message_splitted[0]
+        note_text = message_splitted[1]
+
+    # manage insertion or edit
+    if note_title in character.notes:
+        character.notes.pop(note_title, None)
+    character.notes[note_title] = note_text
+
+    await send_and_save_message(update, context, "Nota salvata con successo! ✅")
+    message_str, reply_markup = create_notes_menu(character)
+    await send_and_save_message(update, context, message_str, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
+
+    return NOTES_MANAGEMENT
+
+
+async def character_creation_maps_query_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    query = update.callback_query
+    await query.answer()
+
+    character: Character = context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_CHARACTER_KEY]
+    message_str, reply_markup = create_maps_menu(character)
+
+    await send_and_save_message(update, context, message_str, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
+
+    return MAPS_MANAGEMENT
+
+
+async def character_creation_show_maps_query_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    query = update.callback_query
+    await query.answer()
+    zone, maps_paths = query.data
+
+    await send_and_save_message(update, context,
+                                f"Usa /stop per terminare o un bottone del menù principale per cambiare funzione\n\n"
+                                f"Queste sono le mappe della zona {zone}")
+
+    for path in maps_paths:
+        keyboard = [
+            [InlineKeyboardButton('Cancella', callback_data=f"{DELETE_SINGLE_MAP_CALLBACK_DATA}|{path}|{zone}")]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        message = await update.effective_message.reply_document(path, reply_markup=reply_markup)
+        context.user_data[CHARACTERS_CREATOR_KEY][LAST_MENU_MESSAGES].append(message)
+
+    message_str = "Scegli cosa vuoi fare"
+    keyboard = [
+        [InlineKeyboardButton('Aggiungi nuova mappa', callback_data=f"{ADD_NEW_MAP_CALLBACK_DATA}|{zone}")],
+        [InlineKeyboardButton('Cancella tutte le mappe', callback_data=f"{DELETE_ALL_ZONE_MAPMS_CALLBACK_DATA}|{zone}")]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    await send_and_save_message(update, context, message_str, reply_markup=reply_markup)
+
+
+async def character_creator_delete_single_map_query_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    query = update.callback_query
+    await query.answer()
+    data = query.data
+
+    _, path, zone = data.split('|')
+    character: Character = context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_CHARACTER_KEY]
+    character.maps[zone].remove(path)
+
+    await query.delete_message()
+
+    return MAPS_MANAGEMENT
+
+
+async def character_creator_add_map_query_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    query = update.callback_query
+    await query.answer()
+    data = query.data
+
+    _, zone = data.split('|')
+    context.user_data[CHARACTERS_CREATOR_KEY][TEMP_ZONE_NAME] = zone
+
+    message_str = (f"Usa /stop per terminare o un bottone del menù principale per cambiare funzione\n\n"
+                   f"Mandami la mappa come immagine o file")
+    await send_and_save_message(update, context, message_str)
+
+    context.user_data[CHARACTERS_CREATOR_KEY][ADD_OR_INSERT_MAPS] = 'add'
+
+    return ADD_MAPS_FILES
+
+
+async def character_creation_add_maps_done_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    context.user_data[CHARACTERS_CREATOR_KEY][LAST_MENU_MESSAGES].append(update.effective_message)
+    zone = context.user_data[CHARACTERS_CREATOR_KEY][TEMP_ZONE_NAME]
+    files_paths = context.user_data[CHARACTERS_CREATOR_KEY][TEMP_MAPS_PATHS]
+
+    character: Character = context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_CHARACTER_KEY]
+    character.maps[zone].extend(files_paths)
+
+    context.user_data[CHARACTERS_CREATOR_KEY].pop(TEMP_ZONE_NAME, None)
+    context.user_data[CHARACTERS_CREATOR_KEY].pop(TEMP_MAPS_PATHS, None)
+
+    await send_and_save_message(update, context, "Mappe aggiunte con successo ✅")
+    message_str, reply_markup = create_maps_menu(character)
+    await send_and_save_message(update, context, message_str, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
+
+    return MAPS_MANAGEMENT
+
+
+async def character_creation_maps_delete_all_query_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    query = update.callback_query
+    await query.answer()
+    data = query.data
+
+    _, zone = data.split('|')
+    character: Character = context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_CHARACTER_KEY]
+    character.maps.pop(zone, None)
+
+    await send_and_save_message(update, context, f"Le mappe della zona {zone} sono state cancellate con successo ✅")
+    message_str, reply_markup = create_maps_menu(character)
+    await send_and_save_message(update, context, message_str, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
+
+
+async def character_creation_new_maps_query_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    query = update.callback_query
+    await query.answer()
+
+    message_str = (f"Usa /stop per terminare o un bottone del menù principale per cambiare funzione\n\n"
+                   f"Inviami il nome della zona rappresentata dalle mappe")
+    await query.edit_message_text(message_str)
+
+    context.user_data[CHARACTERS_CREATOR_KEY][ADD_OR_INSERT_MAPS] = 'insert'
+
+    return MAPS_ZONE
+
+
+async def character_creation_ask_maps_file(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    message = update.effective_message
+    context.user_data[CHARACTERS_CREATOR_KEY][LAST_MENU_MESSAGES].append(message)
+    text = message.text
+    context.user_data[CHARACTERS_CREATOR_KEY][TEMP_ZONE_NAME] = text
+
+    message_str = (f"Usa /stop per terminare o un bottone del menù principale per cambiare funzione\n\n"
+                   f"Mandami la mappa come immagine o file")
+    await send_and_save_message(update, context, message_str)
+
+    return MAPS_FILES
+
+
+async def store_map_file_or_photo(file: File, update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    # create the folder for the file
+    os.makedirs(MAPS_DIR_PATH, exist_ok=True)
+    # Download the file on the disk
+    file_name = file.file_path.split('/')[-1].split('.')[0]
+    file_ext = file.file_path.split('/')[-1].split('.')[1]
+    final_file_path = await file.download_to_drive(f"{MAPS_DIR_PATH}/{file_name}.{file_ext}")
+    # save the file path in a temp location
+    if TEMP_MAPS_PATHS not in context.user_data[CHARACTERS_CREATOR_KEY]:
+        context.user_data[CHARACTERS_CREATOR_KEY][TEMP_MAPS_PATHS] = []
+
+    context.user_data[CHARACTERS_CREATOR_KEY][TEMP_MAPS_PATHS].append(str(final_file_path))
+
+    message_str = (f"Invia un altro file o foto oppure usa il comando /done per terminare\n\n"
+                   f"Puoi sempre usare il comando /stop per terminare la conversazione oppure premere su un pulsante "
+                   f"del menu principale")
+    await send_and_save_message(update, context, message_str)
+
+    if context.user_data[CHARACTERS_CREATOR_KEY][ADD_OR_INSERT_MAPS] == 'insert':
+        return MAPS_FILES
+    else:
+        return ADD_MAPS_FILES
+
+
+async def character_creation_store_map_file(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    message = update.effective_message
+    context.user_data[CHARACTERS_CREATOR_KEY][LAST_MENU_MESSAGES].append(message)
+    document = message.effective_attachment
+
+    if document.file_size > FileSizeLimit.FILESIZE_DOWNLOAD:
+        await send_and_save_message(update, context, "Il file inviato è troppo grande!\n"
+                                                     "La dimensione massima è di 20MB")
+        return MAPS_FILES
+
+    file = await document.get_file()
+    return await store_map_file_or_photo(file, update, context)
+
+
+async def character_creation_store_map_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    message = update.effective_message
+    context.user_data[CHARACTERS_CREATOR_KEY][LAST_MENU_MESSAGES].append(message)
+    photo = await message.effective_attachment[-1].get_file()
+
+    return await store_map_file_or_photo(photo, update, context)
+
+
+async def character_creation_maps_done_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    context.user_data[CHARACTERS_CREATOR_KEY][LAST_MENU_MESSAGES].append(update.effective_message)
+    zone = context.user_data[CHARACTERS_CREATOR_KEY][TEMP_ZONE_NAME]
+    files_paths = context.user_data[CHARACTERS_CREATOR_KEY][TEMP_MAPS_PATHS]
+
+    character: Character = context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_CHARACTER_KEY]
+    character.maps[zone] = files_paths
+
+    context.user_data[CHARACTERS_CREATOR_KEY].pop(TEMP_ZONE_NAME, None)
+    context.user_data[CHARACTERS_CREATOR_KEY].pop(TEMP_MAPS_PATHS, None)
+
+    await send_and_save_message(update, context, "Mappe salvate con successo!")
+    message_str, reply_markup = create_maps_menu(character)
+    await send_and_save_message(update, context, message_str, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
+
+    return MAPS_MANAGEMENT
+
+
 async def character_creator_settings(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     query = update.callback_query
     await query.answer()
-    # Inizializza le impostazioni utente se non presenti
-    if USER_SETTINGS_KEY not in context.user_data[CHARACTERS_CREATOR_KEY]:
-        context.user_data[CHARACTERS_CREATOR_KEY][USER_SETTINGS_KEY] = {}
 
-    user_settings = context.user_data[CHARACTERS_CREATOR_KEY][USER_SETTINGS_KEY]
+    character: Character = context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_CHARACTER_KEY]
+    # Send a message for each setting
+    for setting in SETTINGS:
+        message_text, keyboard = generate_setting_message(setting, character)
 
-    # Genera il messaggio e la tastiera per le impostazioni
-    message_text, keyboard = generate_settings_menu_single_message(user_settings)
-
-    # Invia il messaggio con il menu delle impostazioni
-    await send_and_save_message(
-        update,
-        context,
-        message_text,
-        reply_markup=keyboard,
-        parse_mode=ParseMode.HTML
-    )
+        # Send the message
+        await send_and_save_message(
+            update,
+            context,
+            message_text,
+            reply_markup=keyboard,
+            parse_mode=ParseMode.HTML
+        )
 
     return SETTINGS_MENU_STATE
 
@@ -2821,40 +3216,43 @@ async def character_creator_settings_callback_handler(update: Update, context: C
     query = update.callback_query
     data = query.data
 
-    # Formato atteso: 'setting|key|value'
+    # Expected format: 'setting|key|value'
     if data.startswith('setting|'):
         _, setting_key, selected_value = data.split('|')
 
-        # Aggiorna le impostazioni dell'utente
-        if USER_SETTINGS_KEY not in context.user_data:
-            context.user_data[CHARACTERS_CREATOR_KEY][USER_SETTINGS_KEY] = {}
-        context.user_data[CHARACTERS_CREATOR_KEY][USER_SETTINGS_KEY][setting_key] = selected_value
+        character: Character = context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_CHARACTER_KEY]
 
-        # Rispondi alla query
+        # Update the character's settings
+        character.settings[setting_key] = selected_value
+
+        # Answer the query
         await query.answer()
 
-        # Rigenera il messaggio e la tastiera delle impostazioni
-        user_settings = context.user_data[CHARACTERS_CREATOR_KEY][USER_SETTINGS_KEY]
-        message_text, keyboard = generate_settings_menu_single_message(user_settings)
+        # Regenerate the message and keyboard for this setting
+        setting = next((s for s in SETTINGS if s['key'] == setting_key), None)
+        if setting:
+            message_text, keyboard = generate_setting_message(setting, character)
 
-        # Modifica il messaggio originale utilizzando query.edit_message_text
-        try:
-            await query.edit_message_text(
-                text=message_text,
-                reply_markup=keyboard,
-                parse_mode=ParseMode.HTML
-            )
-        except telegram.error.BadRequest as e:
-            # Gestisci errori nell'editing del messaggio
-            print(f"Errore nell'editing del messaggio: {e}")
-            await query.answer('Non è stato possibile aggiornare le impostazioni.', show_alert=True)
+            # Edit the message
+            try:
+                await query.edit_message_text(
+                    text=message_text,
+                    reply_markup=keyboard,
+                    parse_mode=ParseMode.HTML
+                )
+            except telegram.error.BadRequest as e:
+                print(f"Error editing message: {e}")
+                await query.answer('Could not update settings.', show_alert=True)
 
-        # Ritorna allo stato del menu delle impostazioni
-        return SETTINGS_MENU_STATE
+            return SETTINGS_MENU_STATE
+        else:
+            # Handle unknown setting key
+            await query.answer('Unknown setting.', show_alert=True)
+            return SETTINGS_MENU_STATE
 
     else:
-        # Gestisci callback data non riconosciuti
-        await query.answer('Opzione non riconosciuta.', show_alert=True)
+        # Handle unrecognized callback data
+        await query.answer('Option not recognized.', show_alert=True)
         return SETTINGS_MENU_STATE
 
 
@@ -2862,7 +3260,7 @@ async def character_generic_main_menu_query_handler(update: Update, context: Con
     query = update.callback_query
     await query.answer()
 
-    await check_pending_reassignment_for_multiclassing(update, context)
+    await check_pending_reassignment_for_multiclassing_and_wipe_user_data(update, context)
 
     MAINMENU_CALLBACKDATA_TO_CALLBACK = {
         r"^level_(up|down)$": character_change_level_query_handler,
@@ -2880,7 +3278,9 @@ async def character_generic_main_menu_query_handler(update: Update, context: Con
         fr"^{LONG_REST_WARNING_CALLBACK_DATA}$": character_long_rest_warning_query_handler,
         fr"^{SHORT_REST_WARNING_CALLBACK_DATA}$": character_short_rest_warning_query_handler,
         fr"^{ROLL_DICE_MENU_CALLBACK_DATA}$": dice_handler,
-        fr"^{SETTINGS_CALLBACK_DATA}$": character_creator_settings
+        fr"^{SETTINGS_CALLBACK_DATA}$": character_creator_settings,
+        fr"^{MAPS_CALLBACK_DATA}$": character_creation_maps_query_handler,
+        fr"^{NOTES_CALLBACK_DATA}$": character_creator_notes_query_handler
     }
 
     for regex, func in MAINMENU_CALLBACKDATA_TO_CALLBACK.items():
@@ -2895,7 +3295,7 @@ async def character_generic_main_menu_query_handler(update: Update, context: Con
             return await func(update, context)
 
 
-async def check_pending_reassignment_for_multiclassing(update, context):
+async def check_pending_reassignment_for_multiclassing_and_wipe_user_data(update, context):
     # Rollback for multiclass management
     if PENDING_REASSIGNMENT in context.user_data[CHARACTERS_CREATOR_KEY]:
         # Get the pending reassignment information
@@ -2926,3 +3326,6 @@ async def check_pending_reassignment_for_multiclassing(update, context):
         context.user_data[CHARACTERS_CREATOR_KEY].pop(ABILITY_FEATURES_KEY, None)
         context.user_data[CHARACTERS_CREATOR_KEY].pop(TEMP_ABILITY_KEY, None)
         context.user_data[CHARACTERS_CREATOR_KEY].pop(CURRENT_ABILITY_KEY, None)
+        context.user_data[CHARACTERS_CREATOR_KEY].pop(TEMP_ZONE_NAME, None)
+        context.user_data[CHARACTERS_CREATOR_KEY].pop(TEMP_MAPS_PATHS, None)
+        context.user_data[CHARACTERS_CREATOR_KEY].pop(ADD_OR_INSERT_MAPS, None)

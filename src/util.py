@@ -211,7 +211,8 @@ def generate_abilities_list_keyboard(abilities: List[Ability],
 
 
 def generate_spells_list_keyboard(spells: List[Spell],
-                                  draw_navigation_buttons: bool = True) -> InlineKeyboardMarkup:
+                                  draw_navigation_buttons: bool = True,
+                                  draw_back_button: bool = True) -> InlineKeyboardMarkup:
     """
     Generates an inline keyboard markup for the provided list of spells.
 
@@ -242,7 +243,9 @@ def generate_spells_list_keyboard(spells: List[Spell],
                               InlineKeyboardButton("Successiva ➡️", callback_data="next_page")]
         keyboard.append(navigation_buttons)
     keyboard.append([InlineKeyboardButton("Impara nuova spell", callback_data=SPELL_LEARN_CALLBACK_DATA)])
-    keyboard.append([InlineKeyboardButton('Indietro 🔙', callback_data='spell_usage_back_menu')])
+
+    if draw_back_button:
+        keyboard.append([InlineKeyboardButton('Indietro 🔙', callback_data='spell_usage_back_menu')])
 
     return InlineKeyboardMarkup(keyboard)
 
@@ -275,6 +278,14 @@ def format_camel_case_to_title(input_string: str) -> str:
     words = input_string.split('-')
     formatted_string = ' '.join(word.capitalize() for word in words)
     return formatted_string
+
+
+def extract_3_words(string: str) -> str:
+    words = string.split()
+    if len(words) > 3:
+        return ' '.join(words[:3]) + "..."
+    else:
+        return ' '.join(words) + "..."
 
 
 async def async_graphql_query(endpoint, query, variables=None, headers=None):
