@@ -117,6 +117,8 @@ AFFERMATIVE_CHARACTER_DELETION_CALLBACK_DATA = 'yes_delete_character'
 NEGATIVE_CHARACTER_DELETION_CALLBACK_DATA = 'no_delete_character'
 BAG_ITEM_INSERTION_CALLBACK_DATA = "bag_insert_item"
 BAG_ITEM_EDIT_CALLBACK_DATA = "bag_edit_item"
+BAG_MANAGE_CURRENCY_CALLBACK_DATA = "bag_manage_currency"
+BAG_MANAGE_SINGLE_CURRENCY_CALLBACK_DATA = "bag_manage_single_currency"
 ABILITY_LEARN_CALLBACK_DATA = "ability_learn"
 ABILITY_EDIT_CALLBACK_DATA = "ability_edit"
 ABILITY_DELETE_CALLBACK_DATA = "ability_delete"
@@ -201,6 +203,15 @@ SETTINGS = [
         'options': [
             {'value': 'paginate_by_level', 'text': 'Paginazione per livello spell'},
             {'value': 'select_level_directly', 'text': 'Selezione diretta del livello spell'}
+        ]
+    },
+    {
+        'key': 'special_currency_management',
+        'title': 'Gestione delle valuta',
+        'description': 'Scegli se usare anche le valute meno comuni o no',
+        'options': [
+            {'value': 'special_values', 'text': 'Valute speciali'},
+            {'value': 'common_values', 'text': 'Valute comuni'}
         ]
     }
 ]
@@ -439,14 +450,30 @@ def create_spell_slots_menu_for_spell(character: Character, spell: Spell) -> Tup
     return message_str, InlineKeyboardMarkup(keyboard)
 
 
-def create_bag_menu(character: Character) -> Tuple[str, InlineKeyboardMarkup]:
+def create_currency_menu(currencies: Dict[str, Tuple[str, int]]) -> Dict[str, Tuple[str, InlineKeyboardMarkup]]:
+    menu = {}
+    for currency_id, (currency_name, currency_value) in currencies.items():
+        menu[currency_id] = (
+            f"<code>{currency_id}     {' ' if currency_value < 10 else ''}{currency_value}</code>",
+            InlineKeyboardMarkup([
+                [InlineKeyboardButton('Modifica', callback_data=f"{BAG_MANAGE_SINGLE_CURRENCY_CALLBACK_DATA}|{currency_id}")]
+            ])
+        )
+
+    return menu
+
+def create_bag_menu(character: Character, context: ContextTypes.DEFAULT_TYPE) -> Tuple[str, InlineKeyboardMarkup]:
     # Determine the max length of the quantity string for alignment
     max_quantity_length = max((len(str(item.quantity)) for item in character.bag), default=0)
+    character: Character = context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_CHARACTER_KEY]
+    currency_mangement = character.settings.get('special_currency_management', 'common_values')
 
     # Create the message string with aligned quantities
     message_str = (
         f"<b>Oggetti nella borsa</b>\n"
-        f"<b>Peso trasportabile massimo</b> {character.carry_capacity}Lb\n\n"
+        f"<b>Peso:</b> {character.encumbrance}/{character.carry_capacity}Lb\n"
+        f"🟡 {character.currency.gold} ⚪ {character.currency.silver} ️🟤 {character.currency.bronze}\n"
+        f"{f'⚡️ {character.currency.electrum} 💠 {character.currency.platinum}\n\n' if currency_mangement == 'special_values' else '\n\n'}"
         f"{''.join(f'<code>• Pz {str(item.quantity).ljust(max_quantity_length)}</code>   <code>{item.name}</code>\n' for item in character.bag) if character.bag else 'Lo zaino è ancora vuoto'}\n\n"
         f"Usa /stop per terminare o un bottone del menù principale per cambiare funzione"
     )
@@ -454,8 +481,17 @@ def create_bag_menu(character: Character) -> Tuple[str, InlineKeyboardMarkup]:
     # Create the keyboard with action buttons
     keyboard = [[InlineKeyboardButton('Inserisci nuovo oggetto', callback_data=BAG_ITEM_INSERTION_CALLBACK_DATA)]]
 
+    second_row = []
     if character.bag:
-        keyboard.append([InlineKeyboardButton('Modifica oggetto', callback_data=BAG_ITEM_EDIT_CALLBACK_DATA)])
+        second_row.append(
+                InlineKeyboardButton('Modifica oggetti', callback_data=BAG_ITEM_EDIT_CALLBACK_DATA)
+            )
+
+    second_row.append(
+        InlineKeyboardButton('Gestisci valuta', callback_data=BAG_MANAGE_CURRENCY_CALLBACK_DATA)
+    )
+
+    keyboard.extend([second_row])
 
     return message_str, InlineKeyboardMarkup(keyboard)
 
@@ -1046,7 +1082,7 @@ async def character_bag_query_handler(update: Update, context: ContextTypes.DEFA
     await query.answer()
 
     character: Character = context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_CHARACTER_KEY]
-    message_str, reply_markup = create_bag_menu(character)
+    message_str, reply_markup = create_bag_menu(character, context)
 
     await send_and_save_message(
         update,
@@ -1251,6 +1287,28 @@ async def character_bag_ask_item_overwrite_quantity_query_handler(update: Update
         "Inviami la quntità da sovrascrivere\n\nUsa /stop per terminare o un bottone del menù principale per cambiare funzione")
 
     return BAG_ITEM_OVERWRITE
+
+
+async def character_bag_currencies_menu_query_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    query = update.callback_query
+    await query.answer()
+
+    character: Character = context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_CHARACTER_KEY]
+    messages = create_currency_menu(character.currency.currencies)
+    for message_data in messages.values():
+        await send_and_save_message(
+            update, context, message_data[0], reply_markup=message_data[1], parse_mode=ParseMode.HTML
+        )
+
+    return BAG_MANAGEMENT
+
+
+async def character_bag_currency_edit_query_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    query = update.callback_query
+    await query.answer(f'{query.data}')
+
+    # TODO
+
 
 
 async def character_ask_item_overwrite_quantity(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
