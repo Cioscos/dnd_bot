@@ -73,7 +73,9 @@ from character_creator import character_creator_start_handler, character_creatio
     character_creation_maps_delete_all_query_handler, DELETE_ALL_ZONE_MAPMS_CALLBACK_DATA, \
     character_creator_delete_single_map_query_handler, DELETE_SINGLE_MAP_CALLBACK_DATA, NOTE_TEXT_ADD, \
     character_bag_currencies_menu_query_handler, BAG_MANAGE_CURRENCY_CALLBACK_DATA, \
-    character_bag_currency_edit_query_handler, BAG_MANAGE_SINGLE_CURRENCY_CALLBACK_DATA
+    character_bag_currency_select_query_handler, BAG_MANAGE_SINGLE_CURRENCY_CALLBACK_DATA, \
+    character_bag_currency_edit_quantity_query_handler, verify_selected_currency_callback_data, BAG_CURRENCY_INSERT, \
+    character_bag_currency_edit_quantity_text_handler
 from class_submenus import class_submenus_query_handler, class_spells_menu_buttons_query_handler, \
     class_search_spells_text_handler, class_reading_spells_menu_buttons_query_handler, \
     class_spell_visualization_buttons_query_handler, class_resources_submenu_text_handler, CLASS_SPELLS_SUBMENU, \
@@ -436,8 +438,10 @@ def main() -> None:
                                      pattern=fr"^{BAG_ITEM_EDIT_CALLBACK_DATA}$"),
                 CallbackQueryHandler(character_bag_currencies_menu_query_handler,
                                      pattern=fr"{BAG_MANAGE_CURRENCY_CALLBACK_DATA}"),
-                CallbackQueryHandler(character_bag_currency_edit_query_handler,
-                                     pattern=fr"{BAG_MANAGE_SINGLE_CURRENCY_CALLBACK_DATA}\|.+")
+                CallbackQueryHandler(character_bag_currency_select_query_handler,
+                                     pattern=fr"{BAG_MANAGE_SINGLE_CURRENCY_CALLBACK_DATA}\|.+"),
+                CallbackQueryHandler(character_bag_currency_edit_quantity_query_handler,
+                                     pattern=verify_selected_currency_callback_data)
             ],
             BAG_ITEM_INSERTION: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, character_bag_item_insert)
@@ -455,6 +459,9 @@ def main() -> None:
             ],
             BAG_ITEM_OVERWRITE: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, character_ask_item_overwrite_quantity)
+            ],
+            BAG_CURRENCY_INSERT: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, character_bag_currency_edit_quantity_text_handler)
             ],
             FEATURE_POINTS_EDIT: [
                 CallbackQueryHandler(character_feature_points_edit_query_handler,

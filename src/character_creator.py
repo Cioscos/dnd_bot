@@ -14,6 +14,7 @@ from telegram.ext import ContextTypes, ConversationHandler
 
 from src.model.character_creator.Ability import Ability, RestorationType
 from src.model.character_creator.Character import Character, SpellsSlotMode
+from src.model.character_creator.Currency import Currency
 from src.model.character_creator.Item import Item
 from src.model.character_creator.MultiClass import MultiClass
 from src.model.character_creator.Spell import Spell, SpellLevel
@@ -34,6 +35,7 @@ CHARACTER_CREATOR_VERSION = "3.2.0"
  HIT_POINTS_SELECTION,
  FUNCTION_SELECTION,
  BAG_MANAGEMENT,
+ BAG_CURRENCY_INSERT,
  CHARACTER_DELETION,
  BAG_ITEM_INSERTION,
  BAG_ITEM_EDIT,
@@ -65,7 +67,7 @@ CHARACTER_CREATOR_VERSION = "3.2.0"
  MAPS_ZONE,
  MAPS_FILES,
  ADD_MAPS_FILES,
- SETTINGS_MENU_STATE) = map(int, range(14, 55))
+ SETTINGS_MENU_STATE) = map(int, range(14, 56))
 
 STOPPING = 99
 
@@ -103,6 +105,8 @@ ADD_OR_INSERT_MAPS = 'add_or_insert_maps'
 # keys for settings
 USER_SETTINGS_KEY = 'user_settings'
 SPELL_MANAGEMENT_KEY = 'spell_management'
+# bag / currency
+TEMP_CURRENCY_KEY = 'temp_currency'
 
 # character callback keys
 BACK_BUTTON_CALLBACK_DATA = "back_button"
@@ -451,16 +455,21 @@ def create_spell_slots_menu_for_spell(character: Character, spell: Spell) -> Tup
 
 
 def create_currency_menu(currencies: Dict[str, Tuple[str, int]]) -> Dict[str, Tuple[str, InlineKeyboardMarkup]]:
+    max_length = max(len(currency_name) for currency_name, _ in currencies.values())
+
     menu = {}
     for currency_id, (currency_name, currency_value) in currencies.items():
+        formatted_currency = f"<code>{currency_name:<{max_length}} {currency_value}</code>"
         menu[currency_id] = (
-            f"<code>{currency_id}     {' ' if currency_value < 10 else ''}{currency_value}</code>",
+            formatted_currency,
             InlineKeyboardMarkup([
-                [InlineKeyboardButton('Modifica', callback_data=f"{BAG_MANAGE_SINGLE_CURRENCY_CALLBACK_DATA}|{currency_id}")]
+                [InlineKeyboardButton('Modifica',
+                                      callback_data=f"{BAG_MANAGE_SINGLE_CURRENCY_CALLBACK_DATA}|{currency_id}")]
             ])
         )
 
     return menu
+
 
 def create_bag_menu(character: Character, context: ContextTypes.DEFAULT_TYPE) -> Tuple[str, InlineKeyboardMarkup]:
     # Determine the max length of the quantity string for alignment
@@ -484,8 +493,8 @@ def create_bag_menu(character: Character, context: ContextTypes.DEFAULT_TYPE) ->
     second_row = []
     if character.bag:
         second_row.append(
-                InlineKeyboardButton('Modifica oggetti', callback_data=BAG_ITEM_EDIT_CALLBACK_DATA)
-            )
+            InlineKeyboardButton('Modifica oggetti', callback_data=BAG_ITEM_EDIT_CALLBACK_DATA)
+        )
 
     second_row.append(
         InlineKeyboardButton('Gestisci valuta', callback_data=BAG_MANAGE_CURRENCY_CALLBACK_DATA)
@@ -646,7 +655,6 @@ async def create_spell_levels_menu(character: Character, update: Update, context
 async def create_abilities_menu(character: Character, update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     message_str = f"<b>Gestione abilità</b>\nUsa /stop per terminare o un bottone del menù principale per cambiare funzione\n\n"
     if not character.abilities:
-
         message_str += "Non hai ancora nessuna azione 🤷‍♂️"
         keyboard = [
             [InlineKeyboardButton("Impara nuova azione", callback_data=ABILITY_LEARN_CALLBACK_DATA)]
@@ -809,6 +817,24 @@ def verify_selected_map_callback_data(callback_data: Any) -> bool:
     return True if isinstance(callback_data, tuple) else False
 
 
+def verify_selected_currency_callback_data(callback_data: Any) -> bool:
+    """
+    Verifies if the provided callback data is a tuple with two elements, where:
+    - The first element is a string (currency type).
+    - The second element is an instance of the Currency class.
+
+    :param callback_data: The data to verify, expected to be a tuple (str, Currency).
+    :return: True if the callback data is valid, otherwise False.
+    """
+    if not isinstance(callback_data, tuple) or len(callback_data) != 2:
+        return False
+
+    if not isinstance(callback_data[0], str) or not isinstance(callback_data[1], Currency):
+        return False
+
+    return True
+
+
 def generate_setting_message(setting, character):
     key = setting['key']
     title = setting['title']
@@ -924,7 +950,7 @@ async def character_creator_start_handler(update: Update, context: ContextTypes.
     if context.user_data.get(ACTIVE_CONV) == 'wiki':
         await update.effective_message.reply_text(
             "Usare /stop per uscire dalla wiki prima di usare la gestione dei personaggi.",
-                                    parse_mode=ParseMode.HTML)
+            parse_mode=ParseMode.HTML)
         return ConversationHandler.END
 
     context.user_data[ACTIVE_CONV] = 'character'
@@ -933,15 +959,15 @@ async def character_creator_start_handler(update: Update, context: ContextTypes.
     if BOT_DATA_CHAT_IDS not in context.bot_data or update.effective_chat.id not in context.bot_data.get(
             BOT_DATA_CHAT_IDS, []):
         await update.effective_message.reply_text("La prima volta devi interagire con il bot usando il comando /start",
-                                    parse_mode=ParseMode.HTML)
+                                                  parse_mode=ParseMode.HTML)
         return ConversationHandler.END
 
     # check if the function is called in a group or not
     if update.effective_chat.type != ChatType.PRIVATE:
         await update.effective_message.reply_text(
             "La funzione di gestione del personaggio può essere usata solo in privato!\n"
-                                    "Ritorno al menù principale...",
-                                    parse_mode=ParseMode.HTML)
+            "Ritorno al menù principale...",
+            parse_mode=ParseMode.HTML)
         return ConversationHandler.END
 
     message_str = f"Benvenuto nella gestione del personaggio!\n"
@@ -1006,8 +1032,8 @@ async def character_name_handler(update: Update, context: ContextTypes.DEFAULT_T
     # check if the character already exists
     if any(character.name == name for character in context.user_data[CHARACTERS_CREATOR_KEY].get(CHARACTERS_KEY, [])):
         await update.effective_message.reply_text("🔴 Esiste già un personaggio con lo stesso nome! 🔴\n"
-            "Inserisci un altro nome o premi /stop per terminare"
-        )
+                                                  "Inserisci un altro nome o premi /stop per terminare"
+                                                  )
         return NAME_SELECTION
 
     character = context.user_data[CHARACTERS_CREATOR_KEY][TEMP_CHARACTER_KEY]
@@ -1303,12 +1329,81 @@ async def character_bag_currencies_menu_query_handler(update: Update, context: C
     return BAG_MANAGEMENT
 
 
-async def character_bag_currency_edit_query_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+async def character_bag_currency_select_query_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     query = update.callback_query
-    await query.answer(f'{query.data}')
+    await query.answer()
+    data = query.data
 
-    # TODO
+    _, currency_type = data.split('|', maxsplit=1)
 
+    character: Character = context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_CHARACTER_KEY]
+    currency = character.currency
+    currency_value = currency.get_currency_value(currency_type)
+
+    # Costruzione del messaggio formattato
+    message_str = (
+        f"Usa /stop per terminare o un bottone del menù principale per cambiare funzione\n\n"
+        f"<b>💰 Quantità di {currency.get_currency_human_name(currency_type)}</b> {currency.get_currency_emoji(currency_type)}\n\n"
+        f"<code>{currency_value}</code> {currency.get_currency_emoji(currency_type)}\n"
+        "————————————\n"
+        "🔧 <i>Modifica il valore usando i pulsanti qui sotto</i>"
+    )
+    keyboard = [
+        [
+            InlineKeyboardButton('Modifica quantità', callback_data=(currency_type, currency))
+        ]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
+    await send_and_save_message(update, context, message_str, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
+    return BAG_MANAGEMENT
+
+
+async def character_bag_currency_edit_quantity_query_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    query = update.callback_query
+    await query.answer()
+
+    currency_type: str
+    currency: Currency
+    currency_type, currency = query.data
+    human_currency_name = currency.get_currency_human_name(currency_type)
+    context.user_data[CHARACTERS_CREATOR_KEY][TEMP_CURRENCY_KEY] = query.data
+
+    message_str = (f"Usa /stop per terminare o un bottone del menù principale per cambiare funzione\n\n"
+                   f"Inserisci la quantità di monete di {human_currency_name} da modificare.\n\n"
+                   f"<b>Esempio:</b>\n"
+                   f"-40 (Rimuove 40 monete di {human_currency_name} dal borsello\n"
+                   f"+50 (Aggiunge 50 monete di {human_currency_name} dal borsello)")
+
+    await query.edit_message_text(message_str, parse_mode=ParseMode.HTML)
+    return BAG_CURRENCY_INSERT
+
+
+async def character_bag_currency_edit_quantity_text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    quantity = update.effective_message.text
+
+    try:
+        quantity = int(quantity)
+    except ValueError:
+        await send_and_save_message(update, context, "🔴 La quantità di monete inserita non è un numero!\n\n"
+                                                     "Inserisci una quantità corretta o usa /stop per terminare "
+                                                     "o un bottone del menù principale per cambiare funzione")
+
+    currency_type: str
+    currency: Currency
+    currency_type, currency = context.user_data[CHARACTERS_CREATOR_KEY][TEMP_CURRENCY_KEY]
+
+    current_currency_value = currency.get_currency_value(currency_type)
+    currency.set_currency_value(currency_type, current_currency_value + quantity)
+
+    message_str = f"✅ {quantity} monete di {currency.get_currency_human_name(currency_type)} aggiunte"
+    await send_and_save_message(update, context, message_str, parse_mode=ParseMode.HTML)
+
+    character: Character = context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_CHARACTER_KEY]
+    message_str, reply_markup = create_bag_menu(character, context)
+    await send_and_save_message(update, context, message_str, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
+
+    return BAG_MANAGEMENT
 
 
 async def character_ask_item_overwrite_quantity(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -1318,7 +1413,7 @@ async def character_ask_item_overwrite_quantity(update: Update, context: Context
     try:
         item_quantity = int(text)
     except ValueError:
-        await send_and_save_message(update, context, "La quantità inserita non è un numero!\n\n"
+        await send_and_save_message(update, context, "🔴 La quantità inserita non è un numero!\n\n"
                                                      "Inserisci una quantità corretta o usa /stop per terminare "
                                                      "o un bottone del menù principale per cambiare funzione")
         return BAG_ITEM_OVERWRITE
@@ -1344,10 +1439,10 @@ async def character_ask_item_overwrite_quantity(update: Update, context: Context
     else:
         await send_and_save_message(update, context, "🔴 La quantità inviata è uguale a quella presente!")
 
-    message_str, reply_markup = create_item_menu(item)
+    message_str, reply_markup = create_bag_menu(character, context)
     await send_and_save_message(update, context, message_str, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
 
-    return BAG_ITEM_EDIT
+    return BAG_MANAGEMENT
 
 
 async def character_spells_query_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -2349,9 +2444,9 @@ async def character_deleting_answer_query_handler(update: Update, context: Conte
         context.user_data[CHARACTERS_CREATOR_KEY].pop(CURRENT_CHARACTER_KEY, None)
 
         await update.effective_message.reply_text("Personaggio eliminato con successo ✅\n\n"
-            "Usa il comando /start per avviare una nuova conversazione!\n"
-            "Oppure invia direttamente i comandi /wiki o /character"
-        )
+                                                  "Usa il comando /start per avviare una nuova conversazione!\n"
+                                                  "Oppure invia direttamente i comandi /wiki o /character"
+                                                  )
 
         return ConversationHandler.END
 
@@ -2710,7 +2805,7 @@ async def character_over_healing_registration_query_handler(update: Update, cont
 
         character.current_hit_points += int(healing)
         await update.effective_message.reply_text(f"Sei stato curato di {healing} PF!\n"
-                                                     f"{(character.current_hit_points + healing) - character.hit_points} punti ferita temporanei aggiunti!")
+                                                  f"{(character.current_hit_points + healing) - character.hit_points} punti ferita temporanei aggiunti!")
 
     elif data == 'n':
         character.current_hit_points = character.hit_points
