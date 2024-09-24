@@ -1381,6 +1381,7 @@ async def character_bag_currency_edit_quantity_query_handler(update: Update, con
 
 async def character_bag_currency_edit_quantity_text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     quantity = update.effective_message.text
+    context.user_data[CHARACTERS_CREATOR_KEY][LAST_MENU_MESSAGES].append(update.effective_message)
 
     try:
         quantity = int(quantity)
