@@ -34,6 +34,14 @@ class Currency:
         'platinum': 'platino'
     }
 
+    _currency_to_cp = {
+        'bronze': 1,
+        'silver': 10,
+        'electrum': 50,
+        'gold': 100,
+        'platinum': 1000
+    }
+
     @property
     def currencies(self) -> Dict[str, Tuple[str, int]]:
         return {
@@ -43,6 +51,14 @@ class Currency:
             'electrum': ('Electrum', self.electrum),
             'platinum': ('Platino', self.platinum)
         }
+
+    @property
+    def currency_human_names(self) -> Dict[str, str]:
+        return self._currency_human_names
+
+    @property
+    def currency_to_cp(self) -> Dict[str, int]:
+        return self._currency_to_cp
 
     def get_currency_value(self, currency_id: str) -> int:
         """

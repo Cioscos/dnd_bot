@@ -75,7 +75,10 @@ from character_creator import character_creator_start_handler, character_creatio
     character_bag_currencies_menu_query_handler, BAG_MANAGE_CURRENCY_CALLBACK_DATA, \
     character_bag_currency_select_query_handler, BAG_MANAGE_SINGLE_CURRENCY_CALLBACK_DATA, \
     character_bag_currency_edit_quantity_query_handler, verify_selected_currency_callback_data, BAG_CURRENCY_INSERT, \
-    character_bag_currency_edit_quantity_text_handler
+    character_bag_currency_edit_quantity_text_handler, BAG_CURRENCY_FUNCTIONS, \
+    BAG_MANAGE_CURRENCY_CONVERT_FUNCTION_CALLBACK_DATA, character_bag_currency_convert_function_query_handler, \
+    character_currency_convert_menu_query_handler, verify_character_currency_converter_callback_data, \
+    BAG_CURRENCY_CONVERT, character_currency_convert_quantity_handler
 from class_submenus import class_submenus_query_handler, class_spells_menu_buttons_query_handler, \
     class_search_spells_text_handler, class_reading_spells_menu_buttons_query_handler, \
     class_spell_visualization_buttons_query_handler, class_resources_submenu_text_handler, CLASS_SPELLS_SUBMENU, \
@@ -437,11 +440,13 @@ def main() -> None:
                 CallbackQueryHandler(character_bag_edit_object_query_handler,
                                      pattern=fr"^{BAG_ITEM_EDIT_CALLBACK_DATA}$"),
                 CallbackQueryHandler(character_bag_currencies_menu_query_handler,
-                                     pattern=fr"{BAG_MANAGE_CURRENCY_CALLBACK_DATA}"),
+                                     pattern=fr"^{BAG_MANAGE_CURRENCY_CALLBACK_DATA}$"),
                 CallbackQueryHandler(character_bag_currency_select_query_handler,
-                                     pattern=fr"{BAG_MANAGE_SINGLE_CURRENCY_CALLBACK_DATA}\|.+"),
+                                     pattern=fr"^{BAG_MANAGE_SINGLE_CURRENCY_CALLBACK_DATA}\|.+$"),
                 CallbackQueryHandler(character_bag_currency_edit_quantity_query_handler,
-                                     pattern=verify_selected_currency_callback_data)
+                                     pattern=verify_selected_currency_callback_data),
+                CallbackQueryHandler(character_bag_currency_convert_function_query_handler,
+                                     pattern=fr"^{BAG_MANAGE_CURRENCY_CONVERT_FUNCTION_CALLBACK_DATA}$")
             ],
             BAG_ITEM_INSERTION: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, character_bag_item_insert)
@@ -462,6 +467,13 @@ def main() -> None:
             ],
             BAG_CURRENCY_INSERT: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, character_bag_currency_edit_quantity_text_handler)
+            ],
+            BAG_CURRENCY_FUNCTIONS: [
+                CallbackQueryHandler(character_currency_convert_menu_query_handler,
+                                     pattern=verify_character_currency_converter_callback_data)
+            ],
+            BAG_CURRENCY_CONVERT: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, character_currency_convert_quantity_handler)
             ],
             FEATURE_POINTS_EDIT: [
                 CallbackQueryHandler(character_feature_points_edit_query_handler,
@@ -605,7 +617,7 @@ def main() -> None:
             CommandHandler("stop", character_creator_stop_submenu),
             CallbackQueryHandler(character_generic_main_menu_query_handler)
         ],
-        name='character_creator_handler_v19',
+        name='character_creator_handler_v20',
         persistent=True
     )
 

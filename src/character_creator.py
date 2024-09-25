@@ -40,6 +40,8 @@ CHARACTER_CREATOR_VERSION = "3.2.0"
  BAG_ITEM_INSERTION,
  BAG_ITEM_EDIT,
  BAG_ITEM_OVERWRITE,
+ BAG_CURRENCY_FUNCTIONS,
+ BAG_CURRENCY_CONVERT,
  FEATURE_POINTS_EDIT,
  ABILITIES_MENU,
  ABILITY_VISUALIZATION,
@@ -67,7 +69,7 @@ CHARACTER_CREATOR_VERSION = "3.2.0"
  MAPS_ZONE,
  MAPS_FILES,
  ADD_MAPS_FILES,
- SETTINGS_MENU_STATE) = map(int, range(14, 56))
+ SETTINGS_MENU_STATE) = map(int, range(14, 58))
 
 STOPPING = 99
 
@@ -107,6 +109,9 @@ USER_SETTINGS_KEY = 'user_settings'
 SPELL_MANAGEMENT_KEY = 'spell_management'
 # bag / currency
 TEMP_CURRENCY_KEY = 'temp_currency'
+CURRENCY_CONVERTER = 'currency_converter'
+SELECTED_SOURCE_CURRENCY = 'selected_source_currency'
+SELECTED_TARGET_CURRENCY = 'selected_target_currency'
 
 # character callback keys
 BACK_BUTTON_CALLBACK_DATA = "back_button"
@@ -123,6 +128,10 @@ BAG_ITEM_INSERTION_CALLBACK_DATA = "bag_insert_item"
 BAG_ITEM_EDIT_CALLBACK_DATA = "bag_edit_item"
 BAG_MANAGE_CURRENCY_CALLBACK_DATA = "bag_manage_currency"
 BAG_MANAGE_SINGLE_CURRENCY_CALLBACK_DATA = "bag_manage_single_currency"
+BAG_MANAGE_CURRENCY_CONVERT_FUNCTION_CALLBACK_DATA = "bag_manage_currency_convert_function"
+SELECT_SOURCE_CALLBACK_DATA = 'select_source'
+SELECT_TARGET_CALLBACK_DATA = 'select_target'
+CONVERT_CURRENCY_CALLBACK_DATA = 'convert'
 ABILITY_LEARN_CALLBACK_DATA = "ability_learn"
 ABILITY_EDIT_CALLBACK_DATA = "ability_edit"
 ABILITY_DELETE_CALLBACK_DATA = "ability_delete"
@@ -471,6 +480,58 @@ def create_currency_menu(currencies: Dict[str, Tuple[str, int]]) -> Dict[str, Tu
     return menu
 
 
+def create_currency_converter_main_menu(context: ContextTypes.DEFAULT_TYPE) -> Tuple[str, InlineKeyboardMarkup]:
+    character = context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_CHARACTER_KEY]
+    # retrieve currency and quantity
+    currencies = character.currency.currencies
+    keyboard = []
+    message_str = (f"Usa /stop per terminare o un bottone del menù principale per cambiare funzione\n\n"
+                   f"1) Seleziona nella colonna di <b>sinistra</b> la valuta da convertire\n"
+                   f"2) Seleziona nella colonna di <b>destra</b> la valuta a cui convertire quella selezionata a sinistra\n"
+                   f"3) Premi il pulsante <b>converti</b> per effettuare la conversione")
+
+    # Initialise selections if they do not exist
+    if CURRENCY_CONVERTER not in context.user_data[CHARACTERS_CREATOR_KEY]:
+        context.user_data[CHARACTERS_CREATOR_KEY][CURRENCY_CONVERTER] = {
+            SELECTED_SOURCE_CURRENCY: None,
+            SELECTED_TARGET_CURRENCY: None
+        }
+
+    selected_source_currency = context.user_data[CHARACTERS_CREATOR_KEY][CURRENCY_CONVERTER][SELECTED_SOURCE_CURRENCY]
+    selected_target_currency = context.user_data[CHARACTERS_CREATOR_KEY][CURRENCY_CONVERTER][SELECTED_TARGET_CURRENCY]
+
+    for currency_id, (currency_name, amount) in currencies.items():
+        # Start currency button
+        source_selected = currency_id == selected_source_currency
+        source_text = ('✅ ' if source_selected else '') + f"{currency_name.title()} ({amount})"
+        source_callback_data = (SELECT_SOURCE_CALLBACK_DATA, currency_id)
+        source_button = InlineKeyboardButton(source_text, callback_data=source_callback_data)
+
+        # Destination currency button
+        target_selected = currency_id == selected_target_currency
+        target_text = ('✅ ' if target_selected else '') + f"{currency_name.title()} ({amount})"
+        target_callback_data = (SELECT_TARGET_CALLBACK_DATA, currency_id)
+        target_button = InlineKeyboardButton(target_text, callback_data=target_callback_data)
+
+        keyboard.append([source_button, target_button])
+
+    # Bottone per eseguire la conversione
+    if selected_source_currency and selected_target_currency:
+        source_currency_name = currencies[selected_source_currency][0]
+        target_currency_name = currencies[selected_target_currency][0]
+        convert_text = f"Converti {source_currency_name} in {target_currency_name}"
+        convert_callback_data = (CONVERT_CURRENCY_CALLBACK_DATA, selected_source_currency, selected_target_currency)
+        convert_button = InlineKeyboardButton(convert_text, callback_data=convert_callback_data)
+    else:
+        convert_text = "Seleziona le valute da convertire"
+        convert_callback_data = ('noop',)  # Azione no-op se le valute non sono selezionate
+        convert_button = InlineKeyboardButton(convert_text, callback_data=convert_callback_data)
+
+    keyboard.append([convert_button])
+
+    return message_str, InlineKeyboardMarkup(keyboard)
+
+
 def create_bag_menu(character: Character, context: ContextTypes.DEFAULT_TYPE) -> Tuple[str, InlineKeyboardMarkup]:
     # Determine the max length of the quantity string for alignment
     max_quantity_length = max((len(str(item.quantity)) for item in character.bag), default=0)
@@ -479,12 +540,12 @@ def create_bag_menu(character: Character, context: ContextTypes.DEFAULT_TYPE) ->
 
     # Create the message string with aligned quantities
     message_str = (
+        f"Usa /stop per terminare o un bottone del menù principale per cambiare funzione\n\n"
         f"<b>Oggetti nella borsa</b>\n"
         f"<b>Peso:</b> {character.encumbrance}/{character.carry_capacity}Lb\n"
         f"🟡 {character.currency.gold} ⚪ {character.currency.silver} ️🟤 {character.currency.bronze}\n"
         f"{f'⚡️ {character.currency.electrum} 💠 {character.currency.platinum}\n\n' if currency_mangement == 'special_values' else '\n\n'}"
-        f"{''.join(f'<code>• Pz {str(item.quantity).ljust(max_quantity_length)}</code>   <code>{item.name}</code>\n' for item in character.bag) if character.bag else 'Lo zaino è ancora vuoto'}\n\n"
-        f"Usa /stop per terminare o un bottone del menù principale per cambiare funzione"
+        f"{''.join(f'<code>• Pz {str(item.quantity).ljust(max_quantity_length)}</code>   <code>{item.name}</code>\n' for item in character.bag) if character.bag else 'Lo zaino è ancora vuoto'}"
     )
 
     # Create the keyboard with action buttons
@@ -835,6 +896,17 @@ def verify_selected_currency_callback_data(callback_data: Any) -> bool:
     return True
 
 
+def verify_character_currency_converter_callback_data(callback_data: Any) -> bool:
+    if not isinstance(callback_data, tuple) or len(callback_data) > 3:
+        return False
+
+    action = callback_data[0]
+    if action != SELECT_TARGET_CALLBACK_DATA and action != SELECT_SOURCE_CALLBACK_DATA and action != CONVERT_CURRENCY_CALLBACK_DATA:
+        return False
+
+    return True
+
+
 def generate_setting_message(setting, character):
     key = setting['key']
     title = setting['title']
@@ -919,6 +991,11 @@ async def character_creator_stop_submenu(update: Update, context: ContextTypes.D
         context.user_data[CHARACTERS_CREATOR_KEY].pop(ABILITY_FEATURES_KEY, None)
         context.user_data[CHARACTERS_CREATOR_KEY].pop(TEMP_ABILITY_KEY, None)
         context.user_data[CHARACTERS_CREATOR_KEY].pop(CURRENT_ABILITY_KEY, None)
+        context.user_data[CHARACTERS_CREATOR_KEY].pop(TEMP_ZONE_NAME, None)
+        context.user_data[CHARACTERS_CREATOR_KEY].pop(TEMP_MAPS_PATHS, None)
+        context.user_data[CHARACTERS_CREATOR_KEY].pop(ADD_OR_INSERT_MAPS, None)
+        context.user_data[CHARACTERS_CREATOR_KEY].pop(TEMP_CURRENCY_KEY, None)
+        context.user_data[CHARACTERS_CREATOR_KEY].pop(CURRENCY_CONVERTER, None)
 
         return FUNCTION_SELECTION
 
@@ -934,7 +1011,11 @@ async def character_creation_stop(update: Update, context: ContextTypes.DEFAULT_
     context.user_data[CHARACTERS_CREATOR_KEY].pop(ABILITY_FEATURES_KEY, None)
     context.user_data[CHARACTERS_CREATOR_KEY].pop(TEMP_ABILITY_KEY, None)
     context.user_data[CHARACTERS_CREATOR_KEY].pop(CURRENT_ABILITY_KEY, None)
-    context.user_data[CHARACTERS_CREATOR_KEY].pop(CURRENT_CHARACTER_KEY, None)
+    context.user_data[CHARACTERS_CREATOR_KEY].pop(TEMP_ZONE_NAME, None)
+    context.user_data[CHARACTERS_CREATOR_KEY].pop(TEMP_MAPS_PATHS, None)
+    context.user_data[CHARACTERS_CREATOR_KEY].pop(ADD_OR_INSERT_MAPS, None)
+    context.user_data[CHARACTERS_CREATOR_KEY].pop(TEMP_CURRENCY_KEY, None)
+    context.user_data[CHARACTERS_CREATOR_KEY].pop(CURRENCY_CONVERTER, None)
 
     context.user_data[ACTIVE_CONV] = None
 
@@ -1321,10 +1402,26 @@ async def character_bag_currencies_menu_query_handler(update: Update, context: C
 
     character: Character = context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_CHARACTER_KEY]
     messages = create_currency_menu(character.currency.currencies)
+    message_str = (f"Usa /stop per terminare o un bottone del menù principale per cambiare funzione\n\n"
+                   f"Seleziona una delle seguenti valute da modificare oppure usa i tasti funzione\n"
+                   f"per accedere alle funzioni speciali per la valuta")
+    await query.edit_message_text(message_str, parse_mode=ParseMode.HTML)
+
+    # send currency messages
     for message_data in messages.values():
         await send_and_save_message(
             update, context, message_data[0], reply_markup=message_data[1], parse_mode=ParseMode.HTML
         )
+
+    # send special functions message
+    message_str = f"Scegli una delle seguenti funzioni speciali per la valuta"
+    keyboard = [
+        [
+            InlineKeyboardButton('Converti valute', callback_data=BAG_MANAGE_CURRENCY_CONVERT_FUNCTION_CALLBACK_DATA)
+        ]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    await send_and_save_message(update, context, message_str, reply_markup=reply_markup)
 
     return BAG_MANAGEMENT
 
@@ -1401,6 +1498,145 @@ async def character_bag_currency_edit_quantity_text_handler(update: Update, cont
     await send_and_save_message(update, context, message_str, parse_mode=ParseMode.HTML)
 
     character: Character = context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_CHARACTER_KEY]
+    message_str, reply_markup = create_bag_menu(character, context)
+    await send_and_save_message(update, context, message_str, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
+
+    return BAG_MANAGEMENT
+
+
+async def character_bag_currency_convert_function_query_handler(update: Update,
+                                                                context: ContextTypes.DEFAULT_TYPE) -> int:
+    query = update.callback_query
+    await query.answer()
+
+    message_str, reply_markup = create_currency_converter_main_menu(context)
+    await query.edit_message_text(message_str, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
+
+    return BAG_CURRENCY_FUNCTIONS
+
+
+async def character_currency_convert_menu_query_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    query = update.callback_query
+    action, *data = query.data
+
+    # Ensure that 'currency_converter' exists in user_data
+    if CURRENCY_CONVERTER not in context.user_data[CHARACTERS_CREATOR_KEY]:
+        context.user_data[CHARACTERS_CREATOR_KEY][CURRENCY_CONVERTER] = {
+            SELECTED_SOURCE_CURRENCY: None,
+            SELECTED_TARGET_CURRENCY: None
+        }
+
+    currency_data = context.user_data[CHARACTERS_CREATOR_KEY][CURRENCY_CONVERTER]
+    currency: Currency = context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_CHARACTER_KEY].currency
+
+    if action == 'select_source':
+        currency_data[SELECTED_SOURCE_CURRENCY] = data[0]
+        await query.answer()
+    elif action == 'select_target':
+        currency_data[SELECTED_TARGET_CURRENCY] = data[0]
+        await query.answer()
+    elif action == 'convert':
+        await query.answer()
+        message_str = (
+            f"Inviami quante monete di {currency.get_currency_human_name(currency_data[SELECTED_SOURCE_CURRENCY])} vuoi convertire in "
+            f"{currency.get_currency_human_name(currency_data[SELECTED_TARGET_CURRENCY])}")
+        await send_and_save_message(update, context, message_str)
+        return BAG_CURRENCY_CONVERT
+    elif action == 'noop':
+        await query.answer("Per favore, seleziona sia la valuta di partenza che quella di destinazione.",
+                           show_alert=True)
+
+    # Aggiorna il messaggio con la nuova tastiera
+    _, reply_markup = create_currency_converter_main_menu(context)
+    await query.edit_message_reply_markup(reply_markup=reply_markup)
+
+    return BAG_CURRENCY_FUNCTIONS
+
+
+async def character_currency_convert_quantity_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    currency_quantity_text = update.effective_message.text
+    context.user_data[CHARACTERS_CREATOR_KEY][LAST_MENU_MESSAGES].append(update.effective_message)
+
+    try:
+        currency_quantity = int(currency_quantity_text)
+        if currency_quantity <= 0:
+            await send_and_save_message(update, context, "🔴 La quantità deve essere un numero positivo!")
+            return BAG_CURRENCY_CONVERT
+    except ValueError:
+        await send_and_save_message(
+            update,
+            context,
+            "🔴 La quantità inserita non è un numero valido!\n\n"
+            "Inserisci una quantità corretta o usa /stop per terminare "
+            "o un bottone del menù principale per cambiare funzione"
+        )
+        return BAG_CURRENCY_CONVERT
+
+    currency_data = context.user_data[CHARACTERS_CREATOR_KEY][CURRENCY_CONVERTER]
+    source_currency = currency_data[SELECTED_SOURCE_CURRENCY]
+    target_currency = currency_data[SELECTED_TARGET_CURRENCY]
+
+    character: Character = context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_CHARACTER_KEY]
+    currency = character.currency
+
+    source_currency_quantity = currency.get_currency_value(source_currency)
+    if currency_quantity > source_currency_quantity:
+        await send_and_save_message(
+            update,
+            context,
+            f"🔴 Non hai abbastanza {currency.get_currency_human_name(source_currency)} "
+            f"da convertire! Hai solo {source_currency_quantity} unità."
+        )
+        message_str, reply_markup = create_currency_converter_main_menu(context)
+        await send_and_save_message(update, context, message_str, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
+        return BAG_CURRENCY_FUNCTIONS
+
+    # Define conversion rates
+    currency_to_cp = currency.currency_to_cp
+
+    # Converti la quantità della valuta di partenza in pezzi di rame
+    amount_in_cp = currency_quantity * currency_to_cp[source_currency]
+
+    # Converti i pezzi di rame nella valuta di destinazione
+    target_currency_quantity = amount_in_cp // currency_to_cp[target_currency]
+    remainder_cp = amount_in_cp % currency_to_cp[target_currency]
+
+    # Aggiorna le valute del personaggio
+    currency.set_currency_value(
+        source_currency,
+        source_currency_quantity - currency_quantity
+    )
+    target_currency_quantity_existing = currency.get_currency_value(target_currency)
+    currency.set_currency_value(
+        target_currency,
+        target_currency_quantity_existing + target_currency_quantity
+    )
+
+    # Se c'è un resto in pezzi di rame, potresti volerlo gestire
+    if remainder_cp > 0:
+        # Ad esempio, aggiungilo ai pezzi di rame del personaggio
+        copper_quantity_existing = currency.get_currency_value('bronze')
+        currency.set_currency_value(
+            'bronze',
+            copper_quantity_existing + remainder_cp
+        )
+        remainder_message = f"\nHai ricevuto {remainder_cp} pezzi di bronzo come resto."
+    else:
+        remainder_message = ""
+
+    # Conferma la conversione all'utente
+    await send_and_save_message(
+        update,
+        context,
+        f"✅ Hai convertito {currency_quantity} {currency.get_currency_human_name(source_currency)} "
+        f"in {target_currency_quantity} {currency.get_currency_human_name(target_currency)}.{remainder_message}"
+    )
+
+    # Reimposta le selezioni per una nuova conversione
+    currency_data[SELECTED_SOURCE_CURRENCY] = None
+    currency_data[SELECTED_TARGET_CURRENCY] = None
+
+    # Aggiorna il menu principale o termina la conversazione
     message_str, reply_markup = create_bag_menu(character, context)
     await send_and_save_message(update, context, message_str, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
 
@@ -3483,3 +3719,5 @@ async def check_pending_reassignment_for_multiclassing_and_wipe_user_data(update
         context.user_data[CHARACTERS_CREATOR_KEY].pop(TEMP_ZONE_NAME, None)
         context.user_data[CHARACTERS_CREATOR_KEY].pop(TEMP_MAPS_PATHS, None)
         context.user_data[CHARACTERS_CREATOR_KEY].pop(ADD_OR_INSERT_MAPS, None)
+        context.user_data[CHARACTERS_CREATOR_KEY].pop(TEMP_CURRENCY_KEY, None)
+        context.user_data[CHARACTERS_CREATOR_KEY].pop(CURRENCY_CONVERTER, None)
