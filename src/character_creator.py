@@ -1027,6 +1027,9 @@ async def character_creator_start_handler(update: Update, context: ContextTypes.
         query = update.callback_query
         await query.answer()
 
+    beta_message = (f"\n\n<b>The bot is in beta version and currently supports only italian language.\n"
+                    f"Stay tuned for new updates!</b>")
+
     # Check if the user is already in another conversation
     if context.user_data.get(ACTIVE_CONV) == 'wiki':
         await update.effective_message.reply_text(
@@ -1061,14 +1064,14 @@ async def character_creator_start_handler(update: Update, context: ContextTypes.
     if CHARACTERS_KEY not in context.user_data[CHARACTERS_CREATOR_KEY] or not context.user_data[CHARACTERS_CREATOR_KEY][
         CHARACTERS_KEY]:
         message_str += (f"{update.effective_user.name} sembra che non hai inserito ancora nessun personaggio!\n\n"
-                        f"Usa il comando /newCharacter per crearne uno nuovo o /stop per terminare la conversazione.")
+                        f"Usa il comando /newCharacter per crearne uno nuovo o /stop per terminare la conversazione.{beta_message}")
 
         await update.effective_message.reply_text(message_str, parse_mode=ParseMode.HTML)
         return CHARACTER_CREATION
 
     else:
         characters: List[Character] = context.user_data[CHARACTERS_CREATOR_KEY][CHARACTERS_KEY]
-        message_str += "Seleziona uno dei personaggi da gestire o creane uno nuovo con /newCharacter:"
+        message_str += f"Seleziona uno dei personaggi da gestire o creane uno nuovo con /newCharacter{beta_message}"
         keyboard = []
 
         for character in characters:
