@@ -1,15 +1,50 @@
 from dataclasses import dataclass, field
+from enum import Enum
 from typing import Optional
+
+from src.model.models import Currency
 
 
 @dataclass
 class Item:
+    VERSION = 2
+
     name: str
     description: Optional[str] = field(default=None)
     quantity: int = 0
     weight: int = 0
+    currency: Optional[Currency] = field(default=None)
+
+    _version: int = field(default_factory=int)
+
+    def __migrate(self):
+        """Migrates the data to the current version of the class."""
+        if self._version < 2:
+            # Migration for version 2: adding the rolls_history field
+            if not hasattr(self, 'currency'):
+                self.currency = None
+
+    def __setstate__(self, state):
+        """Method called during deserialisation"""
+        # Updates the status of the object
+        self.__dict__.update(state)
+
+        # If the deserialised object does not have a version, we set the default version
+        if not hasattr(self, '_version'):
+            self._version = 1
+
+        # Migrate if necessary
+        if self._version < Item.VERSION:
+            self.__migrate()
 
     def __post_init__(self):
+        # If the object does not have the version, migration is necessary
+        if not hasattr(self, '_version'):
+            self._version = 1
+
+        if self._version < Item.VERSION:
+            self.__migrate()
+
         # Validation for name and description
         if not self.name:
             raise ValueError("Item name cannot be empty.")

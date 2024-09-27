@@ -1,8 +1,10 @@
 from dataclasses import field, dataclass
 from enum import Enum
 from typing import List, Optional, Dict, Tuple, Any
+from xml.etree.ElementTree import VERSION
 
 from src.model.character_creator.Ability import Ability, RestorationType
+from src.model.character_creator.Currency import Currency
 from src.model.character_creator.FeaturePoints import FeaturePoints
 from src.model.character_creator.Item import Item
 from src.model.character_creator.MultiClass import MultiClass
@@ -17,7 +19,7 @@ class SpellsSlotMode(Enum):
 
 @dataclass
 class Character:
-    VERSION = 5
+    VERSION = 6
 
     name: Optional[str] = field(default=None)
     race: Optional[str] = field(default=None)
@@ -33,6 +35,7 @@ class Character:
     spells: List[Spell] = field(default_factory=list)
     abilities: List[Ability] = field(default_factory=list)
     carry_capacity: int = field(default_factory=int)
+    currency: Optional[Currency] = field(default_factory=Currency)
     encumbrance: int = field(default_factory=int)
     rolls_history: Optional[List[Tuple[str, list[int]]]] = field(default_factory=list)
     notes: Dict[str, str] = field(default_factory=dict)
@@ -70,8 +73,6 @@ class Character:
             # Migration for version 2: adding the rolls_history field
             if not hasattr(self, 'rolls_history'):
                 self.rolls_history = []
-            # Update version's object
-            self._version = 2
         if self._version < 3:
             # Migration for version 3: adding notes
             if not hasattr(self, 'notes'):
@@ -84,6 +85,11 @@ class Character:
             # Migration for version 5: adding settings
             if not hasattr(self, 'settings'):
                 self.settings = {}
+        if self._version < 6:
+            if not hasattr(self, 'currency'):
+                self.currency = Currency()
+        # Update version's object
+        self._version = Character.VERSION
         # FUTURE MIGRATIONS
 
     def __setstate__(self, state):
