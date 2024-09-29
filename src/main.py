@@ -4,6 +4,7 @@ import logging
 import traceback
 from warnings import filterwarnings
 
+import aiohttp
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.constants import ParseMode
 from telegram.error import BadRequest, TelegramError
@@ -71,14 +72,15 @@ from character_creator import character_creator_start_handler, character_creatio
     character_creation_maps_done_command, character_creation_show_maps_query_handler, \
     character_creator_add_map_query_handler, ADD_NEW_MAP_CALLBACK_DATA, character_creation_add_maps_done_command, \
     character_creation_maps_delete_all_query_handler, DELETE_ALL_ZONE_MAPMS_CALLBACK_DATA, \
-    character_creator_delete_single_map_query_handler, DELETE_SINGLE_MAP_CALLBACK_DATA, NOTE_TEXT_ADD, \
+    character_creator_delete_single_map_query_handler, DELETE_SINGLE_MAP_CALLBACK_DATA, NOTE_ADD, \
     character_bag_currencies_menu_query_handler, BAG_MANAGE_CURRENCY_CALLBACK_DATA, \
     character_bag_currency_select_query_handler, BAG_MANAGE_SINGLE_CURRENCY_CALLBACK_DATA, \
     character_bag_currency_edit_quantity_query_handler, verify_selected_currency_callback_data, BAG_CURRENCY_INSERT, \
     character_bag_currency_edit_quantity_text_handler, BAG_CURRENCY_FUNCTIONS, \
     BAG_MANAGE_CURRENCY_CONVERT_FUNCTION_CALLBACK_DATA, character_bag_currency_convert_function_query_handler, \
     character_currency_convert_menu_query_handler, verify_character_currency_converter_callback_data, \
-    BAG_CURRENCY_CONVERT, character_currency_convert_quantity_handler
+    BAG_CURRENCY_CONVERT, character_currency_convert_quantity_handler, character_creator_insert_voice_message, \
+    VOICE_NOTE_TITLE, character_creator_save_voice_note
 from class_submenus import class_submenus_query_handler, class_spells_menu_buttons_query_handler, \
     class_search_spells_text_handler, class_reading_spells_menu_buttons_query_handler, \
     class_spell_visualization_buttons_query_handler, class_resources_submenu_text_handler, CLASS_SPELLS_SUBMENU, \
@@ -221,13 +223,39 @@ async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE):
         )
 
 
+async def get_latest_release(session):
+    owner = keyring_get('RepoOwner')
+    repo = keyring_get('RepoName')
+    url = f'https://api.github.com/repos/{owner}/{repo}/releases/latest'
+    try:
+        async with session.get(url) as response:
+            if response.status == 200:
+                release = await response.json()
+                title = release.get('name', 'Nessun titolo')
+                notes = release.get('body', 'Nessuna nota disponibile.')
+                return title, notes
+            else:
+                print(f'Errore nel recupero della release: {response.status}')
+                return None, None
+    except aiohttp.ClientError as e:
+        print(f'Errore di connessione: {e}')
+        return None, None
+
+
 async def post_init_callback(application: Application) -> None:
+    message_str = "🟢 Il Bot è ripartito dopo un riavvio! Probabilmente ora è meglio di prima 🟢"
+    async with aiohttp.ClientSession() as session:
+        title, notes = await get_latest_release(session)
+        if title and notes:
+            message_str += f"\n\n🆕 <b>{title}</b>\n\n{notes}"
+        else:
+            message_str += "\n\n⚠️ Impossibile recuperare le note dell'ultima release."
+
     for chat_id in application.bot_data.get(BOT_DATA_CHAT_IDS, []):
         try:
-            await application.bot.send_message(chat_id,
-                                               "🟢 Il Bot è ripartito dopo un riavvio! Probabilmente ora è meglio di prima 🟢")
+            await application.bot.send_message(chat_id, message_str, parse_mode=ParseMode.HTML)
         except (BadRequest, TelegramError) as e:
-            logger.error(f"CHAT_ID: {chat_id} Telegram error stopping the bot: {e}")
+            logger.error(f"CHAT_ID: {chat_id} Telegram error starting the bot: {e}")
 
 
 async def post_stop_callback(application: Application) -> None:
@@ -579,8 +607,12 @@ def main() -> None:
                 CallbackQueryHandler(character_creator_notes_back_query_handler,
                                      pattern=fr"^{BACK_BUTTON_CALLBACK_DATA}$")
             ],
-            NOTE_TEXT_ADD: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, character_creator_insert_note_text)
+            NOTE_ADD: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, character_creator_insert_note_text),
+                MessageHandler(filters.VOICE, character_creator_insert_voice_message)
+            ],
+            VOICE_NOTE_TITLE: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, character_creator_save_voice_note)
             ],
             MAPS_MANAGEMENT: [
                 CallbackQueryHandler(character_creation_new_maps_query_handler,

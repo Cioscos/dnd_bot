@@ -6,7 +6,9 @@ logger = logging.getLogger(__name__)
 
 KEYRING: Dict[str, Optional[str]] = {
     'Telegram': None,
-    'DevId': None
+    'DevId': None,
+    'RepoOwner': None,
+    'RepoName': None
 }
 
 
@@ -31,6 +33,16 @@ def keyring_initialize() -> Union[bool, None]:
     with open(os.path.join(root_path, 'dev_id.dat')) as file:
         KEYRING['DevId'] = file.read().strip()
         logger.info("DevId read")
+
+    # Get the dev chat id
+    with open(os.path.join(root_path, 'repo_name.dat')) as file:
+        KEYRING['RepoName'] = file.read().strip()
+        logger.info("RepoName read")
+
+    # Get the dev chat id
+    with open(os.path.join(root_path, 'repo_owner.dat')) as file:
+        KEYRING['RepoOwner'] = file.read().strip()
+        logger.info("RepoOwner read")
 
     return True
 

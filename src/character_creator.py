@@ -64,12 +64,13 @@ CHARACTER_CREATOR_VERSION = "3.2.0"
  SHORT_REST,
  DICE_ACTION,
  NOTES_MANAGEMENT,
- NOTE_TEXT_ADD,
+ NOTE_ADD,
+ VOICE_NOTE_TITLE,
  MAPS_MANAGEMENT,
  MAPS_ZONE,
  MAPS_FILES,
  ADD_MAPS_FILES,
- SETTINGS_MENU_STATE) = map(int, range(14, 58))
+ SETTINGS_MENU_STATE) = map(int, range(14, 59))
 
 STOPPING = 99
 
@@ -100,6 +101,8 @@ SPELL_SLOTS = 'spell_slots'
 DICE = 'dice'
 DICE_MESSAGES = 'dice_messages'
 ACTIVE_CONV = 'active_conv'
+# keys for notes
+TEMP_VOICE_MESSAGE_PATH = 'temp_voice_message_path'
 # keys for maps
 TEMP_ZONE_NAME = 'temp_zone_name'
 TEMP_MAPS_PATHS = 'temp_maps_paths'
@@ -231,6 +234,7 @@ SETTINGS = [
 
 FILES_DIR_PATH = 'files/'
 MAPS_DIR_PATH = FILES_DIR_PATH + 'maps'
+VOICE_NOTES_PATH = FILES_DIR_PATH + 'voice_notes'
 
 
 async def send_and_save_message(update: Update, context: ContextTypes.DEFAULT_TYPE, text: str, **kwargs):
@@ -996,6 +1000,7 @@ async def character_creator_stop_submenu(update: Update, context: ContextTypes.D
         context.user_data[CHARACTERS_CREATOR_KEY].pop(ADD_OR_INSERT_MAPS, None)
         context.user_data[CHARACTERS_CREATOR_KEY].pop(TEMP_CURRENCY_KEY, None)
         context.user_data[CHARACTERS_CREATOR_KEY].pop(CURRENCY_CONVERTER, None)
+        context.user_data[CHARACTERS_CREATOR_KEY].pop(TEMP_VOICE_MESSAGE_PATH, None)
 
         return FUNCTION_SELECTION
 
@@ -1016,6 +1021,7 @@ async def character_creation_stop(update: Update, context: ContextTypes.DEFAULT_
     context.user_data[CHARACTERS_CREATOR_KEY].pop(ADD_OR_INSERT_MAPS, None)
     context.user_data[CHARACTERS_CREATOR_KEY].pop(TEMP_CURRENCY_KEY, None)
     context.user_data[CHARACTERS_CREATOR_KEY].pop(CURRENCY_CONVERTER, None)
+    context.user_data[CHARACTERS_CREATOR_KEY].pop(TEMP_VOICE_MESSAGE_PATH, None)
 
     context.user_data[ACTIVE_CONV] = None
 
@@ -3180,16 +3186,13 @@ async def send_dice_menu(update: Update, context: ContextTypes.DEFAULT_TYPE, is_
     if is_edit:
         starting_dice = context.user_data[CHARACTERS_CREATOR_KEY][DICE]
         reply_markup = create_dice_keyboard(starting_dice)
-    else:
-        starting_dice = STARTING_DICE.copy()
-        reply_markup = create_dice_keyboard(starting_dice)
-        context.user_data[CHARACTERS_CREATOR_KEY][DICE] = starting_dice
-
-    if is_edit:
         message = await update.effective_message.edit_text(
             message_str, reply_markup=reply_markup, parse_mode=ParseMode.HTML
         )
     else:
+        starting_dice = STARTING_DICE.copy()
+        reply_markup = create_dice_keyboard(starting_dice)
+        context.user_data[CHARACTERS_CREATOR_KEY][DICE] = starting_dice
         message = await send_and_save_message(
             update, context, message_str, reply_markup=reply_markup, parse_mode=ParseMode.HTML
         )
@@ -3256,9 +3259,8 @@ async def dice_actions_query_handler(update: Update, context: ContextTypes.DEFAU
 
         # update history
         character.rolls_history.extend(total_rolls)
-        context.user_data[CHARACTERS_CREATOR_KEY].pop(DICE, None)
         await delete_dice_menu(context)
-        await send_dice_menu(update, context, is_edit=True)
+        await send_dice_menu(update, context, is_edit=False)
 
     elif query.data == ROLL_DICE_DELETE_HISTORY_CALLBACK_DATA:
 
@@ -3288,10 +3290,11 @@ async def character_creator_new_note_query_handler(update: Update, context: Cont
     message_str = ("Inserisci la nota usando questo formato:\n"
                    "<code>Titolo#testo nota</code>\n\n"
                    "Il titolo della nota non è obbligatorio, puoi inserire anche solo il testo\n\n"
+                   "In alternativa puoi inviare un <b>messaggio vocale</b>\n\n"
                    "Usa /stop per terminare o un bottone del menù principale per cambiare funzione")
     await query.edit_message_text(message_str, parse_mode=ParseMode.HTML)
 
-    return NOTE_TEXT_ADD
+    return NOTE_ADD
 
 
 async def character_creator_open_note_query_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -3302,17 +3305,37 @@ async def character_creator_open_note_query_handler(update: Update, context: Con
 
     character: Character = context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_CHARACTER_KEY]
     note_title, note_text = next(((title, text) for title, text in character.notes.items() if title == title_text))
-    message_str = (f"Usa /stop per terminare o un bottone del menù principale per cambiare funzione\n\n"
-                   f"<b>{note_title}</b>\n\n"
-                   f"<i>{note_text}</i>")
 
-    keyboard = [
-        [InlineKeyboardButton('Modifica nota', callback_data=f"{EDIT_NOTE_CALLBACK_DATA}|{note_title}")],
-        [InlineKeyboardButton('Elimina nota', callback_data=f"{DELETE_NOTE_CALLBACK_DATA}|{note_title}")],
-        [InlineKeyboardButton('Indietro 🔙', callback_data=f"{BACK_BUTTON_CALLBACK_DATA}")]
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    await query.edit_message_text(message_str, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
+    # distinguish behaviour if the note is a vocal message or a text note
+    if os.path.exists(note_text):
+        # the note is a voice note
+        message_str = (f"Usa /stop per terminare o un bottone del menù principale per cambiare funzione\n\n"
+                       f"<b>Titolo nota:</b> {note_title}")
+        keyboard = [
+            [InlineKeyboardButton('Elimina nota', callback_data=f"{DELETE_NOTE_CALLBACK_DATA}|{note_title}")],
+            [InlineKeyboardButton('Indietro 🔙', callback_data=f"{BACK_BUTTON_CALLBACK_DATA}")]
+        ]
+        message = await update.effective_message.reply_voice(note_text,
+                                                             caption=message_str,
+                                                             reply_markup=InlineKeyboardMarkup(keyboard),
+                                                             parse_mode=ParseMode.HTML)
+
+        context.user_data[CHARACTERS_CREATOR_KEY][LAST_MENU_MESSAGES].append(message)
+
+    else:
+        # the note is a text note
+        message_str = (f"Usa /stop per terminare o un bottone del menù principale per cambiare funzione\n\n"
+                       f"<b>{note_title}</b>\n\n"
+                       f"<i>{note_text}</i>")
+
+        keyboard = [
+            [InlineKeyboardButton('Modifica nota', callback_data=f"{EDIT_NOTE_CALLBACK_DATA}|{note_title}")],
+            [InlineKeyboardButton('Elimina nota', callback_data=f"{DELETE_NOTE_CALLBACK_DATA}|{note_title}")],
+            [InlineKeyboardButton('Indietro 🔙', callback_data=f"{BACK_BUTTON_CALLBACK_DATA}")]
+        ]
+
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        await query.edit_message_text(message_str, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
 
     # delete cached query data
     context.drop_callback_data(query)
@@ -3339,7 +3362,7 @@ async def character_creator_edit_note_query_handler(update: Update, context: Con
 
     await query.edit_message_text(message_str, parse_mode=ParseMode.HTML)
 
-    return NOTE_TEXT_ADD
+    return NOTE_ADD
 
 
 async def character_creator_delete_note_query_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -3363,7 +3386,13 @@ async def character_creator_notes_back_query_handler(update: Update, context: Co
 
     character: Character = context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_CHARACTER_KEY]
     message_str, reply_markup = create_notes_menu(character)
-    await query.edit_message_text(message_str, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
+
+    try:
+        await query.edit_message_text(message_str, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
+    except TelegramError as e:
+        logger.warning(
+            f"Errore nel modificare il messaggio per il pulsante indietro delle note, riprovare con sand_and_save: {e}")
+        await send_and_save_message(update, context, message_str, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
 
     return NOTES_MANAGEMENT
 
@@ -3385,6 +3414,51 @@ async def character_creator_insert_note_text(update: Update, context: ContextTyp
     if note_title in character.notes:
         character.notes.pop(note_title, None)
     character.notes[note_title] = note_text
+
+    await send_and_save_message(update, context, "Nota salvata con successo! ✅")
+    message_str, reply_markup = create_notes_menu(character)
+    await send_and_save_message(update, context, message_str, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
+
+    return NOTES_MANAGEMENT
+
+
+async def character_creator_insert_voice_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    # create voice notes folder if it doesn't exist
+    os.makedirs(VOICE_NOTES_PATH, exist_ok=True)
+
+    message = update.effective_message
+    context.user_data[CHARACTERS_CREATOR_KEY][LAST_MENU_MESSAGES].append(message)
+    voice = message.voice
+    voice_file = await voice.get_file()
+    voice_message_path = os.path.join(VOICE_NOTES_PATH, f"{voice.file_unique_id}.ogg")
+    final_voice_path = await voice_file.download_to_drive(voice_message_path)
+
+    # save the final vocal message path into userdata
+    context.user_data[CHARACTERS_CREATOR_KEY][TEMP_VOICE_MESSAGE_PATH] = final_voice_path
+
+    await send_and_save_message(update, context, "Mandami il titolo del messaggio vocale\n\n"
+                                                 "Usa /stop per terminare o un bottone del menù principale per cambiare funzione")
+
+    return VOICE_NOTE_TITLE
+
+
+async def character_creator_save_voice_note(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    message = update.effective_message
+    context.user_data[CHARACTERS_CREATOR_KEY][LAST_MENU_MESSAGES].append(message)
+    voice_note_title = message.text
+
+    if voice_note_title.strip() == '':
+        await send_and_save_message(update, context, "🔴 Invia un titolo valido!")
+        return VOICE_NOTE_TITLE
+
+    character: Character = context.user_data[CHARACTERS_CREATOR_KEY][CURRENT_CHARACTER_KEY]
+    final_voice_path = context.user_data[CHARACTERS_CREATOR_KEY][TEMP_VOICE_MESSAGE_PATH]
+    context.user_data[CHARACTERS_CREATOR_KEY].pop(TEMP_VOICE_MESSAGE_PATH, None)
+
+    # manage insertion or edit
+    if voice_note_title in character.notes:
+        character.notes.pop(voice_note_title, None)
+    character.notes[voice_note_title] = final_voice_path
 
     await send_and_save_message(update, context, "Nota salvata con successo! ✅")
     message_str, reply_markup = create_notes_menu(character)
@@ -3526,7 +3600,8 @@ async def store_map_file_or_photo(file: File, update: Update, context: ContextTy
     # Download the file on the disk
     file_name = file.file_path.split('/')[-1].split('.')[0]
     file_ext = file.file_path.split('/')[-1].split('.')[1]
-    final_file_path = await file.download_to_drive(f"{MAPS_DIR_PATH}/{file_name}.{file_ext}")
+    file_path = os.path.join(MAPS_DIR_PATH, f"{file_name}.{file_ext}")
+    final_file_path = await file.download_to_drive(file_path)
     # save the file path in a temp location
     if TEMP_MAPS_PATHS not in context.user_data[CHARACTERS_CREATOR_KEY]:
         context.user_data[CHARACTERS_CREATOR_KEY][TEMP_MAPS_PATHS] = []
@@ -3724,3 +3799,4 @@ async def check_pending_reassignment_for_multiclassing_and_wipe_user_data(update
         context.user_data[CHARACTERS_CREATOR_KEY].pop(ADD_OR_INSERT_MAPS, None)
         context.user_data[CHARACTERS_CREATOR_KEY].pop(TEMP_CURRENCY_KEY, None)
         context.user_data[CHARACTERS_CREATOR_KEY].pop(CURRENCY_CONVERTER, None)
+        context.user_data[CHARACTERS_CREATOR_KEY].pop(TEMP_VOICE_MESSAGE_PATH, None)
