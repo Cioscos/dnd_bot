@@ -3180,16 +3180,13 @@ async def send_dice_menu(update: Update, context: ContextTypes.DEFAULT_TYPE, is_
     if is_edit:
         starting_dice = context.user_data[CHARACTERS_CREATOR_KEY][DICE]
         reply_markup = create_dice_keyboard(starting_dice)
-    else:
-        starting_dice = STARTING_DICE.copy()
-        reply_markup = create_dice_keyboard(starting_dice)
-        context.user_data[CHARACTERS_CREATOR_KEY][DICE] = starting_dice
-
-    if is_edit:
         message = await update.effective_message.edit_text(
             message_str, reply_markup=reply_markup, parse_mode=ParseMode.HTML
         )
     else:
+        starting_dice = STARTING_DICE.copy()
+        reply_markup = create_dice_keyboard(starting_dice)
+        context.user_data[CHARACTERS_CREATOR_KEY][DICE] = starting_dice
         message = await send_and_save_message(
             update, context, message_str, reply_markup=reply_markup, parse_mode=ParseMode.HTML
         )
@@ -3256,9 +3253,8 @@ async def dice_actions_query_handler(update: Update, context: ContextTypes.DEFAU
 
         # update history
         character.rolls_history.extend(total_rolls)
-        context.user_data[CHARACTERS_CREATOR_KEY].pop(DICE, None)
         await delete_dice_menu(context)
-        await send_dice_menu(update, context, is_edit=True)
+        await send_dice_menu(update, context, is_edit=False)
 
     elif query.data == ROLL_DICE_DELETE_HISTORY_CALLBACK_DATA:
 
