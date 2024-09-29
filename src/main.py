@@ -4,6 +4,7 @@ import logging
 import traceback
 from warnings import filterwarnings
 
+import aiohttp
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.constants import ParseMode
 from telegram.error import BadRequest, TelegramError
@@ -222,13 +223,39 @@ async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE):
         )
 
 
+async def get_latest_release(session):
+    owner = keyring_get('RepoOwner')
+    repo = keyring_get('RepoName')
+    url = f'https://api.github.com/repos/{owner}/{repo}/releases/latest'
+    try:
+        async with session.get(url) as response:
+            if response.status == 200:
+                release = await response.json()
+                title = release.get('name', 'Nessun titolo')
+                notes = release.get('body', 'Nessuna nota disponibile.')
+                return title, notes
+            else:
+                print(f'Errore nel recupero della release: {response.status}')
+                return None, None
+    except aiohttp.ClientError as e:
+        print(f'Errore di connessione: {e}')
+        return None, None
+
+
 async def post_init_callback(application: Application) -> None:
+    message_str = "🟢 Il Bot è ripartito dopo un riavvio! Probabilmente ora è meglio di prima 🟢"
+    async with aiohttp.ClientSession() as session:
+        title, notes = await get_latest_release(session)
+        if title and notes:
+            message_str += f"\n\n🆕 <b>{title}</b>\n\n{notes}"
+        else:
+            message_str += "\n\n⚠️ Impossibile recuperare le note dell'ultima release."
+
     for chat_id in application.bot_data.get(BOT_DATA_CHAT_IDS, []):
         try:
-            await application.bot.send_message(chat_id,
-                                               "🟢 Il Bot è ripartito dopo un riavvio! Probabilmente ora è meglio di prima 🟢")
+            await application.bot.send_message(chat_id, message_str, parse_mode=ParseMode.HTML)
         except (BadRequest, TelegramError) as e:
-            logger.error(f"CHAT_ID: {chat_id} Telegram error stopping the bot: {e}")
+            logger.error(f"CHAT_ID: {chat_id} Telegram error starting the bot: {e}")
 
 
 async def post_stop_callback(application: Application) -> None:
