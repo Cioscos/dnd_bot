@@ -1,3 +1,4 @@
+import argparse
 import html
 import json
 import logging
@@ -100,6 +101,16 @@ from src.character_creator import character_bag_query_handler, character_selecti
 from wiki import wiki_main_menu_handler, main_menu_buttons_query_handler, details_menu_buttons_query_handler, \
     ITEM_DETAILS_MENU, WIKI_MAIN_MENU
 
+
+# Create a custom filter class to ignore specific log messages
+class IgnoreNetworkErrorFilter(logging.Filter):
+    def filter(self, record):
+        # Check if the log message contains the specific error to ignore
+        if "NetworkError" in record.getMessage():
+            return False  # Suppress this log message
+        return True  # Allow other messages
+
+
 # Setup logging
 logging.basicConfig(
     level=logging.INFO,
@@ -113,8 +124,8 @@ filterwarnings(action="ignore", message=r".*CallbackQueryHandler", category=PTBU
 
 # set higher logging level for httpx to avoid all GET and POST requests being logged
 logging.getLogger("httpx").setLevel(logging.WARNING)
-
 logger = logging.getLogger(__name__)
+logger.addFilter(IgnoreNetworkErrorFilter())
 
 # State definitions for top-level conv handler
 START_MENU, CHARACTERS_CREATOR_MENU, WIKI_MENU = map(int, range(3))
@@ -315,7 +326,7 @@ async def handle_old_callback_queries(update: Update, context: ContextTypes.DEFA
     await query.answer("This conversation is over or you didn't start it! Wait until it ends!", show_alert=True)
 
 
-def main() -> None:
+def main(silent_start: bool = False) -> None:
     # Initialize the keyring
     if not keyring_initialize():
         exit(0xFF)
@@ -323,16 +334,19 @@ def main() -> None:
     # Initialize the Pickle database
     persistence = PicklePersistence(filepath='DB.pkl')
 
-    application = (Application.builder()
+    # Start building the application
+    app_builder = (Application.builder()
                    .token(keyring_get('Telegram'))
-                   .post_init(post_init_callback)
-                   .post_stop(post_stop_callback)
                    .persistence(persistence)
-                   .arbitrary_callback_data(True).build())
+                   .arbitrary_callback_data(True))
+
+    if not silent_start:
+        app_builder = app_builder.post_init(post_init_callback).post_stop(post_stop_callback)
+
+    application = app_builder.build()
 
     application.add_error_handler(error_handler)
 
-    # -------------------------------------------------- new
     equipment_categories_handler = ConversationHandler(
         entry_points=[CallbackQueryHandler(equipment_categories_first_menu_query_handler)],
         states={
@@ -649,7 +663,7 @@ def main() -> None:
             CommandHandler("stop", character_creator_stop_submenu),
             CallbackQueryHandler(character_generic_main_menu_query_handler)
         ],
-        name='character_creator_handler_v20',
+        name='character_creator_handler_v21',
         persistent=True
     )
 
@@ -675,4 +689,12 @@ def main() -> None:
 
 
 if __name__ == '__main__':
-    main()
+    # Initialize argparse
+    parser = argparse.ArgumentParser(description="Start the D&D Adventurer's Tome Telegram bot.")
+    parser.add_argument(
+        '--silent_start',
+        action='store_true',
+        help='If set, the bot will start without post_init and post_stop callbacks.'
+    )
+    args = parser.parse_args()
+    main(silent_start=args.silent_star)
