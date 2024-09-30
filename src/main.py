@@ -1,7 +1,109 @@
-import argparse
 import html
 import json
 import logging
+import os
+import traceback
+from warnings import filterwarnings
+
+import aiohttp
+from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
+from telegram.constants import ParseMode
+from telegram.error import BadRequest, TelegramError
+from telegram.ext import (
+    Application,
+    CommandHandler,
+    ConversationHandler,
+    ContextTypes,
+    MessageHandler, filters, CallbackQueryHandler, PicklePersistence
+)
+from telegram.warnings import PTBUserWarning
+
+from character_creator import character_creator_start_handler, character_creation_handler, \
+    character_spells_query_handler, character_abilities_query_handler, character_feature_point_query_handler, \
+    character_name_handler, character_race_handler, character_gender_handler, character_class_handler, \
+    character_multiclassing_query_handler, \
+    BAG_CALLBACK_DATA, SPELLS_CALLBACK_DATA, ABILITIES_CALLBACK_DATA, FEATURE_POINTS_CALLBACK_DATA, \
+    MULTICLASSING_CALLBACK_DATA, character_deleting_query_handler, \
+    DELETE_CHARACTER_CALLBACK_DATA, CHARACTER_DELETION, character_deleting_answer_query_handler, \
+    character_bag_new_object_query_handler, BAG_ITEM_INSERTION, character_bag_item_insert, character_hit_points_handler, \
+    BAG_ITEM_INSERTION_CALLBACK_DATA, BAG_ITEM_EDIT, character_bag_edit_object_query_handler, \
+    character_bag_item_delete_one_handler, character_bag_item_add_one_handler, character_bag_item_delete_all_handler, \
+    BAG_ITEM_EDIT_CALLBACK_DATA, FEATURE_POINTS_EDIT, character_feature_points_edit_query_handler, CHARACTER_CREATION, \
+    NAME_SELECTION, RACE_SELECTION, GENDER_SELECTION, CLASS_SELECTION, FUNCTION_SELECTION, CHARACTER_SELECTION, \
+    character_creator_stop_submenu, character_bag_item_edit_handler, ABILITIES_MENU, \
+    character_abilities_menu_query_handler, \
+    character_ability_visualization_query_handler, ABILITY_ACTIONS, character_ability_edit_handler, \
+    character_ability_delete_query_handler, character_ability_text_handler, character_ability_new_query_handler, \
+    character_change_level_query_handler, character_spells_menu_query_handler, \
+    character_spell_visualization_query_handler, character_spell_new_query_handler, character_spell_learn_handler, \
+    character_spell_edit_handler, character_spell_delete_query_handler, character_multiclassing_add_class_query_handler, \
+    MULTICLASSING_ADD_CALLBACK_DATA, character_multiclassing_add_class_answer_handler, \
+    character_multiclassing_remove_class_query_handler, character_multiclassing_remove_class_answer_query_handler, \
+    character_level_change_class_choice_handler, LEVEL_UP_CALLBACK_DATA, LEVEL_DOWN_CALLBACK_DATA, \
+    SPELLS_SLOT_CALLBACK_DATA, character_multiclassing_reassign_levels_query_handler, SPELLS_SLOTS_MANAGEMENT, \
+    character_spells_slots_mode_answer_query_handler, character_spells_slots_add_query_handler, \
+    SPELLS_SLOTS_INSERT_CALLBACK_DATA, character_spell_slot_add_answer_query_handler, \
+    character_spells_slots_query_handler, SPELLS_SLOTS_REMOVE_CALLBACK_DATA, \
+    character_spells_slots_remove_query_handler, character_spell_slot_remove_answer_query_handler, \
+    character_spells_slot_use_slot_query_handler, SPELL_SLOT_SELECTED_CALLBACK_DATA, \
+    character_spells_slot_use_reset_query_handler, SPELLS_SLOTS_RESET_CALLBACK_DATA, \
+    character_spells_slot_change_mode_query_handler, SPELLS_SLOTS_CHANGE_CALLBACK_DATA, DAMAGE_CALLBACK_DATA, \
+    HEALING_CALLBACK_DATA, character_damage_query_handler, character_healing_query_handler, \
+    character_hit_points_query_handler, HIT_POINTS_CALLBACK_DATA, \
+    character_hit_points_registration_handler, character_damage_registration_handler, LONG_REST_WARNING_CALLBACK_DATA, \
+    character_long_rest_warning_query_handler, LONG_REST_CALLBACK_DATA, character_long_rest_query_handler, \
+    ROLL_DICE_MENU_CALLBACK_DATA, dice_handler, dice_actions_query_handler, character_ability_features_query_handler, \
+    character_ability_insert_query_handler, SPELL_LEARN_CALLBACK_DATA, character_short_rest_warning_query_handler, \
+    character_creation_stop, OVER_HEALING_CONFIRMATION, character_healing_value_check_or_registration_handler, \
+    character_over_healing_registration_query_handler, character_generic_main_menu_query_handler, \
+    ROLL_DICE_CALLBACK_DATA, ROLL_DICE_DELETE_HISTORY_CALLBACK_DATA, SPELL_EDIT_CALLBACK_DATA, \
+    SPELL_DELETE_CALLBACK_DATA, SPELL_BACK_MENU_CALLBACK_DATA, ABILITY_EDIT_CALLBACK_DATA, ABILITY_ACTIVE_CALLBACK_DATA, \
+    ABILITY_DELETE_CALLBACK_DATA, ABILITY_USE_CALLBACK_DATA, ABILITY_BACK_MENU_CALLBACK_DATA, \
+    ABILITY_LEARN_CALLBACK_DATA, AFFERMATIVE_CHARACTER_DELETION_CALLBACK_DATA, \
+    NEGATIVE_CHARACTER_DELETION_CALLBACK_DATA, SPELL_USE_CALLBACK_DATA, character_spell_use_query_handler, \
+    SPELL_USAGE_BACK_MENU_CALLBACK_DATA, character_bag_ask_item_overwrite_quantity_query_handler, BAG_ITEM_OVERWRITE, \
+    character_ask_item_overwrite_quantity, SETTINGS_CALLBACK_DATA, character_creator_settings, SETTINGS_MENU_STATE, \
+    character_creator_settings_callback_handler, SPELL_LEVEL_MENU, character_spells_by_level_query_handler, \
+    character_creator_notes_query_handler, character_creator_new_note_query_handler, INSERT_NEW_NOTE_CALLBACK_DATA, \
+    character_creator_open_note_query_handler, character_creator_insert_note_text, \
+    character_creator_edit_note_query_handler, EDIT_NOTE_CALLBACK_DATA, character_creator_delete_note_query_handler, \
+    DELETE_NOTE_CALLBACK_DATA, BACK_BUTTON_CALLBACK_DATA, character_creator_notes_back_query_handler, \
+    character_creation_maps_query_handler, character_creation_new_maps_query_handler, INSERT_NEW_MAPS_CALLBACK_DATA, \
+    character_creation_ask_maps_file, character_creation_store_map_file, character_creation_store_map_photo, \
+    character_creation_maps_done_command, character_creation_show_maps_query_handler, \
+    character_creator_add_map_query_handler, ADD_NEW_MAP_CALLBACK_DATA, character_creation_add_maps_done_command, \
+    character_creation_maps_delete_all_query_handler, DELETE_ALL_ZONE_MAPMS_CALLBACK_DATA, \
+    character_creator_delete_single_map_query_handler, DELETE_SINGLE_MAP_CALLBACK_DATA, NOTE_ADD, \
+    character_bag_currencies_menu_query_handler, BAG_MANAGE_CURRENCY_CALLBACK_DATA, \
+    character_bag_currency_select_query_handler, BAG_MANAGE_SINGLE_CURRENCY_CALLBACK_DATA, \
+    character_bag_currency_edit_quantity_query_handler, verify_selected_currency_callback_data, BAG_CURRENCY_INSERT, \
+    character_bag_currency_edit_quantity_text_handler, BAG_CURRENCY_FUNCTIONS, \
+    BAG_MANAGE_CURRENCY_CONVERT_FUNCTION_CALLBACK_DATA, character_bag_currency_convert_function_query_handler, \
+    character_currency_convert_menu_query_handler, verify_character_currency_converter_callback_data, \
+    BAG_CURRENCY_CONVERT, character_currency_convert_quantity_handler, character_creator_insert_voice_message, \
+    VOICE_NOTE_TITLE, character_creator_save_voice_note
+from class_submenus import class_submenus_query_handler, class_spells_menu_buttons_query_handler, \
+    class_search_spells_text_handler, class_reading_spells_menu_buttons_query_handler, \
+    class_spell_visualization_buttons_query_handler, class_resources_submenu_text_handler, CLASS_SPELLS_SUBMENU, \
+    CLASS_MANUAL_SPELLS_SEARCHING, CLASS_READING_SPELLS_SEARCHING, CLASS_SPELL_VISUALIZATION, CLASS_RESOURCES_SUBMENU, \
+    CLASS_SUBMENU
+from environment_variables_mg import keyring_initialize, keyring_get
+from equipment_categories_submenus import equipment_categories_first_menu_query_handler, \
+    equipment_visualization_query_handler, EQUIPMENT_CATEGORIES_SUBMENU, EQUIPMENT_VISUALIZATION
+from src.character_creator import character_bag_query_handler, character_selection_query_handler, BAG_MANAGEMENT, \
+    HIT_POINTS_SELECTION, ABILITY_VISUALIZATION, ABILITY_LEARN, SPELLS_MENU, SPELL_VISUALIZATION, SPELL_ACTIONS, \
+    SPELL_LEARN, MULTICLASSING_ACTIONS, MULTICLASSING_REMOVE_CALLBACK_DATA, SPELL_SLOT_ADDING, SPELL_SLOT_REMOVING, \
+    DAMAGE_REGISTRATION, HEALING_REGISTRATION, HIT_POINTS_REGISTRATION, LONG_REST, DICE_ACTION, \
+    ABILITY_IS_PASSIVE_CALLBACK_DATA, ABILITY_RESTORATION_TYPE_CALLBACK_DATA, ABILITY_INSERT_CALLBACK_DATA, SHORT_REST, \
+    character_short_rest_query_handler, SHORT_REST_CALLBACK_DATA, SHORT_REST_WARNING_CALLBACK_DATA, NOTES_CALLBACK_DATA, \
+    NOTES_MANAGEMENT, OPEN_NOTE_CALLBACK_DATA, MAPS_CALLBACK_DATA, MAPS_MANAGEMENT, MAPS_ZONE, MAPS_FILES, \
+    verify_selected_map_callback_data, ADD_MAPS_FILES
+from wiki import wiki_main_menu_handler, main_menu_buttons_query_handler, details_menu_buttons_query_handler, \
+    ITEM_DETAILS_MENU, WIKI_MAIN_MENU
+import html
+import json
+import logging
+import os
 import traceback
 from warnings import filterwarnings
 
@@ -326,7 +428,10 @@ async def handle_old_callback_queries(update: Update, context: ContextTypes.DEFA
     await query.answer("This conversation is over or you didn't start it! Wait until it ends!", show_alert=True)
 
 
-def main(silent_start: bool = False) -> None:
+def main() -> None:
+    # Check if the environment variable SILENT_START is set
+    silent_start = os.getenv("SILENT_START", "false").lower() == "true"
+
     # Initialize the keyring
     if not keyring_initialize():
         exit(0xFF)
@@ -689,12 +794,4 @@ def main(silent_start: bool = False) -> None:
 
 
 if __name__ == '__main__':
-    # Initialize argparse
-    parser = argparse.ArgumentParser(description="Start the D&D Adventurer's Tome Telegram bot.")
-    parser.add_argument(
-        '--silent_start',
-        action='store_true',
-        help='If set, the bot will start without post_init and post_stop callbacks.'
-    )
-    args = parser.parse_args()
-    main(silent_start=args.silent_star)
+    main()
