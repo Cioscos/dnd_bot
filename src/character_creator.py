@@ -23,7 +23,7 @@ from src.util import chunk_list, generate_abilities_list_keyboard, generate_spel
 
 logger = logging.getLogger(__name__)
 
-CHARACTER_CREATOR_VERSION = "3.2.0"
+CHARACTER_CREATOR_VERSION = "3.3.0"
 
 # states definition
 (CHARACTER_CREATION,
