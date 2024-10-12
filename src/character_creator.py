@@ -1083,7 +1083,8 @@ async def character_creator_start_handler(update: Update, context: ContextTypes.
         for character in characters:
             keyboard.append([InlineKeyboardButton(character.name, callback_data=character.name)])
 
-        await update.effective_message.reply_text(message_str, reply_markup=InlineKeyboardMarkup(keyboard))
+        await update.effective_message.reply_text(message_str, reply_markup=InlineKeyboardMarkup(keyboard),
+                                                  parse_mode=ParseMode.HTML)
 
         return CHARACTER_SELECTION
 
