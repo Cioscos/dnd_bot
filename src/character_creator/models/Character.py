@@ -25,12 +25,9 @@ class Character:
     gender: Optional[str] = field(default=None)
     multi_class: MultiClass = field(default_factory=MultiClass)
     hit_points: int = field(default_factory=int)
-
-    # TODO: Add armor class
     base_armor_class: int = field(default_factory=int)
     shield_armor_class: int = field(default_factory=int)
     magic_armor: int = field(default_factory=int)
-
     current_hit_points: int = field(default_factory=int)
     feature_points: FeaturePoints = field(default_factory=FeaturePoints)
     spell_slots_mode: SpellsSlotMode = field(default=None)
