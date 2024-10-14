@@ -5,6 +5,8 @@ from .abilities import character_abilities_query_handler, character_ability_new_
     character_abilities_menu_query_handler, character_ability_visualization_query_handler, \
     character_ability_edit_handler, character_ability_delete_query_handler, character_ability_insert_query_handler, \
     character_ability_features_query_handler, character_ability_text_handler
+from .armor_class import armor_class_main_menu_callback, armor_class_text_callback, edit_ac_callback, \
+    edit_magic_armor_callback, edit_shield_ac_callback
 from .bag import character_bag_query_handler, character_bag_new_object_query_handler, \
     character_bag_edit_object_query_handler, character_bag_currencies_menu_query_handler, \
     character_bag_currency_select_query_handler, character_bag_currency_edit_quantity_query_handler, \
@@ -94,6 +96,7 @@ character_creator_handler = ConversationHandler(
             CallbackQueryHandler(character_creator_settings, pattern=fr"^{SETTINGS_CALLBACK_DATA}$"),
             CallbackQueryHandler(character_creator_notes_query_handler, pattern=fr"^{NOTES_CALLBACK_DATA}$"),
             CallbackQueryHandler(character_creation_maps_query_handler, pattern=fr"^{MAPS_CALLBACK_DATA}$"),
+            CallbackQueryHandler(armor_class_main_menu_callback, pattern=fr"^{ARMOR_CLASS_CALLBACK_DATA}$"),
             CommandHandler('stop', character_creation_stop)
         ],
         DAMAGE_REGISTRATION: [
@@ -108,6 +111,12 @@ character_creator_handler = ConversationHandler(
         ],
         HIT_POINTS_REGISTRATION: [
             MessageHandler(filters.TEXT & ~filters.COMMAND, character_hit_points_registration_handler)
+        ],
+        ARMOR_CLASS: [
+            MessageHandler(filters.TEXT & ~filters.COMMAND, armor_class_text_callback),
+            CallbackQueryHandler(edit_ac_callback, pattern=fr"^{ARMOR_CLASS_CALLBACK_DATA}\|ac$"),
+            CallbackQueryHandler(edit_shield_ac_callback, pattern=fr"^{ARMOR_CLASS_CALLBACK_DATA}\|shield$"),
+            CallbackQueryHandler(edit_magic_armor_callback, pattern=fr"^{ARMOR_CLASS_CALLBACK_DATA}\|magic_armor$")
         ],
         LONG_REST: [
             CallbackQueryHandler(character_long_rest_query_handler,
@@ -312,6 +321,6 @@ character_creator_handler = ConversationHandler(
         CommandHandler("stop", character_creator_stop_submenu),
         CallbackQueryHandler(character_generic_main_menu_query_handler)
     ],
-    name='character_creator_handler_v22',
+    name='character_creator_handler_v24',
     persistent=True
 )

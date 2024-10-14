@@ -158,6 +158,9 @@ def create_main_menu_message(character: Character) -> Tuple[str, InlineKeyboardM
             InlineKeyboardButton('🧬 Gestisci punti ferita 💉', callback_data=HIT_POINTS_CALLBACK_DATA)
         ],
         [
+            InlineKeyboardButton('🛡 Punti Armatura 🛡', callback_data=ARMOR_CLASS_CALLBACK_DATA)
+        ],
+        [
             InlineKeyboardButton('🧳 Borsa', callback_data=BAG_CALLBACK_DATA),
             InlineKeyboardButton('🗯 Azioni', callback_data=ABILITIES_CALLBACK_DATA),
             InlineKeyboardButton('📖 Spell', callback_data=SPELLS_CALLBACK_DATA)

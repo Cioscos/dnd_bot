@@ -18,13 +18,19 @@ class SpellsSlotMode(Enum):
 
 @dataclass
 class Character:
-    VERSION = 6
+    VERSION = 8
 
     name: Optional[str] = field(default=None)
     race: Optional[str] = field(default=None)
     gender: Optional[str] = field(default=None)
     multi_class: MultiClass = field(default_factory=MultiClass)
     hit_points: int = field(default_factory=int)
+
+    # TODO: Add armor class
+    base_armor_class: int = field(default_factory=int)
+    shield_armor_class: int = field(default_factory=int)
+    magic_armor: int = field(default_factory=int)
+
     current_hit_points: int = field(default_factory=int)
     feature_points: FeaturePoints = field(default_factory=FeaturePoints)
     spell_slots_mode: SpellsSlotMode = field(default=None)
@@ -87,9 +93,15 @@ class Character:
         if self._version < 6:
             if not hasattr(self, 'currency'):
                 self.currency = Currency()
+        if self._version < 8:
+            if not hasattr(self, 'base_armor_class'):
+                self.base_armor_class = 0
+            if not hasattr(self, 'shield_armor_class'):
+                self.shield_armor_class = 0
+            if not hasattr(self, 'magic_armor'):
+                self.magic_armor = 0
         # Update version's object
         self._version = Character.VERSION
-        # FUTURE MIGRATIONS
 
     def __setstate__(self, state):
         """Method called during deserialisation"""
@@ -286,17 +298,6 @@ class Character:
             if ability.restoration_type == RestorationType.SHORT_REST:
                 ability.uses = ability.max_uses
 
-    def __str__(self):
-        return (f"Character(name={self.name}, race={self.race}, gender={self.gender}, "
-                f"multi_class={self.multi_class}, "
-                f"feature_points={self.feature_points}, items={len(self.bag)}, "
-                f"spells={len(self.spells)}, abilities={len(self.abilities)}, "
-                f"spell_slots={len(self.spell_slots)}), spell_slots_mode={self.spell_slots_mode}, "
-                f"rolls={self.rolls_history}")
-
-    def __repr__(self):
-        return (f"Character(name={self.name!r}, race={self.race!r}, gender={self.gender!r}, "
-                f"multi_class={self.multi_class!r}, "
-                f"feature_points={self.feature_points!r}, items={self.bag!r}, "
-                f"spells={self.spells!r}, abilities={self.abilities!r}, "
-                f"spell_slots={self.spell_slots!r})")
+    @property
+    def ac(self):
+        return self.base_armor_class + self.shield_armor_class + self.magic_armor_class
