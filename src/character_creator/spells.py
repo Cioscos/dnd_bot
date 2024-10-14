@@ -68,7 +68,7 @@ async def create_spell_levels_menu(character: Character, update: Update, context
                                    edit_mode: bool = False) -> int:
     message_str = (
         f"<b>Gestione spells</b>\nUsa /stop per terminare o un bottone del menù principale per cambiare funzione\n\n"
-        f"❌ Significa che non hai più slot incantesimo disponibili di quel livello")
+        f"❌ Significa che non hai più slot incantesimo disponibili di quel livello\n\n")
 
     if not character.spells:
         message_str += "Non conosci ancora nessun incantesimo ‍🤷‍♂️"
