@@ -297,4 +297,4 @@ class Character:
 
     @property
     def ac(self):
-        return self.base_armor_class + self.shield_armor_class + self.magic_armor_class
+        return self.base_armor_class + self.shield_armor_class + self.magic_armor
