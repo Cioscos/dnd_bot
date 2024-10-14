@@ -140,6 +140,7 @@ def create_main_menu_message(character: Character) -> Tuple[str, InlineKeyboardM
                    f"<b>Genere:</b> {character.gender}\n"
                    f"<b>Classe:</b> {', '.join(f"{class_name} (Level {level})" for class_name, level in character.multi_class.classes.items())}\n"
                    f"<b>Punti ferita:</b> {health_str}"
+                   f"<b>Classe armatura:</b> {character.ac}\n"
                    f"<b>Peso trasportato:</b> {character.encumbrance} Lb\n\n"
                    f"<b>Punti caratteristica</b>\n<code>{str(character.feature_points)}\n\n</code>"
                    f"<b>Slot incantesimo</b>\n{"\n".join([f"L{str(slot.level)}  {"🟥" * slot.used_slots}{"🟦" * (slot.total_slots - slot.used_slots)}" for _, slot in sorted(character.spell_slots.items())]) if character.spell_slots else "Non hai registrato ancora nessuno Slot incantesimo"}\n\n"
@@ -156,6 +157,9 @@ def create_main_menu_message(character: Character) -> Tuple[str, InlineKeyboardM
         ],
         [
             InlineKeyboardButton('🧬 Gestisci punti ferita 💉', callback_data=HIT_POINTS_CALLBACK_DATA)
+        ],
+        [
+            InlineKeyboardButton('🛡 Punti Armatura 🛡', callback_data=ARMOR_CLASS_CALLBACK_DATA)
         ],
         [
             InlineKeyboardButton('🧳 Borsa', callback_data=BAG_CALLBACK_DATA),

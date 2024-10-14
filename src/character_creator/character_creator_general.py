@@ -9,6 +9,7 @@ from telegram.ext import ContextTypes, ConversationHandler
 
 from . import *
 from .abilities import character_abilities_query_handler
+from .armor_class import armor_class_main_menu_callback
 from .bag import character_bag_query_handler
 from .damage_healing import character_damage_query_handler, character_healing_query_handler
 from .dice import dice_handler
@@ -362,7 +363,8 @@ async def character_generic_main_menu_query_handler(update: Update, context: Con
         fr"^{ROLL_DICE_MENU_CALLBACK_DATA}$": dice_handler,
         fr"^{SETTINGS_CALLBACK_DATA}$": character_creator_settings,
         fr"^{MAPS_CALLBACK_DATA}$": character_creation_maps_query_handler,
-        fr"^{NOTES_CALLBACK_DATA}$": character_creator_notes_query_handler
+        fr"^{NOTES_CALLBACK_DATA}$": character_creator_notes_query_handler,
+        fr"^{ARMOR_CLASS_CALLBACK_DATA}$": armor_class_main_menu_callback
     }
 
     for regex, func in MAINMENU_CALLBACKDATA_TO_CALLBACK.items():

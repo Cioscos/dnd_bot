@@ -45,7 +45,8 @@ CHARACTER_CREATOR_VERSION = "3.3.0"
  MAPS_ZONE,
  MAPS_FILES,
  ADD_MAPS_FILES,
- SETTINGS_MENU_STATE) = map(int, range(14, 59))
+ SETTINGS_MENU_STATE,
+ ARMOR_CLASS) = map(int, range(14, 60))
 
 STOPPING = 99
 
@@ -90,6 +91,8 @@ TEMP_CURRENCY_KEY = 'temp_currency'
 CURRENCY_CONVERTER = 'currency_converter'
 SELECTED_SOURCE_CURRENCY = 'selected_source_currency'
 SELECTED_TARGET_CURRENCY = 'selected_target_currency'
+# armor class
+AC_KIND_KEY = 'ac_kind'
 
 # character callback keys
 BACK_BUTTON_CALLBACK_DATA = "back_button"
@@ -159,6 +162,7 @@ DELETE_SINGLE_MAP_CALLBACK_DATA = "delete_single_map"
 ADD_NEW_MAP_CALLBACK_DATA = "add_new_map"
 DELETE_ALL_ZONE_MAPMS_CALLBACK_DATA = "delete_all_zone_mapms"
 SETTINGS_CALLBACK_DATA = "settings"
+ARMOR_CLASS_CALLBACK_DATA = 'armor_class'
 
 # Setting related callback
 SETTING_SPELL_MANAGEMENT_CALLBACK_DATA = 'setting_spell_management'
